@@ -1,0 +1,6 @@
+pytz
+requests
+yfinance
+bs4
+numpy
+pytorch

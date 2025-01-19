@@ -1,0 +1,6 @@
+cache
+_test_cache
+__pycache__
+venv
+/test.*
+!/test.py
