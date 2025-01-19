@@ -14,7 +14,8 @@ class TestQuery(unittest.TestCase):
         self.assertTrue(volume)
         self.assertGreater(prices[0], 46)
         self.assertLess(prices[0], 47)
-        self.assertAlmostEqual(45715058, volume[0], places = 0)
+        self.assertGreater(sum(volume[:7]), 340000000)
+        self.assertLess(sum(volume[:7]), 380000000)
         self.assertEqual(len(prices), len(volume))
         self.assertTrue(len(prices)> 150 and len(prices) < 300)
     

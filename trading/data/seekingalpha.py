@@ -6,8 +6,18 @@ from pathlib import Path
 from ..utils import common
 
 _MODULE: str = __name__.split(".")[-1]
-_CACHE: Path = Path(__file__).parent / 'cache'
+_CACHE: Path = common.CACHE / _MODULE
 
+@common.cached_series(
+    cache_root=_CACHE,
+    unix_from_arg=1,
+    unix_to_arg=2,
+    include_args=0,
+    time_step_fn=100000000,
+    series_field=None,
+    timestamp_field="unix_time",
+    live_delay=3600
+)
 @common.backup_timeout()
 def _get_news(ticker: str, unix_from: int, unix_to: int, *, logger: logging.Logger = None) -> list[dict]:
     ticker = ticker.lower()
@@ -30,31 +40,7 @@ def _get_news(ticker: str, unix_from: int, unix_to: int, *, logger: logging.Logg
         if len(data) < 50:
             break
         i += 1
-    return ret
+    return sorted(ret, key = lambda it: it['unix_time'])
     
 def get_news(ticker: str, unix_from: float, unix_to: float, *, logger: logging.Logger = None) -> list[str]:
-    path = _CACHE / _MODULE / ticker.lower()
-    path.mkdir(parents = True, exist_ok = True)
-    PERIOD = 100000000
-    from_id = int(unix_from) // PERIOD
-    to_id = int(unix_to) // PERIOD
-    now_id = int()
-    ret = []
-    for i in range(from_id, to_id+1):
-        subpath = path / str(i)
-        if subpath.exists():
-            ret.extend(json.loads(subpath.read_text()))
-        else:
-            newdata = _get_news(ticker, i*PERIOD, (i+1)*PERIOD, logger = logger)
-            newdata.sort(key = lambda value: value['unix_time'])
-            subpath.write_text(json.dumps(newdata))
-            ret.extend(newdata)
-    if not ret:
-        return ret
-    start = 0
-    while start < len(ret) and ret[start]['unix_time'] < unix_from:
-        start += 1
-    end = len(ret) -1
-    while end >= 0 and ret[end]['unix_time'] > unix_to:
-        end -= 1
-    return [it['title'] for it in ret[start:end+1]]
+    return [it['title'] for it in _get_news(ticker.upper(), unix_from, unix_to, logger=logger)]

@@ -1,7 +1,7 @@
 from enum import Enum
 import requests
 import json
-from ..utils import httputils, dateutils
+from ..utils import httputils, dateutils, common
 import yfinance
 from pathlib import Path
 from datetime import datetime
@@ -10,7 +10,7 @@ import time
 import math
 
 _MODULE: str = __name__.split(".")[-1]
-_CACHE: Path = Path(__file__).parent / 'cache'
+_CACHE: Path = common.CACHE / _MODULE
 
 class Interval(Enum):
     M1 = '1m'
@@ -46,56 +46,111 @@ def _create_yahoo_finance_pricing_query(
     result += f"&&lang=en-US&region=US"
     return result
 
+@common.cached_series(
+    cache_root=_CACHE,
+    unix_from_arg=1,
+    unix_to_arg=2,
+    include_args=[0,3],
+    time_step_fn= lambda args: 10000000 if args[1] == Interval.H1 else 50000000,
+    series_field="data",
+    timestamp_field="t",
+    live_delay=3600,
+    return_series_only=False
+)
+@common.backup_timeout()
 def _get_yahoo_pricing(
     ticker: str,
-    start_time: float, #unix
-    end_time: float, #unix
+    unix_from: float, #unix
+    unix_to: float, #unix
     interval: Interval,
     events: list[Event] = [Event.DIVIDEND, Event.SPLIT, Event.EARNINGS],
     include_pre_post = False,
     *, logger: logging.Logger = None
 ) -> dict:
-    query = _create_yahoo_finance_pricing_query(ticker, start_time, end_time, interval, events, include_pre_post)
+    query = _create_yahoo_finance_pricing_query(ticker, unix_from, unix_to, interval, events, include_pre_post)
     resp = httputils.get_as_browser(query)
     data = json.loads(resp.text)
-    data = data['chart']['result'][0]
-    data['quotes'] = data['indicators']['quote'][0]
-    #Move adjclose to quotes
-    if 'adjclose' in data['indicators']:
-        adjclose = data['indicators']['adjclose'][0]
-        if 'adjclose' in adjclose:
-            data['quotes']['adjclose'] = adjclose['adjclose']
-    del data['indicators']
-    return data
+    def get_meta(data):
+        return data['chart']['result'][0]['meta']
+    def get_events(data):
+        data = data['chart']['result'][0]
+        if 'events' in data:
+            return data['events']
+        return {}
+    def get_arrays(data):
+        arrays = data['chart']['result'][0]['indicators']['quote'][0]
+        arrays['timestamp'] = data['chart']['result'][0]['timestamp']
+        try:
+            arrays['adjclose'] = data['chart']['result'][0]['indicators']['adjclose'][0]['adjclose']
+        except:
+            pass
+        vols = arrays['volume']
+        times = arrays['timestamp']
+        for key in arrays.keys():
+            arrays[key] = [it for index,it in enumerate(arrays[key]) if vols[index] and times[index] >= unix_from and times[index] <= unix_to]
+        return arrays
+    def try_adjust(arrays):
+        try:
+            resp = httputils.get_as_browser(_create_yahoo_finance_pricing_query(ticker, unix_to - 14*24*3600, unix_to, Interval.D1))
+            d1data = json.loads(resp.text)
+            d1arrays = get_arrays(d1data)
+            if not d1arrays['timestamp']:
+                return
+            close = d1arrays['close'][-1]
+            time = d1arrays['timestamp'][-1] + 6*3600 #Move the start of the day to the start of the last hour
+            times = arrays['timestamp']
+            i = len(times) - 1
+            while i >= 0 and times[i] > time and times[i]-time>=60:
+                i -= 1
+            if i >= 0 and abs(times[i]-time) < 60:
+                factor = close / arrays['close'][i]
+                for key in arrays.keys():
+                    if key != 'timestamp':
+                        for i in range(len(arrays[key])):
+                            arrays[key][i] *= factor if key != 'volume' else 1/factor
+                return
+            logger and logger.error(f"Failed to adjust {ticker}. No suitable timestamp found.")
+        except:
+            logger and logger.error(f"Failed to adjust {ticker}.", exc_info=True)
+    arrays = get_arrays(data)
+    meta = get_meta(data)
+    events = get_events(data)
+    if interval == Interval.H1 and unix_to < time.time() - 15*24*3600:
+        try_adjust(arrays)
+    """
+    Rearrange data to be comaptible with series caching by moving everything to one array.
+    open - o, close - c, low - l, high - h, adjclose - a, volume - v, timestamp - t
+    """
+    processed = {"meta": meta, "events": events, "data": []}
+    for i in range(len(arrays['timestamp'])):
+        if arrays['volume'][i]:
+            processed['data'].append({ it[0]: arrays[it][i] for it in arrays.keys() })
+    return processed
 
-def get_timestamps(data: dict) -> list[int]:
-    return data['timestamp']
-def _get_available_quotes(data: dict) -> list[str]:
-    return list(data['quotes'].keys())
-def _get_quote_values(data: dict, type: str) -> list[float]:
-    if type in data['quotes']:
-        return data['quotes'][type]
-    return None
-_quotes = ['open', 'close', 'low', 'high', 'adjclose', 'volume']
-def _filter_quotes(data:dict, quotes: list[str] = _quotes):
-    volume = _get_quote_values(data, 'volume')
-    for quote in set(quotes).intersection(_get_available_quotes(data)):
-        data['quotes'][quote] = [it for index,it in enumerate(_get_quote_values(data, quote)) if volume[index]]
-def _adjust_quotes(data:dict, factor: float):
-    for quote in set(_quotes).difference(['adjclose']).intersection(_get_available_quotes(data)):
-        arr = _get_quote_values(data, quote)
-        for i in range(len(arr)):
-            arr[i] *= 1/factor if quote == 'volume' else factor
+def get_yahoo_pricing(
+    ticker: str,
+    unix_from: float, #unix
+    unix_to: float, #unix
+    interval: Interval,
+    return_quote = 'close',
+    *, logger: logging.Logger = None
+) -> tuple[list[float], list[float]]:
+    """
+    Returns the pricing as two arrays - prices and volume.
+    Zero volume entries are filtered out.
+    """
+    ticker = ticker.upper()
+    path = _CACHE  / ticker
+    path.mkdir(parents = True, exist_ok = True)
+    if interval != Interval.D1 and interval != Interval.H1:
+        raise ValueError(f'Only H1 and D1 are supported. Got {interval.name}.')
+    data = _get_yahoo_pricing(ticker, unix_from, unix_to, interval, logger=logger)['data']
+    return ([it[return_quote[0]] for it in data], [it['v'] for it in data])
+
 def get_splits(data: dict) -> dict:
-    if 'events' in data and 'splits' in data['events']:
+    if 'splits' in data['events']:
         return data['events']['splits']
     return {}
-def get_close(data: dict) -> list[float]:
-    return _get_quote_values(data, 'close')
-def get_volume(data: dict) -> list[float]:
-    return _get_quote_values(data, 'volume')
-def get_adjclose(data: dict) -> list[float]:
-    return _get_quote_values(data, 'adjclose')
 
 def _get_info(ticker: str) -> dict:
     return yfinance.Ticker(ticker).info
@@ -116,103 +171,17 @@ def get_first_trade_time(info: dict) -> float:
         return info[key]
     return None
 
-def get_yahoo_pricing(
-    ticker: str,
-    start_time: float, #unix
-    end_time: float, #unix
-    interval: Interval,
-    return_quote = 'close',
-    *, logger: logging.Logger = None
-) -> tuple[list[float], list[float]]:
-    """
-    Returns the pricing as two arrays - prices and volume.
-    Zero volume entries are filtered out.
-    """
-    path = _CACHE / _MODULE / ticker.lower()
-    path.mkdir(parents = True, exist_ok = True)
-    start_datetime = dateutils.unix_to_datetime(start_time, tz = dateutils.EST)
-    end_datetime = dateutils.unix_to_datetime(end_time, tz = dateutils.EST)
-    
-    prices = []
-    volumes = []
-    timestamps = []
-    def extend(data):
-        prices.extend(_get_quote_values(data, return_quote))
-        volumes.extend(get_volume(data))
-        timestamps.extend(get_timestamps(data))
-    if interval == Interval.D1:
-        #Fetch per 3 years
-        #D1 is always already adjusted for splits
-        start_year = start_datetime.year - start_datetime.year % 3
-        end_year = end_datetime.year - end_datetime.year % 3 + 3
-
-        for year in range(start_year, end_year, 3):
-            subpath = path / f'{Interval.D1.name}-{year}'
-            if subpath.exists():
-                data = json.loads(subpath.read_text())
-            else:
-                unix_start = int(datetime(year, 1, 1, tzinfo=dateutils.EST).timestamp())
-                unix_end = int(datetime(year+3, 1, 1, tzinfo=dateutils.EST).timestamp())
-                data = _get_yahoo_pricing(ticker, unix_start, unix_end, interval, logger = logger)
-                _filter_quotes(data)
-                subpath.write_text(json.dumps(data))
-            extend(data)
-    elif interval == Interval.H1:
-        #Fetch per 4 months
-        start_month = start_datetime.month - (start_datetime.month-1)%4
-        end_month = end_datetime.month - (end_datetime.month-1)%4 + 4
-        for year in range(start_datetime.year, end_datetime.year+1):
-            for month in range(start_month if year == start_datetime.year else 1, end_month if year == end_datetime.year else 13, 4):
-                subpath = path / f'{Interval.H1.name}-{year}-{month}'
-                if subpath.exists():
-                    data = json.loads(subpath.read_text())
-                else:
-                    unix_start = int(datetime(year, month, 1, tzinfo=dateutils.EST).timestamp())
-                    unix_end = int(datetime(year+1 if month+4 > 12 else year, 1 if month+4>12 else month+4, 1, tzinfo=dateutils.EST).timestamp())
-                    data = _get_yahoo_pricing(ticker, unix_start, unix_end, interval, logger = logger)
-                    if data is None:
-                        return (None, None)
-                    _filter_quotes(data)
-                    close = get_close(data)
-                    if close: #adjust for splits
-                        if get_adjclose(data):
-                            factor = get_adjclose(data)[-1] / close[-1]
-                        else:
-                            #try with 1d
-                            data1d = _get_yahoo_pricing(ticker, unix_start, unix_end, Interval.D1, logger = logger)
-                            if data1d:
-                                _filter_quotes(data1d, ['close', 'adjclose'])
-                                close1d = get_adjclose(data1d) or get_close(data1d)
-                                if close1d:
-                                    factor = close1d[-1] / close[-1]
-                                else:
-                                    factor = 1
-                            else:
-                                factor = 1
-                        _adjust_quotes(data, factor)
-                    subpath.write_text(json.dumps(data))
-                extend(data)
-    else:
-        raise ValueError(f'Only H1 and D1 are supported not {interval.name}')
-    i = 0
-    j = len(timestamps)
-    while i < len(timestamps) and timestamps[i] < start_time:
-        i += 1
-    while j > 0 and timestamps[j-1] > end_time:
-        j -= 1
-    
-    return (prices[i:j], volumes[i:j])
-
 def get_info(ticker: str, *, logger: logging.Logger = None) -> dict:
-    path = _MODULE / _CACHE / ticker.lower()
+    ticker = ticker.upper()
+    path = _MODULE / _CACHE / ticker
     path.mkdir(parents = True, exist_ok = True)
     path /= 'info'
     if path.exists():
         return json.loads(path.read_text())
     else:
         info = _get_info(ticker)
-        mock_time = int(time.time())
-        meta = _get_yahoo_pricing(ticker, mock_time-100, mock_time, interval = Interval.W1, logger=logger)['meta']
+        mock_time = int(time.time() - 15*24*3600)
+        meta = _get_yahoo_pricing(ticker, mock_time-100, mock_time, Interval.D1, logger=logger)['meta']
         info = {**info, **meta}
         path.write_text(json.dumps(info))
         return info

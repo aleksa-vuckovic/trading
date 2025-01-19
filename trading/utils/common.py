@@ -46,9 +46,10 @@ def check_response(url: str, response: requests.Response):
     if response.status_code != 200:
         raise BadResponseException(url, response)
 
-def backup_timeout(*,
+def backup_timeout(
+    *,
     exc_type = TooManyRequestsException,
-    rethrow: bool = False,
+    rethrow: bool = True,
     base_timeout: float = 10.0,
     backoff_factor: float = 2.0
 ):
@@ -92,17 +93,19 @@ def cached_series(
     *,
     unix_from_arg: str | int = 1,
     unix_to_arg: str | int = 2,
-    include_args: list[str | int] = [],
+    include_args: list[str | int] | str | int = [],
     time_step_fn: int | float | Callable[[list], float] = lambda include_args: 10000000,
-    series_field: str = "",
+    series_field: str | None = None,
     timestamp_field: str | int = "unix_time",
-    live_delay: float = 3600
+    live_delay: float = 3600,
+    return_series_only: bool = False
 ):
     """
     Denotes a method which returns time series data, based on unix timestamps, and whose results should be cached.
     The result MUST be a dictionary, list or None, and the time series part MUST be a list or None.
     The time series should be validated and filtered already.
     The underlying method is assumed to be closed at the start and open at the end of the interval.
+    It is also assumed to return data sorted by timestamp!
     Args:
         cache_root - The root folder path where cache files are to be stored.
         include_args - Arguments to be included as time series inputs.
@@ -111,13 +114,15 @@ def cached_series(
         series_field - The json path to locate the time series part of the object (can be empty if it's just the series itself).
         timestamp_field - The field within a single time series object containing the timestamp value.
         live_delay - The maximum delay allowed for recent data.
+        return_series_only - Wether to return just the series or the entire object.
     Returns:
-        The time series list.
-        Notice that the return type might be different from the underlying method,
-        if the underlying method returns the time series as part of a larger object.
+        The time series list or the entire object as returned from the last underlying method call,
+        with the proper series set.
+
     """
     cache_root.mkdir(parents=True, exist_ok=True)
     series_path = [int(it) if re.fullmatch(r"\d+", it) else it for it in (series_field or "").split(".") if it]
+    include_args = include_args if isinstance(include_args, list) else [include_args]
     def get_series(data, *, logger: Logger = None) -> list:
         try:
             ret = data
@@ -127,6 +132,16 @@ def cached_series(
         except:
             logger and logger.error("Failed to extract time series.", exc_info=True)
             return []
+    def set_series(data, series, *, logger: Logger = None):
+        if not series_path:
+            return series
+        try:
+            for i in range(len(series_path)-1):
+                data = data[series_path[i]]
+            data[series_path[-1]] = series
+        except:
+            logger and logger.error("Failed to set series.", exc_info=True)
+        return data
     def get_timestamp(time_series_object) -> float | None:
         return float(time_series_object[timestamp_field])
     def get_unix_args(args: list, kwargs: dict) -> tuple[float, float]:
@@ -159,16 +174,18 @@ def cached_series(
             end_id = (int(unix_to) if unix_to%1 else int(unix_to)-1) // time_step
             now_id = int(unix_now) // time_step
             result = []
+            last_data = None
             def extend(data):
                 series = get_series(data, logger=logger)
                 i = 0
                 j = len(series)
                 while i < len(series) and get_timestamp(series[i]) < unix_from:
                     i += 1
-                while (j > 0 and get_timestamp(series[i]) >= unix_to):
+                while (j > 0 and get_timestamp(series[j-1]) >= unix_to):
                     j -= 1
                 result.extend(series[i:j])
-                
+                nonlocal last_data
+                last_data = data
 
             for id in range(start_id, min(end_id, now_id)+1):
                 if id == now_id:
@@ -208,12 +225,11 @@ def cached_series(
                     if subpath.exists():
                         extend(json.loads(subpath.read_text()))
                     else:
-
                         # Invoke the underlying method for the entire chunk
                         set_unix_args(args, kwargs, float(id*time_step), float((id+1)*time_step))
                         data = func(*args, **kwargs)
                         subpath.write_text(json.dumps(data))
                         extend(data)
-            return result
+            return  result if return_series_only else set_series(last_data, result, logger=logger)
         return wrapper
     return decorate

@@ -1,6 +1,5 @@
 from datetime import datetime
-from ..utils import dateutils
-from ..utils import httputils
+from ..utils import dateutils, httputils, common
 import logging
 from bs4 import BeautifulSoup
 from pathlib import Path
@@ -10,7 +9,7 @@ import json
 import time
 
 _MODULE: str = __name__.split(".")[-1]
-_CACHE: Path = Path(__file__).parent / 'cache'
+_CACHE: Path = common.CACHE / _MODULE
 
 def _format_date(unix: int) -> str:
     return dateutils.unix_to_datetime(unix, tz = dateutils.EST)\
@@ -44,7 +43,7 @@ def _get_summary(unix_time: int, *, logger: logging.Logger = None) -> str:
     return ""
 
 def get_summary(unix_time: int, *, logger: logging.Logger = None) -> str:
-    path = Path(__file__).parent / 'cache' / __name__.split('.')[-1]
+    path = _CACHE
     path.mkdir(parents = True, exist_ok=True)
     date = _format_date(unix_time)
     path /= date

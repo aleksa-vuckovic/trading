@@ -6,7 +6,6 @@ import logging
 from pathlib import Path
 import json
 from ..utils import common
-from http import HTTPStatus
 
 _MODULE: str = __name__.split(".")[-1]
 _CACHE = common.CACHE / _MODULE
@@ -36,7 +35,7 @@ def _get_shares_outstanding_raw(ticker: nasdaq.NasdaqListedEntry, *, logger: log
     return result
 
 def _get_shares_outstanding(ticker: nasdaq.NasdaqListedEntry, *, logger: logging.Logger = None) -> list[dict]:
-    raw = _get_shares_outstanding_raw(ticker, logger)
+    raw = _get_shares_outstanding_raw(ticker, logger=logger)
     res = []
     for key,value in raw.items():
         try:
@@ -51,12 +50,12 @@ def get_shares_outstanding(ticker: nasdaq.NasdaqListedEntry, *, logger: logging.
     """
     Returns shares outstanding fully, as provided by macrotrends.
     """
-    path = _CACHE / _MODULE
+    path = _CACHE
     path.mkdir(parents = True, exist_ok=True)
     path /= ticker.symbol.lower()
     if path.exists():
         return json.loads(path.read_text())
-    data = _get_shares_outstanding(ticker, logger)
+    data = _get_shares_outstanding(ticker, logger=logger)
     path.write_text(json.dumps(data))
     return data
 
@@ -67,6 +66,6 @@ def get_shares_outstanding_at(ticker: nasdaq.NasdaqListedEntry, unix_time: int, 
         while i < len(data)-1 and data[i]['unix_time'] < unix_time:
             i += 1
         return float(data[i]['shares'])
-    except Exception as e:
+    except:
         logger and logger.error("Failed to get shares outstanding", exc_info=True)
         return None

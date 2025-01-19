@@ -42,7 +42,8 @@ class TestCommon(unittest.TestCase):
             include_args=["type"],
             time_step_fn=lambda args: 10 if args[0] == 'type10' else 30,
             series_field="series",
-            timestamp_field="time"
+            timestamp_field="time",
+            return_series_only=True
         )
         def get_series(unix_from: float, *, unix_to: float, type: str):
             return {

@@ -7,7 +7,6 @@ from pathlib import Path
 
 _URL = "https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt"
 _MODULE: str = __name__.split(".")[-1]
-_CACHE: Path = Path(__file__).parent / 'cache'
 
 class NasdaqMarket(Enum):
     SELECT = 'Q'
@@ -106,7 +105,7 @@ class NasdaqListedEntry:
         return self._line
     
 def get_all_entries(*, logger: logging.Logger = None) -> list[NasdaqListedEntry]:
-    response = httputils.get_as_browser('https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt')
+    response = httputils.get_as_browser(_URL)
     result = []
     for row in response.text.splitlines(False):
         try:
