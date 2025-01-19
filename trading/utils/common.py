@@ -24,7 +24,7 @@ class BadResponseException(Exception):
         self.module = _find_host(url)
         self.url = url
         self.response = response
-    def __repr__(self):
+    def __str__(self):
         return f"Can't fetch from {self.module}. Url: '{self.url}'. Code: {self.response.status_code}. Text: '{self.response.text}'."
 
 class TooManyRequestsException(Exception):
@@ -37,7 +37,7 @@ class TooManyRequestsException(Exception):
         self.url = url
         self.response = response
     
-    def __repr__(self):
+    def __str__(self):
         return f"Too many requests for {self.module}. Url: {self.url}. Text: {self.response.text}."
 
 def check_response(url: str, response: requests.Response):

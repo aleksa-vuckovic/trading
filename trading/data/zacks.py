@@ -39,7 +39,7 @@ def _get_summary(unix_time: int, *, logger: logging.Logger = None) -> str:
                 if not main_div:
                     raise ValueError(f"No comtext div. Url: {pageurl}\n Document:\n{resp.text}")
                 return "\n".join([it.text for it in main_div.find_all("p", recursive=False)])
-    logger and logger.error(f"Couldn't find date {dates[0]} in pages from {start_page} to {end_page}.")
+    logger and logger.fatal(f"Couldn't find date {dates[0]} in pages from {start_page} to {end_page}.")
     return ""
 
 def get_summary(unix_time: int, *, logger: logging.Logger = None) -> str:

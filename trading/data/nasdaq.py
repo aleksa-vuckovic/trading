@@ -101,6 +101,8 @@ class NasdaqListedEntry:
         ret._line = line
         return ret
     
+    def __str__(self):
+        return repr(self)
     def __repr__(self):
         return self._line
     

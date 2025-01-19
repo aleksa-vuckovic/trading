@@ -155,22 +155,6 @@ def get_splits(data: dict) -> dict:
 def _get_info(ticker: str) -> dict:
     return yfinance.Ticker(ticker).info
 
-def get_shares(info: dict) -> int:
-    key = 'impliedSharesOutstanding'
-    if info and key in info:
-        return info[key]
-    return None
-def get_summary(info: dict) -> dict:
-    key = 'longBusinessSummary'
-    if info and key in info:
-        return info[key]
-    return None
-def get_first_trade_time(info: dict) -> float:
-    key = 'firstTradeDate'
-    if info and key in info:
-        return info[key]
-    return None
-
 def get_info(ticker: str, *, logger: logging.Logger = None) -> dict:
     ticker = ticker.upper()
     path = _MODULE / _CACHE / ticker
@@ -185,3 +169,12 @@ def get_info(ticker: str, *, logger: logging.Logger = None) -> dict:
         info = {**info, **meta}
         path.write_text(json.dumps(info))
         return info
+def get_shares(ticker: str, *, logger: logging.Logger = None) -> int:
+    key = 'impliedSharesOutstanding'
+    get_info(ticker, logger=logger)[key]
+def get_summary(ticker: str, *, logger: logging.Logger = None) -> dict:
+    key = 'longBusinessSummary'
+    return get_info(ticker, logger=logger)[key]
+def get_first_trade_time(ticker: str, *, logger: logging.Logger = None) -> float:
+    key = 'firstTradeDate'
+    return float(get_info(ticker, logger=logger)[key])

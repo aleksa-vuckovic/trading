@@ -2,5 +2,8 @@ cache
 _test_cache
 __pycache__
 venv
+logs
+logsbin
 /test.*
 !/test.py
+/main.py

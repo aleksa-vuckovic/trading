@@ -34,6 +34,6 @@ class TestQuery(unittest.TestCase):
         self.assertEqual(32, len(prices))
 
     def test_get_info(self):
-        info = yahoo.get_first_trade_time(yahoo.get_info('tnya'))
+        info = yahoo.get_first_trade_time('tnya')
         self.assertEqual(1627651800, info)
 

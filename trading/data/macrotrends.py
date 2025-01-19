@@ -59,13 +59,9 @@ def get_shares_outstanding(ticker: nasdaq.NasdaqListedEntry, *, logger: logging.
     path.write_text(json.dumps(data))
     return data
 
-def get_shares_outstanding_at(ticker: nasdaq.NasdaqListedEntry, unix_time: int, *, logger: logging.Logger = None) -> float | None:
-    try:
-        data = get_shares_outstanding(ticker, logger=logger)
-        i = 0
-        while i < len(data)-1 and data[i]['unix_time'] < unix_time:
-            i += 1
-        return float(data[i]['shares'])
-    except:
-        logger and logger.error("Failed to get shares outstanding", exc_info=True)
-        return None
+def get_shares_outstanding_at(ticker: nasdaq.NasdaqListedEntry, unix_time: int, *, logger: logging.Logger = None) -> float:
+    data = get_shares_outstanding(ticker, logger=logger)
+    i = 0
+    while i < len(data)-1 and data[i]['unix_time'] < unix_time:
+        i += 1
+    return float(data[i]['shares'])
