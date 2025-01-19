@@ -3,11 +3,12 @@ import requests
 from http import HTTPStatus
 import re
 from pathlib import Path
-from logging import Logger
+import logging
 from enum import Enum
 import json
 from typing import Callable
 
+logger = logging.getLogger(__name__)
 CACHE = Path(__file__).parent.parent / "data" / "cache"
 
 def _find_host(url: str) -> str | None:
@@ -78,8 +79,7 @@ def backup_timeout(
                     last_break = time.time()
                     last_exception = ex
                     last_timeout = timeout
-                    if 'logger' in kwargs and kwargs['logger']:
-                        kwargs['logger'].error(f"Timing out for {timeout} ({func.__name__})", exc_info = True)
+                    logger.error(f"Timing {func.__name__} out for {timeout}.", exc_info = True)
                     if rethrow:
                         raise
                     else:
@@ -123,16 +123,16 @@ def cached_series(
     cache_root.mkdir(parents=True, exist_ok=True)
     series_path = [int(it) if re.fullmatch(r"\d+", it) else it for it in (series_field or "").split(".") if it]
     include_args = include_args if isinstance(include_args, list) else [include_args]
-    def get_series(data, *, logger: Logger = None) -> list:
+    def get_series(data) -> list:
         try:
             ret = data
             for it in series_path:
                 ret = data[it]
             return ret or []
         except:
-            logger and logger.error("Failed to extract time series.", exc_info=True)
+            logger.error("Failed to extract time series.", exc_info=True)
             return []
-    def set_series(data, series, *, logger: Logger = None):
+    def set_series(data, series):
         if not series_path:
             return series
         try:
@@ -140,7 +140,7 @@ def cached_series(
                 data = data[series_path[i]]
             data[series_path[-1]] = series
         except:
-            logger and logger.error("Failed to set series.", exc_info=True)
+            logger.error("Failed to set series.", exc_info=True)
         return data
     def get_timestamp(time_series_object) -> float | None:
         return float(time_series_object[timestamp_field])
@@ -165,9 +165,6 @@ def cached_series(
             path = cache_root / include if include else cache_root
             path.mkdir(parents=True, exist_ok=True)
             time_step = int(time_step_fn(include_raw) if callable(time_step_fn) else int(time_step_fn))
-            logger: Logger | None = None
-            if 'logger' in kwargs:
-                logger = kwargs['logger']
             
             unix_now = time.time()
             start_id = int(unix_from) // time_step
@@ -176,7 +173,7 @@ def cached_series(
             result = []
             last_data = None
             def extend(data):
-                series = get_series(data, logger=logger)
+                series = get_series(data)
                 i = 0
                 j = len(series)
                 while i < len(series) and get_timestamp(series[i]) < unix_from:
@@ -230,6 +227,6 @@ def cached_series(
                         data = func(*args, **kwargs)
                         subpath.write_text(json.dumps(data))
                         extend(data)
-            return  result if return_series_only else set_series(last_data, result, logger=logger)
+            return  result if return_series_only else set_series(last_data, result)
         return wrapper
     return decorate

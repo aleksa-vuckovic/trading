@@ -8,6 +8,7 @@ import re
 import json
 import time
 
+logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
 _CACHE: Path = common.CACHE / _MODULE
 
@@ -18,7 +19,7 @@ def _format_date(unix: int) -> str:
         .replace("jun", "june")\
         .lower()
 
-def _get_summary(unix_time: int, *, logger: logging.Logger = None) -> str:
+def _get_summary(unix_time: int) -> str:
     #First find the id by searching through the pages
     #One page = approximately 1 month (more than 1 month, less than 2 months)
     day_diff = time.time()/(24*3600) - unix_time/(24*3600)
@@ -39,16 +40,16 @@ def _get_summary(unix_time: int, *, logger: logging.Logger = None) -> str:
                 if not main_div:
                     raise ValueError(f"No comtext div. Url: {pageurl}\n Document:\n{resp.text}")
                 return "\n".join([it.text for it in main_div.find_all("p", recursive=False)])
-    logger and logger.fatal(f"Couldn't find date {dates[0]} in pages from {start_page} to {end_page}.")
+    logger.fatal(f"Couldn't find date {dates[0]} in pages from {start_page} to {end_page}.")
     return ""
 
-def get_summary(unix_time: int, *, logger: logging.Logger = None) -> str:
+def get_summary(unix_time: int) -> str:
     path = _CACHE
     path.mkdir(parents = True, exist_ok=True)
     date = _format_date(unix_time)
     path /= date
     if path.exists():
         return path.read_text()
-    data = _get_summary(unix_time, logger = logger)
+    data = _get_summary(unix_time)
     path.write_text(data)
     return data

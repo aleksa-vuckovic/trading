@@ -7,12 +7,13 @@ from pathlib import Path
 import json
 from ..utils import common
 
+logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
 _CACHE = common.CACHE / _MODULE
 
 
 @common.backup_timeout()
-def _get_shares_outstanding_raw(ticker: nasdaq.NasdaqListedEntry, *, logger: logging.Logger = None) -> dict[str, str]:
+def _get_shares_outstanding_raw(ticker: nasdaq.NasdaqListedEntry) -> dict[str, str]:
     shortName = re.sub(r'\s+', '-', ticker.short_name().strip())
     shortName = shortName.replace(".", "").lower()
     url = f"https://www.macrotrends.net/stocks/charts/{ticker.symbol}/{shortName}/shares-outstanding"
@@ -31,11 +32,11 @@ def _get_shares_outstanding_raw(ticker: nasdaq.NasdaqListedEntry, *, logger: log
                 values = [cell.get_text(strip=True) for cell in cells]
                 result[values[0]] = values[1]
             except:
-                logger and logger.error("Failed to load cells for shares outstanding from macrotrends.", exc_info=True)
+                logger.error("Failed to load cells for shares outstanding from macrotrends.", exc_info=True)
     return result
 
-def _get_shares_outstanding(ticker: nasdaq.NasdaqListedEntry, *, logger: logging.Logger = None) -> list[dict]:
-    raw = _get_shares_outstanding_raw(ticker, logger=logger)
+def _get_shares_outstanding(ticker: nasdaq.NasdaqListedEntry) -> list[dict]:
+    raw = _get_shares_outstanding_raw(ticker)
     res = []
     for key,value in raw.items():
         try:
@@ -43,10 +44,10 @@ def _get_shares_outstanding(ticker: nasdaq.NasdaqListedEntry, *, logger: logging
             shares = int(value.replace(",", ""))
             res.append({'unix_time': unix_time, 'shares': shares*1000000})
         except:
-            logger and logger.error("Failed to parse shares outstanding row from macrotrends", exc_info=True)
+            logger.error("Failed to parse shares outstanding row from macrotrends", exc_info=True)
     return sorted(res, key = lambda x: x['unix_time'])
 
-def get_shares_outstanding(ticker: nasdaq.NasdaqListedEntry, *, logger: logging.Logger = None) -> list[dict]:
+def get_shares_outstanding(ticker: nasdaq.NasdaqListedEntry) -> list[dict]:
     """
     Returns shares outstanding fully, as provided by macrotrends.
     """
@@ -55,12 +56,12 @@ def get_shares_outstanding(ticker: nasdaq.NasdaqListedEntry, *, logger: logging.
     path /= ticker.symbol.lower()
     if path.exists():
         return json.loads(path.read_text())
-    data = _get_shares_outstanding(ticker, logger=logger)
+    data = _get_shares_outstanding(ticker)
     path.write_text(json.dumps(data))
     return data
 
-def get_shares_outstanding_at(ticker: nasdaq.NasdaqListedEntry, unix_time: int, *, logger: logging.Logger = None) -> float:
-    data = get_shares_outstanding(ticker, logger=logger)
+def get_shares_outstanding_at(ticker: nasdaq.NasdaqListedEntry, unix_time: int) -> float:
+    data = get_shares_outstanding(ticker)
     i = 0
     while i < len(data)-1 and data[i]['unix_time'] < unix_time:
         i += 1

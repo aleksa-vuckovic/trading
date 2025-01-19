@@ -2,17 +2,16 @@ import logging
 from . import dateutils
 from pathlib import Path
 
-def configure_logging():
+def configure_logging(testing: bool = False):
     date = str(dateutils.now(tz = dateutils.CET).strftime("%Y-%m-%d %H-%M-%S"))
-    logroot = Path("./logs")
-    logbin = Path("./logsbin")
+    logroot = Path("./logs/test") if testing else Path("./logs/prod")
+    logbin = Path("./logs/bin")
+    if not logroot.exists():
+        logroot.mkdir(parents=True)
     if not logbin.exists():
         logbin.mkdir()
-    if not logroot.exists():
-        logroot.mkdir()
-    else:
-        for file in logroot.iterdir():
-            file.rename(logbin / file.name)
+    for file in logroot.iterdir():
+        file.unlink() if testing else file.rename(logbin / file.name)
 
     #formatters
     simple_formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
@@ -41,5 +40,6 @@ def configure_logging():
     models.propagate = False
     models.addHandler(file_handlers["models"])
     for logger in [root, data, yahoo, models]:
-        logger.addHandler(console_handler)
+        if not testing:
+            logger.addHandler(console_handler)
         logger.setLevel(logging.INFO)

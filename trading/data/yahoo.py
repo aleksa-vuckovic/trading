@@ -9,6 +9,7 @@ import logging
 import time
 import math
 
+logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
 _CACHE: Path = common.CACHE / _MODULE
 
@@ -64,8 +65,7 @@ def _get_yahoo_pricing(
     unix_to: float, #unix
     interval: Interval,
     events: list[Event] = [Event.DIVIDEND, Event.SPLIT, Event.EARNINGS],
-    include_pre_post = False,
-    *, logger: logging.Logger = None
+    include_pre_post = False
 ) -> dict:
     query = _create_yahoo_finance_pricing_query(ticker, unix_from, unix_to, interval, events, include_pre_post)
     resp = httputils.get_as_browser(query)
@@ -109,9 +109,9 @@ def _get_yahoo_pricing(
                         for i in range(len(arrays[key])):
                             arrays[key][i] *= factor if key != 'volume' else 1/factor
                 return
-            logger and logger.error(f"Failed to adjust {ticker}. No suitable timestamp found.")
+            logger.error(f"Failed to adjust {ticker}. No suitable timestamp found.")
         except:
-            logger and logger.error(f"Failed to adjust {ticker}.", exc_info=True)
+            logger.error(f"Failed to adjust {ticker}.", exc_info=True)
     arrays = get_arrays(data)
     meta = get_meta(data)
     events = get_events(data)
@@ -132,8 +132,7 @@ def get_yahoo_pricing(
     unix_from: float, #unix
     unix_to: float, #unix
     interval: Interval,
-    return_quote = 'close',
-    *, logger: logging.Logger = None
+    return_quote = 'close'
 ) -> tuple[list[float], list[float]]:
     """
     Returns the pricing as two arrays - prices and volume.
@@ -144,7 +143,7 @@ def get_yahoo_pricing(
     path.mkdir(parents = True, exist_ok = True)
     if interval != Interval.D1 and interval != Interval.H1:
         raise ValueError(f'Only H1 and D1 are supported. Got {interval.name}.')
-    data = _get_yahoo_pricing(ticker, unix_from, unix_to, interval, logger=logger)['data']
+    data = _get_yahoo_pricing(ticker, unix_from, unix_to, interval)['data']
     return ([it[return_quote[0]] for it in data], [it['v'] for it in data])
 
 def get_splits(data: dict) -> dict:
@@ -155,7 +154,7 @@ def get_splits(data: dict) -> dict:
 def _get_info(ticker: str) -> dict:
     return yfinance.Ticker(ticker).info
 
-def get_info(ticker: str, *, logger: logging.Logger = None) -> dict:
+def get_info(ticker: str) -> dict:
     ticker = ticker.upper()
     path = _MODULE / _CACHE / ticker
     path.mkdir(parents = True, exist_ok = True)
@@ -165,16 +164,16 @@ def get_info(ticker: str, *, logger: logging.Logger = None) -> dict:
     else:
         info = _get_info(ticker)
         mock_time = int(time.time() - 15*24*3600)
-        meta = _get_yahoo_pricing(ticker, mock_time-100, mock_time, Interval.D1, logger=logger)['meta']
+        meta = _get_yahoo_pricing(ticker, mock_time-100, mock_time, Interval.D1)['meta']
         info = {**info, **meta}
         path.write_text(json.dumps(info))
         return info
-def get_shares(ticker: str, *, logger: logging.Logger = None) -> int:
+def get_shares(ticker: str) -> int:
     key = 'impliedSharesOutstanding'
-    get_info(ticker, logger=logger)[key]
-def get_summary(ticker: str, *, logger: logging.Logger = None) -> dict:
+    get_info(ticker)[key]
+def get_summary(ticker: str) -> dict:
     key = 'longBusinessSummary'
-    return get_info(ticker, logger=logger)[key]
-def get_first_trade_time(ticker: str, *, logger: logging.Logger = None) -> float:
+    return get_info(ticker)[key]
+def get_first_trade_time(ticker: str) -> float:
     key = 'firstTradeDate'
-    return float(get_info(ticker, logger=logger)[key])
+    return float(get_info(ticker)[key])

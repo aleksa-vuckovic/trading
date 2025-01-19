@@ -5,6 +5,7 @@ import re
 from ..utils import httputils
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
 _URL = "https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt"
 _MODULE: str = __name__.split(".")[-1]
 
@@ -106,18 +107,18 @@ class NasdaqListedEntry:
     def __repr__(self):
         return self._line
     
-def get_all_entries(*, logger: logging.Logger = None) -> list[NasdaqListedEntry]:
+def get_all_entries() -> list[NasdaqListedEntry]:
     response = httputils.get_as_browser(_URL)
     result = []
     for row in response.text.splitlines(False):
         try:
             result.append(NasdaqListedEntry.from_line(row))
         except:
-            logger and logger.error(f'Failed to parse line:\n{row}', exc_info=True)
+            logger.error(f'Failed to parse line:\n{row}', exc_info=True)
     return result
 
-def get_filtered_entries(logger: logging.Logger = None) -> list[NasdaqListedEntry]:
-    return [it for it in get_all_entries(logger) if not it.is_warrant() and it.is_tradable()]
+def get_filtered_entries() -> list[NasdaqListedEntry]:
+    return [it for it in get_all_entries() if not it.is_warrant() and it.is_tradable()]
 
-def get_filtered_tickers(logger: logging.Logger = None) -> list[str]:
-    return [it.symbol for it in get_filtered_entries(logger)]
+def get_filtered_tickers() -> list[str]:
+    return [it.symbol for it in get_filtered_entries()]

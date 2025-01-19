@@ -3,9 +3,9 @@ from ...data import aggregate, nasdaq
 import random
 import time
 import numpy as np
-from logging import Logger
 import logging
 
+logger = logging.getLogger(__name__)
 START_TIME = dateutils.str_to_unix('2022-07-01 00:00:00', tz = dateutils.EST)
 END_TIME = dateutils.str_to_unix('2025-01-01 00:00:00', tz = dateutils.EST)
 
@@ -14,8 +14,7 @@ def generate_input(
     ticker: nasdaq.NasdaqListedEntry,
     prices_size: int,
     prices_ratio: float,
-    end_time: float,
-    *, logger: Logger = None
+    end_time: float
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, str, str, str, float]:
     #1. Get the prices
     d1_prices_count = int(prices_size*prices_ratio)
@@ -23,8 +22,8 @@ def generate_input(
     d1_start_time = (end_time-(d1_prices_count*2+5)*24*3600) #for 10 d1 prices fetch from 20 days earlier
     h1_start_time = (end_time-(h1_prices_count/3+5)*24*3600)
 
-    d1_prices, d1_volumes = aggregate.get_hourly_pricing(ticker, d1_start_time, end_time, logger = logger)
-    h1_prices, h1_volumes = aggregate.get_hourly_pricing(ticker, h1_start_time, end_time, logger = logger)
+    d1_prices, d1_volumes = aggregate.get_hourly_pricing(ticker, d1_start_time, end_time)
+    h1_prices, h1_volumes = aggregate.get_hourly_pricing(ticker, h1_start_time, end_time)
     if not d1_prices or not h1_prices or len(d1_prices) < d1_prices_count or len(h1_prices) < h1_prices_count:
         raise Exception(f'Failed to fetch enough prices for {ticker.symbol}')
 
@@ -38,7 +37,7 @@ def generate_input(
     d1_prices /= last_price
     h1_prices /= last_price
 
-    shares = aggregate.get_shares_outstanding_at(ticker, end_time, logger=logger)
+    shares = aggregate.get_shares_outstanding_at(ticker, end_time)
     d1_volumes /= shares
     h1_volumes /= shares
     market_cap = last_price*shares
@@ -46,7 +45,7 @@ def generate_input(
     #3. Get the textual data
     market_summary = aggregate.get_market_summary(end_time)
     company_summary = aggregate.get_company_summary(ticker)
-    titles = aggregate.get_company_news(ticker.symbol, d1_start_time, end_time, logger = logger)
+    titles = aggregate.get_company_news(ticker.symbol, d1_start_time, end_time)
 
     return (d1_prices, d1_volumes, h1_prices, h1_volumes, market_cap, market_summary, company_summary, titles, last_price)
 
@@ -54,9 +53,7 @@ def generate_example(
     ticker: nasdaq.NasdaqListedEntry,
     end_time: float,
     prices_size: int,
-    prices_ratio: float = 0.8,
-
-    logger: Logger = None
+    prices_ratio: float = 0.8
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, str, str, str, float]:
     """
     Generates a text example.
@@ -71,9 +68,9 @@ def generate_example(
         (d1_prices, d1_volumes, h1_prices, h1_volumes, market_cap, market_summary, company_summary, titles, expect)
         Where expect is a value from 0 to 1.
     """
-    data = generate_input(ticker, prices_size, prices_ratio, end_time, logger=logger)
+    data = generate_input(ticker, prices_size, prices_ratio, end_time)
     last_price = data[-1]
-    after_price, _ = aggregate.get_hourly_pricing(ticker.symbol, end_time+60, end_time+5*24*3600, logger=logger)
+    after_price, _ = aggregate.get_hourly_pricing(ticker.symbol, end_time+60, end_time+5*24*3600)
     if not after_price or len(after_price) < 7:
         raise Exception(f"Failed to fetch enough after prices for {ticker.symbol}")
     after_price = max(after_price[:8]) / last_price
@@ -85,12 +82,11 @@ def generate_example(
 def generate_current(
     ticker: nasdaq.NasdaqListedEntry,
     prices_size: int,
-    prices_ratio = 0.8,
-    logger: Logger = None
+    prices_ratio = 0.8
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, str, str, str, float]:
     """
     Generates input for prediction.
     Returns: Same as generate_example, except no expected value.
     """
-    data = generate_input(ticker, prices_size, prices_ratio, time.time(), logger=logger)
+    data = generate_input(ticker, prices_size, prices_ratio, time.time())
     return data[:-1]
