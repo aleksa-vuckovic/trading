@@ -1,7 +1,10 @@
 from . import nasdaq, macrotrends, yahoo, zacks, seekingalpha
+from ..utils import common
 import logging
 
 logger = logging.getLogger(__name__)
+_MODULE = __name__.split(".")[-1]
+_CACHE = common.CACHE / _MODULE
 
 # Aggregating methods
 def get_shares_outstanding_at(ticker: nasdaq.NasdaqListedEntry, unix_time: float) -> float:
@@ -12,6 +15,10 @@ def get_shares_outstanding_at(ticker: nasdaq.NasdaqListedEntry, unix_time: float
     return float(yahoo.get_shares(ticker.symbol))
 def get_first_trade_time(ticker: nasdaq.NasdaqListedEntry) -> float:
     return yahoo.get_first_trade_time(ticker.symbol)
+def get_sorted_tickers() -> list[dict]:
+    tickers = [{"ticker": it, "unix_time": yahoo.get_first_trade_time(it.symbol)} for it in nasdaq.get_filtered_entries()]
+    return sorted(tickers, key=lambda it: it["unix_time"])
+
 
 def get_hourly_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float) -> tuple[list[float], list[float]]:
     return yahoo.get_yahoo_pricing(ticker.symbol, unix_from, unix_to, yahoo.Interval.H1)

@@ -2,12 +2,13 @@ import requests
 from enum import Enum
 import logging
 import re
-from ..utils import httputils
+from ..utils import httputils, common
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 _URL = "https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt"
 _MODULE: str = __name__.split(".")[-1]
+_CACHE = common.CACHE / _MODULE
 
 class NasdaqMarket(Enum):
     SELECT = 'Q'
@@ -36,7 +37,7 @@ class NasdaqListedEntry:
         return bool(re.search(warrant_pattern, self.name, re.IGNORECASE))
     
     def is_tradable(self) -> bool:
-        return not self.test and self.status in [FinancialStatus.NORMAL, FinancialStatus.DELINQUENT] and not self.next_shares
+        return not self.test and self.status in [FinancialStatus.NORMAL, FinancialStatus.DELINQUENT]
 
     def short_name(self) -> str:
         try:
@@ -108,9 +109,13 @@ class NasdaqListedEntry:
         return self._line
     
 def get_all_entries() -> list[NasdaqListedEntry]:
-    response = httputils.get_as_browser(_URL)
+    path = _CACHE / "data"
+    if path.exists():
+        data = path.read_text()
+    else:
+        data = httputils.get_as_browser(_URL).text
     result = []
-    for row in response.text.splitlines(False):
+    for row in data.splitlines(False):
         try:
             result.append(NasdaqListedEntry.from_line(row))
         except:
@@ -118,7 +123,7 @@ def get_all_entries() -> list[NasdaqListedEntry]:
     return result
 
 def get_filtered_entries() -> list[NasdaqListedEntry]:
-    return [it for it in get_all_entries() if not it.is_warrant() and it.is_tradable()]
+    return [it for it in get_all_entries() if it.is_tradable() and len(it.symbol) == 4]
 
 def get_filtered_tickers() -> list[str]:
     return [it.symbol for it in get_filtered_entries()]

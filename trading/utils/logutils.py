@@ -2,6 +2,9 @@ import logging
 from . import dateutils
 from pathlib import Path
 
+def remove_handlers(logger: logging.Logger):
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
 def configure_logging(testing: bool = False):
     date = str(dateutils.now(tz = dateutils.CET).strftime("%Y-%m-%d %H-%M-%S"))
     logroot = Path("./logs/test") if testing else Path("./logs/prod")
@@ -36,6 +39,9 @@ def configure_logging(testing: bool = False):
     yahoo = logging.getLogger("trading.data.yahoo")
     yahoo.propagate = False
     yahoo.addHandler(file_handlers["yahoo"])
+    nasdaq = logging.getLogger("trading.data.nasdaq")
+    nasdaq.propagate = False
+    nasdaq.addHandler(logging.NullHandler())
     models = logging.getLogger("trading.models")
     models.propagate = False
     models.addHandler(file_handlers["models"])

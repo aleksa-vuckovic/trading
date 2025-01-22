@@ -138,6 +138,8 @@ def get_yahoo_pricing(
     Returns the pricing as two arrays - prices and volume.
     Zero volume entries are filtered out.
     """
+    if interval == Interval.H1 and unix_from < (time.time-730*24*3600):
+        raise Exception("Yahoo only provides hourly data for up to 2 years in the past.")
     ticker = ticker.upper()
     path = _CACHE  / ticker
     path.mkdir(parents = True, exist_ok = True)
