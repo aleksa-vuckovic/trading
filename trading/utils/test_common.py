@@ -129,3 +129,4 @@ class TestCommon(unittest.TestCase):
         self.assertGreater(series[2]["time"], unix_to)
         self.assertEqual(series[0]["time"] + 1, series[1]["time"])
         self.assertEqual(2, invocations)
+        self.assertEqual(4, len(json.loads(livepath.read_text()))) #Make sure previous data is not deleted

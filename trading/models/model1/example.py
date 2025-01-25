@@ -8,6 +8,8 @@ import torch
 from torch.autograd import Function
 from transformers import BertTokenizer, BertModel
 import math
+from enum import Enum
+from matplotlib import pyplot as plt
 
 logger = logging.getLogger(__name__)
 
@@ -24,51 +26,57 @@ TEXT1_I = H1_VOLUMES_I + H1_PRICES
 TEXT2_I = TEXT1_I + TEXT_EMBEDDING_SIZE
 TEXT3_I = TEXT2_I + TEXT_EMBEDDING_SIZE
 MARKET_CAP_I = TEXT3_I + TEXT_EMBEDDING_SIZE
-LIN_5_RESULT_I = MARKET_CAP_I+1
-LIN_10_RESULT_I = LIN_5_RESULT_I + 1
-LIN_5_5_RESULT_I = LIN_10_RESULT_I + 1
-LIN_10_10_RESULT_I = LIN_5_5_RESULT_I + 1
-SIG_5_RESULT_I = LIN_10_10_RESULT_I + 1
-SIG_10_RESULT_I = SIG_5_RESULT_I + 1
-TAN_5_RESULT_I = SIG_10_RESULT_I + 1
-TAN_10_RESULT_I = TAN_5_RESULT_I + 1
+D1_TARGET_I = MARKET_CAP_I + 1
+D2_TARGET_I = D1_TARGET_I + 1
+D7_TARGET_I = D2_TARGET_I + 1
 
-result_types = [
-    LIN_5_RESULT_I,
-    LIN_10_RESULT_I,
-    LIN_5_5_RESULT_I,
-    LIN_10_10_RESULT_I,
-    SIG_5_RESULT_I,
-    SIG_10_RESULT_I,
-    TAN_5_RESULT_I,
-    TAN_10_RESULT_I
-]
+class PriceTarget(Enum):
+    LINEAR_0_5 = 'Linear 0 to 5%'
+    LINEAR_0_10 = 'Linear 0 to 10%'
+    LINEAR_5_5 = 'Linear -5 to 5%'
+    LINEAR_10_10 = 'Linear -10 to 10%'
+    SIGMOID_0_5 = 'Sigmoid 0 to 5%'
+    SIGMOID_0_10 = 'Sigmoid 0 to 10%'
+    TANH_5_5 = 'Tanh -5 to 5%'
+    TANH_10_10 = 'Tanh -10 to 10%'
 
-def bounded(value: float, low: float, high: float):
-    return min(max(value, low), high)
-def get_result(type: int, price_difference: float) -> float:
-    x = price_difference
-    if type == LIN_5_RESULT_I:
-        return bounded(x, 0, 0.05)/0.05
-    if type == LIN_10_RESULT_I:
-        return bounded(x, 0, 0.1)/0.1
-    if type == LIN_5_5_RESULT_I:
-        return bounded(x, -0.05, 0.05)/0.05
-    if type == LIN_10_10_RESULT_I:
-        return bounded(x, -0.1, 0.1)/0.1
-    if type == SIG_5_RESULT_I:
-        t = math.e**(300*x-6)
-        return t/(1+t)
-    if type == SIG_10_RESULT_I:
-        t = math.e**(150*x-7.5)
-        return t/(1+t)
-    if type == TAN_5_RESULT_I:
-        t = math.e**(-150*x)
-        return (1-t)/(1+t)
-    if type == TAN_10_RESULT_I:
-        t = math.e**(-6*x)
-        return (1-t)/(1+t)
-    raise Exception("Unknown result type")
+
+    def get_price(self, normalized_values: torch.Tensor):
+        x = normalized_values
+        if self == PriceTarget.LINEAR_0_5:
+            return torch.clamp(x, min=0, max=0.05)
+        if self == PriceTarget.LINEAR_0_10:
+            return torch.clamp(x, min=0, max=0.1)
+        if self == PriceTarget.LINEAR_5_5:
+            return torch.clamp(x, min=-0.05, max=0.05)
+        if self == PriceTarget.LINEAR_10_10:
+            return torch.clamp(x, min=-0.1, max=0.1)
+        if self == PriceTarget.SIGMOID_0_5:
+            x = torch.exp(300*x-6)
+            return x/(1+x)
+        if self == PriceTarget.SIGMOID_0_10:
+            x = torch.exp(150*x-7.5)
+            return x/(1+x)
+        if self == PriceTarget.TANH_5_5:
+            x = torch.exp(-150*x)
+            return (1-x)/(1+x)
+        if self == PriceTarget.TANH_10_10:
+            x = torch.exp(-60*x)
+            return (1-x)/(1+x)
+        raise Exception("Unknown price target type")
+    
+    def plot(self):
+        x = torch.linspace(-0.15, 0.15, 100, dtype=torch.float32)
+        for i, pt in enumerate(PriceTarget):
+            fig = plt.figure(i // 4)
+            fig.suptitle(f'Window {i//4}')
+            axes = fig.add_subplot(2,2,i%4 + 1)
+            axes.plot(x, pt.get_price(x), label=pt.name)
+            axes.set_title(pt.name)
+            axes.grid(True)
+
+        [plt.figure(it).tight_layout() for it in plt.get_fignums()]
+        plt.show()
 
 def generate_input(
     ticker: nasdaq.NasdaqListedEntry,
@@ -80,10 +88,10 @@ def generate_input(
 
     d1_prices, d1_volumes = aggregate.get_daily_pricing(ticker, d1_start_time, end_time)
     h1_prices, h1_volumes = aggregate.get_hourly_pricing(ticker, h1_start_time, end_time)
-    if not d1_prices or len(d1_prices) < D1_PRICES:
-        raise Exception(f'Failed to fetch enough daily prices for {ticker.symbol}. Got {d1_prices and len(d1_prices)}')
-    if not h1_prices or len(h1_prices) < H1_PRICES:
-        raise Exception(f'Failed to fetch enough hourly prices for {ticker.symbol}. Got {h1_prices and len(h1_prices)}')
+    if len(d1_prices) < D1_PRICES:
+        raise Exception(f'Failed to fetch enough daily prices for {ticker.symbol}. Got {len(d1_prices)}')
+    if len(h1_prices) < H1_PRICES:
+        raise Exception(f'Failed to fetch enough hourly prices for {ticker.symbol}. Got {len(h1_prices)}')
     
     d1_prices = torch.tensor(d1_prices[-D1_PRICES:], dtype=torch.float64)
     d1_volumes = torch.tensor(d1_volumes[-D1_PRICES:], dtype=torch.float64)
@@ -122,25 +130,19 @@ def generate_example(
     The total number of prices will be prices_size, with prices_ration for 1d and (1-prices_ratio) for 1h prices.
     The last relevant market summary, the company summary, and the last 10 relevant news titles,
     will be passed as three text segments, to be processed by the language processor separately.
-    The expected result is a number between -1 and 1, indicating the price action in the following day of trading (that is 8 hours).
-        1 means that the price will rise 5 or more percent.
-        0 means that the price will not rise.
-        -1 means that the price will fall 5 or more percent.
-        The inbetween is linearly distributed.
     Returns:
         (d1_prices, d1_volumes, h1_prices, h1_volumes, market_cap, market_summary, company_summary, titles, expect)
         Where expect is a value from 0 to 1.
     """
     data, last_price = generate_input(ticker, end_time)
-    after_price, _ = aggregate.get_hourly_pricing(ticker, end_time+60, end_time+5*24*3600)
-    if not after_price or len(after_price) < 7:
-        raise Exception(f"Failed to fetch enough after prices for {ticker.symbol}")
-    after_price = max(after_price[:8]) / last_price
-    after_price -= 1
-    results = [get_result(type, after_price) for type in result_types]
-    results = torch.tensor(results, dtype=torch.float64)
-    data = torch.concat([data, results], dim=0)
-
+    h_after_prices, _ = aggregate.get_hourly_pricing(ticker, end_time + 10, dateutils.add_business_days_unix(end_time, 3, tz=dateutils.EST))
+    d_after_prices, _ = aggregate.get_daily_pricing(ticker, end_time + 10, dateutils.add_business_days_unix(end_time, 5, tz=dateutils.EST))
+    if len(h_after_prices) < 14:
+        raise Exception(f"Failed to fetch enough houry after prices for {ticker.symbol}. Got {len(h_after_prices)}.")
+    if len(d_after_prices) < 4:
+        raise Exception(f"Failed to fetch enough daily after prices for {ticker.symbol}. Got {len(d_after_prices)}.")
+    after_prices = torch.tensor([max(h_after_prices[:8]), max(h_after_prices[:15]), max(d_after_prices[:5])], dtype=torch.float64) / last_price - 1
+    data = torch.concat([data, after_prices], dim=0)
     logger.info(f'Generated example for {ticker.symbol} for end time {str(dateutils.unix_to_datetime(end_time))}')
     return data
 

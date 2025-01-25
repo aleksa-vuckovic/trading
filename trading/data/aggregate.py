@@ -26,8 +26,14 @@ def get_sorted_tickers() -> list[dict]:
     return sorted(tickers, key=lambda it: it["unix_time"])
 
 def get_hourly_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float) -> tuple[list[float], list[float]]:
+    """
+    Returns a tuple of arrays - prices and volumes.
+    """
     return yahoo.get_yahoo_pricing(ticker.symbol, unix_from, unix_to, yahoo.Interval.H1)
 def get_daily_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float) -> tuple[list[float], list[float]]:
+    """
+    Returns a tuple of arrays - prices and volumes.
+    """
     return yahoo.get_yahoo_pricing(ticker.symbol, unix_from, unix_to, yahoo.Interval.D1)
 
 def get_market_summary(unix_time: float) -> str:

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import re
 
@@ -16,8 +16,30 @@ def str_to_unix(time_string: str, format: str = "%Y-%m-%d %H:%M:%S", tz = EST) -
     time = tz.localize(time)
     return int(time.timestamp())
 
-def unix_to_datetime(unix: int, tz = EST) -> datetime:
+def unix_to_datetime(unix: float, tz = EST) -> datetime:
     return datetime.fromtimestamp(unix, tz = tz)
+
+def add_business_days_unix(unix: float, count: int, tz = EST) -> float:
+    time = unix_to_datetime(unix, tz=tz)
+    return add_business_days_datetime(time, count).timestamp()
+
+def add_business_days_datetime(time: datetime, count: int) -> datetime:
+    """
+    Adds count business days to time and returns the result.
+    A business day is 24 hours during weekdays.
+    """
+    if time.weekday() >= 5:
+        time = to_start_of_day_datetime(time)
+        while time.weekday() >= 5:
+            time += timedelta(days=1)
+    for i in range(count):
+        time += timedelta(days=1)
+        while time.weekday() >= 5:
+            time += timedelta(days = 1)
+    return time
+
+def to_start_of_day_datetime(time: datetime) -> datetime:
+    return time.replace(hour=0, minute=0, second=0, microsecond=0)
 
 def now(tz = EST) -> datetime:
     return datetime.now(tz = tz)

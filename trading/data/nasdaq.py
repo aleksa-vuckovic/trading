@@ -107,8 +107,12 @@ class NasdaqListedEntry:
         return repr(self)
     def __repr__(self):
         return self._line
-    
+
+_entries = None
 def get_all_entries() -> list[NasdaqListedEntry]:
+    global _entries
+    if _entries:
+        return _entries
     path = _CACHE / "data"
     if path.exists():
         data = path.read_text()
@@ -120,6 +124,7 @@ def get_all_entries() -> list[NasdaqListedEntry]:
             result.append(NasdaqListedEntry.from_line(row))
         except:
             logger.error(f'Failed to parse line:\n{row}', exc_info=True)
+    _entries = result
     return result
 
 def get_filtered_entries() -> list[NasdaqListedEntry]:

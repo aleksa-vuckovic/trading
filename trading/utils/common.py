@@ -52,7 +52,6 @@ def binary_search(
             i = mid
     return j if edge == BinarySearchEdge.HIGH else i if edge == BinarySearchEdge.LOW else None
 
-
 def _find_host(url: str) -> str | None:
     host = re.search(r"https?://(www.)?([^/\.]*)", url)
     if host:
@@ -249,7 +248,7 @@ def cached_series(
                         new_data = func(*args, **kwargs)
                         get_series(data).extend(get_series(new_data))
                         extend(data)
-                        subpath.write_text(json.dumps(new_data))
+                        subpath.write_text(json.dumps(data))
                         meta["live"] = {"id": id, "fetch": unix_now}
                     else:
                         data = json.loads(subpath.read_text())
