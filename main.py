@@ -1,34 +1,26 @@
-from trading.data import yahoo, nasdaq, seekingalpha, macrotrends, zacks, polygon, aggregate
 from trading.utils import dateutils, httputils, logutils, common
-from enum import Enum
-import requests
-from datetime import datetime, timezone
-import re
-import time
-import pytz
-from trading.models.model1 import example
-import random
-from pathlib import Path
-import json
+logutils.configure_logging()
+from trading.data import yahoo, nasdaq, seekingalpha, macrotrends, zacks, polygon, aggregate
 from logging import Logger
-from enum import Enum
-import shutil
 import logging
 from tqdm import tqdm
 from trading.models.model1.network import Model
-
-logutils.configure_logging()
-
-print('hi')
+import torchinfo
 import torch
-from torch.autograd import Function
-from transformers import BertTokenizer, BertModel
+from trading.models.model1 import generator, example, test_generator
+#model = Model()
+#total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+#print(total_params)
+from time import sleep
+from tqdm import tqdm
+import sys
 
+logger = logging.getLogger(__name__)
 
-model = Model()
-total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-print(total_params)
-
+try:
+    generator.run_ordered_loop(hour=int(sys.argv[1]))
+except:
+    logger.error('Generator loop exception.', exc_info=True)
 
 """TODO 1. Finish polygon impl
         2. Add polygon as fallback for pricing

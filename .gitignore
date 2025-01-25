@@ -8,3 +8,6 @@ logstest
 /test.*
 !/test.py
 /main.py
+examples/
+/ttest.py
+**/*loop_state.json

@@ -41,6 +41,10 @@ def _create_yahoo_finance_pricing_query(
     events: list[Event] = [Event.DIVIDEND, Event.SPLIT, Event.EARNINGS],
     include_pre_post = False
 ) -> str:
+    if interval == Interval.H1:
+        earliest = time.time() - 729*24*3600
+        start_time = max(start_time, earliest)
+        end_time = start_time + 1 if end_time < start_time else end_time
     result =  f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker.upper()}"
     result += f"?period1={int(start_time)}&period2={math.ceil(end_time)}&interval={interval.value}"
     result += f"&incldePrePost={str(include_pre_post).lower()}&events={"|".join([it.value for it in events])}"
@@ -78,10 +82,13 @@ def _get_yahoo_pricing(
             return data['events']
         return {}
     def get_arrays(data):
-        arrays = data['chart']['result'][0]['indicators']['quote'][0]
-        arrays['timestamp'] = data['chart']['result'][0]['timestamp']
+        data = data['chart']['result'][0]
+        if 'timestamp' not in data or not data['timestamp']:
+            return {'timestamp': [], 'open': [], 'close': [], 'low': [], 'high': [], 'volume': []}
+        arrays = data['indicators']['quote'][0]
+        arrays['timestamp'] = data['timestamp']
         try:
-            arrays['adjclose'] = data['chart']['result'][0]['indicators']['adjclose'][0]['adjclose']
+            arrays['adjclose'] = data['indicators']['adjclose'][0]['adjclose']
         except:
             pass
         vols = arrays['volume']
@@ -138,8 +145,6 @@ def get_yahoo_pricing(
     Returns the pricing as two arrays - prices and volume.
     Zero volume entries are filtered out.
     """
-    if interval == Interval.H1 and unix_from < (time.time-730*24*3600):
-        raise Exception("Yahoo only provides hourly data for up to 2 years in the past.")
     ticker = ticker.upper()
     path = _CACHE  / ticker
     path.mkdir(parents = True, exist_ok = True)

@@ -11,14 +11,19 @@ def get_shares_outstanding_at(ticker: nasdaq.NasdaqListedEntry, unix_time: float
     try:
         return macrotrends.get_shares_outstanding_at(ticker, unix_time)
     except:
-        logger.error("Failed to get shares outstanding from macrotrends. Fallback to yahoo.", exc_info=True)
+        pass#logger.error("Failed to get shares outstanding from macrotrends. Fallback to yahoo.", exc_info=True)
     return float(yahoo.get_shares(ticker.symbol))
 def get_first_trade_time(ticker: nasdaq.NasdaqListedEntry) -> float:
     return yahoo.get_first_trade_time(ticker.symbol)
 def get_sorted_tickers() -> list[dict]:
-    tickers = [{"ticker": it, "unix_time": yahoo.get_first_trade_time(it.symbol)} for it in nasdaq.get_filtered_entries()]
+    tickers = []
+    for it in nasdaq.get_filtered_entries():
+        try:
+            first_trade = yahoo.get_first_trade_time(it.symbol)
+            tickers.append({"ticker": it, "unix_time": first_trade})
+        except:
+            logger.error(f"Skipping {it.symbol}. No first trade time.")
     return sorted(tickers, key=lambda it: it["unix_time"])
-
 
 def get_hourly_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float) -> tuple[list[float], list[float]]:
     return yahoo.get_yahoo_pricing(ticker.symbol, unix_from, unix_to, yahoo.Interval.H1)

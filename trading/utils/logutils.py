@@ -1,6 +1,7 @@
 import logging
 from . import dateutils
 from pathlib import Path
+from logging.handlers import RotatingFileHandler
 
 def remove_handlers(logger: logging.Logger):
     for handler in logger.handlers[:]:
@@ -26,8 +27,8 @@ def configure_logging(testing: bool = False):
     file_handler_names = ["data", "yahoo", "models", "others"]
     file_handlers = {}
     for name in file_handler_names:
-        handler = logging.FileHandler(filename=logroot / f"{date} - {name}", mode="w")
-        handler.setFormatter(simple_formatter)
+        handler = RotatingFileHandler(filename=logroot / f"{date} - {name}.txt", mode="w", maxBytes=1024*1024, backupCount=3)
+        handler.setFormatter(timed_simple_formatter)
         file_handlers[name] = handler
 
     #loggers
@@ -41,11 +42,12 @@ def configure_logging(testing: bool = False):
     yahoo.addHandler(file_handlers["yahoo"])
     nasdaq = logging.getLogger("trading.data.nasdaq")
     nasdaq.propagate = False
+    remove_handlers(nasdaq)
     nasdaq.addHandler(logging.NullHandler())
     models = logging.getLogger("trading.models")
     models.propagate = False
     models.addHandler(file_handlers["models"])
     for logger in [root, data, yahoo, models]:
-        if not testing:
-            logger.addHandler(console_handler)
+        """if not testing:
+            logger.addHandler(console_handler)"""
         logger.setLevel(logging.INFO)

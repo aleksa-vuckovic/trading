@@ -6,10 +6,52 @@ from pathlib import Path
 import logging
 from enum import Enum
 import json
-from typing import Callable
+from typing import Callable, Any
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 CACHE = Path(__file__).parent.parent / "data" / "cache"
+
+class BinarySearchEdge(Enum):
+    LOW ='low'
+    HIGH = 'high'
+    NONE = 'none'
+def binary_search(
+    collection: list, key: Callable[[Any], int|float], value: int|float, edge: BinarySearchEdge = BinarySearchEdge.NONE) -> int | None:
+    """
+    Returns the index of value.
+    If the value is not there, returns the index of:
+        - The last smaller value (LOW).
+        - The first bigger value (HIGH).
+        - None (NONE).
+    The collection is assumed to be sorted in ascending order, based on the key.
+    """
+    if not collection:
+        return None
+    i = 0 # Always strictly smaller
+    j = len(collection)-1 # Always strictly larger
+    #Ensure proper initial conditions
+    ival = key(collection[i])
+    jval = key(collection[j])
+    if ival == value:
+        return i
+    if jval == value:
+        return j
+    if ival > value:
+        return i if edge == BinarySearchEdge.HIGH else None
+    if jval < value:
+        return j if edge == BinarySearchEdge.LOW else None
+    while j - i > 1:
+        mid = (i + j) // 2
+        midval = key(collection[mid])
+        if midval == value:
+            return mid
+        if midval > value:
+            j = mid
+        else:
+            i = mid
+    return j if edge == BinarySearchEdge.HIGH else i if edge == BinarySearchEdge.LOW else None
+
 
 def _find_host(url: str) -> str | None:
     host = re.search(r"https?://(www.)?([^/\.]*)", url)
@@ -62,10 +104,9 @@ def backup_timeout(
             nonlocal last_break
             nonlocal last_exception
             nonlocal last_timeout
-            now = time.time()
             if last_break and (last_break + last_timeout > time.time()):
                 if rethrow:
-                    raise last_exception
+                    raise last_exception from None
                 else:
                     return None
             last_break = None
@@ -112,7 +153,7 @@ def cached_series(
         time_step - The maximum time step with which to query the underlying method.
         time_step_fn - Determines the time step used when fetching the data. Can be a constant, or a method with one argument - the include_args list.
         series_field - The json path to locate the time series part of the object (can be empty if it's just the series itself).
-        timestamp_field - The field within a single time series object containing the timestamp value.
+        timestamp_field - The field within a single time series object containing the timestamp value. That field must always contain a valid value!
         live_delay - The maximum delay allowed for recent data.
         return_series_only - Wether to return just the series or the entire object.
     Returns:
@@ -142,7 +183,7 @@ def cached_series(
         except:
             logger.error("Failed to set series.", exc_info=True)
         return data
-    def get_timestamp(time_series_object) -> float | None:
+    def get_timestamp(time_series_object) -> float:
         return float(time_series_object[timestamp_field])
     def get_unix_args(args: list, kwargs: dict) -> tuple[float, float]:
         return float(args[unix_from_arg] if isinstance(unix_from_arg, int) else kwargs[unix_from_arg]), float(args[unix_to_arg] if isinstance(unix_to_arg, int) else kwargs[unix_to_arg])
@@ -173,16 +214,14 @@ def cached_series(
             result = []
             last_data = None
             def extend(data):
-                series = get_series(data)
-                i = 0
-                j = len(series)
-                while i < len(series) and get_timestamp(series[i]) < unix_from:
-                    i += 1
-                while (j > 0 and get_timestamp(series[j-1]) >= unix_to):
-                    j -= 1
-                result.extend(series[i:j])
                 nonlocal last_data
                 last_data = data
+                series = get_series(data)
+                first = binary_search(series, get_timestamp, unix_from, BinarySearchEdge.HIGH)
+                last = binary_search(series, get_timestamp, unix_to, BinarySearchEdge.LOW)
+                if first is None or last is None:
+                    return
+                result.extend(series[first:last+1])
 
             for id in range(start_id, min(end_id, now_id)+1):
                 if id == now_id:
