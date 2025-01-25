@@ -9,5 +9,6 @@ logstest
 !/test.py
 /main.py
 examples/
+examples_bin/
 /ttest.py
 **/*loop_state.json
