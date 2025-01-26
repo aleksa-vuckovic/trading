@@ -177,7 +177,12 @@ def get_info(ticker: str) -> dict:
         return info
 def get_shares(ticker: str) -> int:
     key = 'impliedSharesOutstanding'
-    get_info(ticker)[key]
+    info = get_info(ticker)
+    if key in info:
+        return info[key]
+    key = 'sharesOutstanding'
+    if key in info:
+        return info[key]
 def get_summary(ticker: str) -> dict:
     key = 'longBusinessSummary'
     return get_info(ticker)[key]
