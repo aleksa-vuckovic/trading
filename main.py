@@ -13,19 +13,14 @@ from trading.models.model1 import generator, example, test_generator
 #print(total_params)
 import time
 import sys
-
+"""
 logger = logging.getLogger(__name__)
 
 try:
     generator.run_ordered_loop(hour=int(sys.argv[1]))
 except:
-    logger.error('Generator loop exception.', exc_info=True)
+    logger.error('Generator loop exception.', exc_info=True)"""
 
-"""nvda = nasdaq.NasdaqListedEntry.from_line('NVDA|NVIDIA Corporation - Common Stock|Q|N|N|100|N|N')
-ex = example.generate_example(nvda, time.time() - 15*24*3600)
-print(ex.shape)
-print(example.D7_TARGET_I)
-print(ex[-20:])"""
 """TODO 1. Finish polygon impl
         2. Add polygon as fallback for pricing
 """

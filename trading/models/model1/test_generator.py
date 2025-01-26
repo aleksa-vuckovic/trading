@@ -30,3 +30,7 @@ class TestGenerator(unittest.TestCase):
         input = dateutils.str_to_unix('2025-01-20 11:00:00', tz=dateutils.EST)
         expect = dateutils.str_to_unix('2025-01-20 13:00:00', tz=dateutils.EST)
         self.assertEqual(expect, generator.get_next_time(input, hour=13))
+
+        input = dateutils.str_to_unix('2025-01-24 11:00:00', tz=dateutils.EST)
+        expect = dateutils.str_to_unix('2025-01-27 11:00:00', tz=dateutils.EST)
+        self.assertEqual(expect, generator.get_next_time(input, hour=11))

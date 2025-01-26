@@ -28,15 +28,18 @@ def add_business_days_datetime(time: datetime, count: int) -> datetime:
     Adds count business days to time and returns the result.
     A business day is 24 hours during weekdays.
     """
-    if time.weekday() >= 5:
+    if is_weekend_datetime(time):
         time = to_start_of_day_datetime(time)
-        while time.weekday() >= 5:
+        while is_weekend_datetime(time):
             time += timedelta(days=1)
     for i in range(count):
         time += timedelta(days=1)
-        while time.weekday() >= 5:
+        while is_weekend_datetime(time):
             time += timedelta(days = 1)
     return time
+
+def is_weekend_datetime(time: datetime) -> bool:
+    return time.weekday() >= 5
 
 def to_start_of_day_datetime(time: datetime) -> datetime:
     return time.replace(hour=0, minute=0, second=0, microsecond=0)
