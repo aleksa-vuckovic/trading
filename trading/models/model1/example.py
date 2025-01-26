@@ -137,9 +137,9 @@ def generate_example(
     data, last_price = generate_input(ticker, end_time)
     h_after_prices, _ = aggregate.get_hourly_pricing(ticker, end_time + 10, dateutils.add_business_days_unix(end_time, 3, tz=dateutils.EST))
     d_after_prices, _ = aggregate.get_daily_pricing(ticker, end_time + 10, dateutils.add_business_days_unix(end_time, 5, tz=dateutils.EST))
-    if len(h_after_prices) < 14:
-        raise Exception(f"Failed to fetch enough houry after prices for {ticker.symbol}. Got {len(h_after_prices)}.")
-    if len(d_after_prices) < 4:
+    if len(h_after_prices) < 7:
+        raise Exception(f"Failed to fetch enough hourly after prices for {ticker.symbol}. Got {len(h_after_prices)}.")
+    if len(d_after_prices) < 3:
         raise Exception(f"Failed to fetch enough daily after prices for {ticker.symbol}. Got {len(d_after_prices)}.")
     after_prices = torch.tensor([max(h_after_prices[:8]), max(h_after_prices[:15]), max(d_after_prices[:5])], dtype=torch.float64) / last_price - 1
     data = torch.concat([data, after_prices], dim=0)
