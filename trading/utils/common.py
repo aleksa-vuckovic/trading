@@ -101,7 +101,7 @@ def backup_timeout(
     backoff_factor: float = 2.0
 ):
     last_break = None
-    last_exception = None
+    last_exception: Exception = None
     last_timeout = None
     def decorate(func):
         def wrapper(*args, **kwargs):
@@ -113,6 +113,7 @@ def backup_timeout(
                 if behavior == BackupBehavior.NONE:
                     return None
                 else:
+                    last_exception.__traceback__ = None
                     raise last_exception from None
             last_break = None
             last_exception = None
