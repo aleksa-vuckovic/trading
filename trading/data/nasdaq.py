@@ -128,7 +128,7 @@ def get_all_entries() -> list[NasdaqListedEntry]:
     return result
 
 def get_filtered_entries() -> list[NasdaqListedEntry]:
-    return [it for it in get_all_entries() if it.is_tradable() and len(it.symbol) == 4]
+    return [it for it in get_all_entries() if it.is_tradable() and len(it.symbol) <= 4]
 
 def get_filtered_tickers() -> list[str]:
     return [it.symbol for it in get_filtered_entries()]
