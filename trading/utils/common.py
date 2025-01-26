@@ -80,10 +80,10 @@ class TooManyRequestsException(Exception):
         self.response = response
     
     def __str__(self):
-        return f"Too many requests for {self.module}. Url: {self.url}. Text: {self.response.text}."
+        return f"Too many requests for {self.module}. Url: {self.url}. Code: {self.response.status_code}. Text: {self.response.text}."
 
 def check_response(url: str, response: requests.Response):
-    if response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
+    if response.status_code == HTTPStatus.TOO_MANY_REQUESTS or response.status_code == HTTPStatus.FORBIDDEN:
         raise TooManyRequestsException(url, response)
     if response.status_code != 200:
         raise BadResponseException(url, response)
