@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 examples_folder = Path(__file__).parent / 'examples'
 if not examples_folder.exists():
     examples_folder.mkdir()
-start_time = dateutils.str_to_unix(config.start_time)
-end_time = dateutils.str_to_unix(config.end_time)
+time_frame_end = dateutils.str_to_unix(config.time_frame_end)
+time_frame_start = dateutils.str_to_unix(config.time_frame_start)
 h_offset = 75*24*3600
 
 tickers = aggregate.get_sorted_tickers()
@@ -59,7 +59,7 @@ def run_ordered_loop(hour: int = 16):
         state_path.write_text('{}')
     total_state = json.loads(state_path.read_text())
     if str(hour) not in total_state:
-        state = {'iter': 0, 'unix_time': start_time, 'entry': -1}
+        state = {'iter': 0, 'unix_time': time_frame_start, 'entry': -1}
     else:
         state = total_state[str(hour)]
     iter: int = state['iter']
@@ -68,11 +68,11 @@ def run_ordered_loop(hour: int = 16):
 
     current = []
     while True:
-        with tqdm(total=1000, desc=f'Generating batch {iter+1} ({hour})', leave=True) as bar:
-            while len(current) < 1000:
+        with tqdm(total=config.batch_size, desc=f'Generating batch {iter+1} ({hour})', leave=True) as bar:
+            while len(current) < config.batch_size:
                 if entry >= len(tickers) - 1 or entry < 0:
                     new_time = get_next_time(unix_time, hour=hour)
-                    if new_time > end_time:
+                    if new_time > time_frame_end:
                         logger.info(f"Finished. (new time is now bigger than end time)")
                         break
                     entry = 0
@@ -82,7 +82,7 @@ def run_ordered_loop(hour: int = 16):
                 try:
                     ticker = tickers[entry]['ticker']
                     first_trade_time = tickers[entry]['unix_time']
-                    start_time = max(first_trade_time+h_offset, start_time)
+                    start_time = max(first_trade_time+h_offset, time_frame_start)
                     if start_time > unix_time:
                         logger.info(f"Skipping {ticker.symbol} at index {entry} for time {dateutils.unix_to_datetime(unix_time)} because of first trade time.")
                         entry = len(tickers) - 1
@@ -101,6 +101,6 @@ def run_ordered_loop(hour: int = 16):
         total_state[str(hour)] = state
         state_path.write_text(json.dumps(total_state))
         logger.info(f"Wrote batch number {iter}({hour}) of size {tensor.shape[0]}")
-        if len(current) < 1000:
+        if len(current) < config.batch_size:
             break
         current.clear()

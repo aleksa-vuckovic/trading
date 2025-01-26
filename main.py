@@ -13,15 +13,11 @@ from trading.models.model1 import generator, example, test_generator
 #print(total_params)
 import time
 import sys
-"""
+
 logger = logging.getLogger(__name__)
 
 try:
     generator.run_ordered_loop(hour=int(sys.argv[1]))
 except:
-    logger.error('Generator loop exception.', exc_info=True)"""
-
-"""TODO 1. Finish polygon impl
-        2. Add polygon as fallback for pricing
-"""
+    logger.error('Generator loop exception.', exc_info=True)
 
