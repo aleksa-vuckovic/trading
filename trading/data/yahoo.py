@@ -62,7 +62,7 @@ def _create_yahoo_finance_pricing_query(
     live_delay=3600,
     return_series_only=False
 )
-@common.backup_timeout()
+@common.backup_timeout(behavior=common.BackupBehavior.SLEEP)
 def _get_yahoo_pricing(
     ticker: str,
     unix_from: float, #unix

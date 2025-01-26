@@ -32,7 +32,7 @@ class TestCommon(unittest.TestCase):
         base_timeout = 0.05
         #create a method that always throws an exception
         invocations = 0
-        @common.backup_timeout(exc_type=TestException, rethrow=False, base_timeout=base_timeout, backoff_factor=2)
+        @common.backup_timeout(exc_type=TestException, behavior=common.BackupBehavior.NONE, base_timeout=base_timeout, backoff_factor=2)
         def test_method():
             nonlocal invocations
             invocations += 1

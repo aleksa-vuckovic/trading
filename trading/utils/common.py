@@ -87,11 +87,16 @@ def check_response(url: str, response: requests.Response):
         raise TooManyRequestsException(url, response)
     if response.status_code != 200:
         raise BadResponseException(url, response)
+    
+class BackupBehavior(Enum):
+    NONE = 'Return none'
+    RETHROW = 'Rethrow'
+    SLEEP = 'Sleep'
 
 def backup_timeout(
     *,
     exc_type = TooManyRequestsException,
-    rethrow: bool = True,
+    behavior: BackupBehavior = BackupBehavior.RETHROW,
     base_timeout: float = 10.0,
     backoff_factor: float = 2.0
 ):
@@ -103,11 +108,12 @@ def backup_timeout(
             nonlocal last_break
             nonlocal last_exception
             nonlocal last_timeout
-            if last_break and (last_break + last_timeout > time.time()):
-                if rethrow:
-                    raise last_exception from None
-                else:
+            time_left: float = last_break and (last_break + last_timeout - time.time())
+            if time_left and time_left > 0:
+                if behavior == BackupBehavior.NONE:
                     return None
+                else:
+                    raise last_exception from None
             last_break = None
             last_exception = None
             timeout = last_timeout*backoff_factor if last_timeout else base_timeout
@@ -119,11 +125,12 @@ def backup_timeout(
                     last_break = time.time()
                     last_exception = ex
                     last_timeout = timeout
-                    logger.error(f"Timing {func.__name__} out for {timeout}.", exc_info = True)
-                    if rethrow:
-                        raise
-                    else:
+                    logger.error(f"Timing {func.__name__} out for {timeout} with behavior {behavior}.", exc_info = True)
+                    if behavior == BackupBehavior.NONE:
                         return None
+                    elif behavior == BackupBehavior.RETHROW:
+                        raise
+                    time.sleep(time_left)
                 raise
         return wrapper
     return decorate
