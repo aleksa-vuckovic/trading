@@ -131,7 +131,7 @@ def backup_timeout(
                         return None
                     elif behavior == BackupBehavior.RETHROW:
                         raise
-                    time.sleep(time_left)
+                    time.sleep(timeout)
                 raise
         return wrapper
     return decorate
