@@ -19,7 +19,7 @@ def _format_date(unix: int) -> str:
         .replace("jun", "june")\
         .lower()
 
-@common.backup_timeout(behavior=common.BackupBehavior.SLEEP)
+@common.backup_timeout()
 def _get_summary(unix_time: int) -> str:
     #First find the id by searching through the pages
     #One page = approximately 1 month (more than 1 month, less than 2 months)

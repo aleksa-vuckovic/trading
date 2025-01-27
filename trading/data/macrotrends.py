@@ -12,7 +12,7 @@ _MODULE: str = __name__.split(".")[-1]
 _CACHE = common.CACHE / _MODULE
 
 
-@common.backup_timeout()
+@common.backup_timeout(behavior=common.BackupBehavior.RETHROW)
 def _get_shares_outstanding_raw(ticker: nasdaq.NasdaqListedEntry) -> dict[str, str]:
     shortName = re.sub(r'\s+', '-', ticker.short_name().strip())
     shortName = shortName.replace(".", "").lower()

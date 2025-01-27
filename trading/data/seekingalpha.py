@@ -18,7 +18,7 @@ _CACHE: Path = common.CACHE / _MODULE
     timestamp_field="unix_time",
     live_delay=3600
 )
-@common.backup_timeout(behavior=common.BackupBehavior.SLEEP)
+@common.backup_timeout()
 def _get_news(ticker: str, unix_from: int, unix_to: int) -> list[dict]:
     ticker = ticker.lower()
     url = f"https://seekingalpha.com/api/v3/symbols/{ticker}/news?filter[since]={unix_from}&filter[until]={unix_to}&id={ticker}&include=author&isMounting=true&page[size]=50&page[number]="

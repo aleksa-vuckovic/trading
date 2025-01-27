@@ -7,7 +7,7 @@ import logging
 from enum import Enum
 import json
 from typing import Callable, Any
-from enum import Enum
+from enum import Enum, Flag, auto
 
 logger = logging.getLogger(__name__)
 CACHE = Path(__file__).parent.parent / "data" / "cache"
@@ -88,15 +88,15 @@ def check_response(url: str, response: requests.Response):
     if response.status_code != 200:
         raise BadResponseException(url, response)
     
-class BackupBehavior(Enum):
-    NONE = 'Return none'
-    RETHROW = 'Rethrow'
-    SLEEP = 'Sleep'
+class BackupBehavior(Flag):
+    DEFAULT = 0
+    RETHROW = auto()
+    SLEEP = auto()
 
 def backup_timeout(
     *,
     exc_type = TooManyRequestsException,
-    behavior: BackupBehavior = BackupBehavior.RETHROW,
+    behavior: BackupBehavior = BackupBehavior.SLEEP | BackupBehavior.RETHROW,
     base_timeout: float = 10.0,
     backoff_factor: float = 2.0
 ):
@@ -110,11 +110,13 @@ def backup_timeout(
             nonlocal last_timeout
             time_left: float = last_break and (last_break + last_timeout - time.time())
             if time_left and time_left > 0:
-                if behavior == BackupBehavior.NONE:
-                    return None
-                else:
+                if BackupBehavior.SLEEP in behavior:
+                    time.sleep(time_left)
+                if BackupBehavior.RETHROW in behavior:
                     last_exception.__traceback__ = None
                     raise last_exception from None
+                else:
+                    return None
             last_break = None
             last_exception = None
             timeout = last_timeout*backoff_factor if last_timeout else base_timeout
@@ -127,11 +129,10 @@ def backup_timeout(
                     last_exception = ex
                     last_timeout = timeout
                     logger.error(f"Timing {func.__name__} out for {timeout} with behavior {behavior}.", exc_info = True)
-                    if behavior == BackupBehavior.NONE:
-                        return None
-                    elif behavior == BackupBehavior.RETHROW:
+                    if BackupBehavior.RETHROW in behavior:
                         raise
-                    time.sleep(timeout)
+                    else:
+                        return None
                 raise
         return wrapper
     return decorate
