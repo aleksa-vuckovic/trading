@@ -30,3 +30,17 @@ def fix_nan_inf():
         torch.save(good_batches, examples_folder / file)
         logger.info(f'Batch {file}.\t Discard {bad_count}.\t Keep {good_count}.\t Avg mcap: {market_cap}')
 
+def fix_nan_inf_check():
+    files = os.listdir(examples_bin_folder)
+    total = 0
+    for file in files:
+        batch: torch.Tensor = torch.load(examples_folder / file, weights_only=True)
+        cnt = torch.logical_or(batch.isnan(), batch.isinf()).sum().item()
+        if cnt > 0:
+            print(f'Bad batch: {file}. Cnt = {cnt}. Examples = {batch.shape[0]}')
+            total += 1
+        else:
+            print(f'Good batch, examples {batch.shape[0]}')
+    if total == 0:
+        print('All ok')
+
