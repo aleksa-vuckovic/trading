@@ -118,21 +118,21 @@ class IndividualSeriesLayer(torch.nn.Module):
     """
     def __init__(self, input_length: int, output_features: int = 100):
         super().__init__()
-        #self.conv1 = torch.nn.Sequential(
-        self.batch1 = torch.nn.BatchNorm1d(num_features=1)
-        self.conv1=    torch.nn.Conv1d(in_channels = 1, out_channels = 5, kernel_size = 4, stride = 1)
-        self.relu1=    torch.nn.LeakyReLU()
-        self.batch2 = torch.nn.BatchNorm1d(num_features=5)
-        self.conv12=    torch.nn.Conv1d(in_channels = 5, out_channels = 10, kernel_size = 5, stride = 1)
-        self.relu2=    torch.nn.LeakyReLU()
-        self.batch3=    torch.nn.BatchNorm1d(num_features=10)
-        #)
+        self.conv1 = torch.nn.Sequential(
+            torch.nn.Conv1d(in_channels = 1, out_channels = 5, kernel_size = 4, stride = 1),
+            torch.nn.LeakyReLU(),
+            torch.nn.BatchNorm1d(num_features=5),
+            torch.nn.Conv1d(in_channels = 5, out_channels = 10, kernel_size = 5, stride = 1),
+            torch.nn.LeakyReLU(),
+            torch.nn.BatchNorm1d(num_features=10)
+        )
         inner_features = input_length-3-4
 
         self.conv2 = torch.nn.Sequential(
             torch.nn.AvgPool1d(kernel_size=5),
             torch.nn.Conv1d(in_channels = 10, out_channels = 10, kernel_size = 6, stride = 1),
             torch.nn.LeakyReLU(),
+            torch.nn.BatchNorm1d(num_features=10),
             torch.nn.AvgPool1d(kernel_size=5),
             torch.nn.Conv1d(in_channels=10, out_channels=15, kernel_size=6, stride=2),
             torch.nn.LeakyReLU(),
@@ -143,23 +143,12 @@ class IndividualSeriesLayer(torch.nn.Module):
         self.concat_features = math.ceil(output_features/2)
         self.dense = torch.nn.Sequential(
             torch.nn.Linear(in_features=outer_features*15, out_features=output_features//2),
-            torch.nn.Tanh(),
-            torch.nn.BatchNorm1d(num_features=output_features//2)
+            torch.nn.Tanh()
         )
 
     def forward(self, series):
         series = torch.unsqueeze(series, dim = 1)
-        nans = series.isnan().sum()
-        #inner = self.conv1(series)
-        torch.save(series, 'test2.pt')
-        inner = self.batch1(series)
-        inner = self.conv1(inner)
-        inner = self.relu1(inner)
-        inner = self.batch2(inner)
-        inner = self.conv12(inner)
-        inner = self.relu2(inner)
-        torch.save(inner, 'TEST.pt')
-        inner = self.batch3(inner)
+        inner = self.conv1(series)
         outer = self.dense(torch.flatten(self.conv2(inner), start_dim=1))
         inner = torch.flatten(inner, start_dim=1)
         return torch.concat([inner[:,-self.concat_features:], outer], dim=1)
@@ -186,12 +175,10 @@ class Model(torch.nn.Module):
         self.series_layer = SeriesLayer(output_features=series_features)
 
         combined_features = final_text_features + series_features*4
-        #self.dense1 = torch.nn.Sequential(
-        #    torch.nn.Linear(in_features=combined_features, out_features=100),
-        #    torch.nn.Tanh()
-        #)
-        self.lin1 = torch.nn.Linear(in_features=combined_features, out_features=100)
-        self.tanh1 = torch.nn.Tanh()
+        self.dense1 = torch.nn.Sequential(
+            torch.nn.Linear(in_features=combined_features, out_features=100),
+            torch.nn.Tanh()
+        )
         self.dense2 = torch.nn.Sequential(
             torch.nn.Linear(in_features=100, out_features=10),
             torch.nn.Tanh()
@@ -204,9 +191,7 @@ class Model(torch.nn.Module):
         text_out = self.text_layer(text1, text2, text3)
         series_out = self.series_layer(series1, series2, series3, series4)
         combined = torch.concat([series_out, text_out], dim = 1)
-        #res = self.dense1(combined)
-        res = self.lin1(combined)
-        res = self.tanh1(res)
+        res = self.dense1(combined)
         res = self.dense2(res)
         res = self.dense3(res)
         return res

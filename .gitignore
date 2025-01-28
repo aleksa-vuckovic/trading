@@ -13,3 +13,4 @@ examples_bin/
 /ttest.py
 **/*loop_state.json
 config.py
+checkpoint.pth

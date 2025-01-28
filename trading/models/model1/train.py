@@ -34,7 +34,11 @@ def run_loop(max_epochs = 100000000):
     logger.info(f"Loaded {len(training_files)} training and {len(validation_files)} validation batches")
     model = Model()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    loss_fn = torch.nn.MSELoss()
+    #loss_fn = torch.nn.MSELoss()
+    def loss_fn(x, y):
+        eps = 1e-6
+        loss = -torch.log(1 + eps - torch.abs(x - y) / (1+torch.abs(y)))
+        return loss.mean()
     def accuracy_precision_fn(output: torch.Tensor, expect: torch.Tensor) -> float:
         #Take 0.5 as the breaking point, and asses how many of these are recognized
         output = output > 0.5
@@ -69,7 +73,7 @@ def run_loop(max_epochs = 100000000):
         text3 = batch[:,example.TEXT3_I:example.TEXT3_I+example.TEXT_EMBEDDING_SIZE]
         expect = batch[:,example.D1_TARGET_I]
         expect = example.PriceTarget.TANH_10_10.get_price(expect)
-        return series1, series2*100, series3, series4*100, text1, text2, text3, expect
+        return series1, series2, series3, series4, text1, text2, text3, expect
     
     while epoch < max_epochs:
         model.train()
@@ -88,39 +92,43 @@ def run_loop(max_epochs = 100000000):
                 expect = tensors[-1]
 
                 optimizer.zero_grad()
-                output = model(*input)
+                output = model(*input).squeeze()
                 loss = loss_fn(output, expect)
                 accuracy, precision = accuracy_precision_fn(output, expect)
                 loss.backward()
                 optimizer.step()
-                bar.update(1)
                 
                 total_train_loss += loss.item()
                 total_train_accuracy += accuracy
                 total_train_precision += precision
-                bar.set_postfix(loss = loss.item(), accuracy = accuracy, precision = precision, total_loss = total_train_loss/bar.n, total_accuracy = total_train_accuracy/bar.n, total_precision = total_train_precision/bar.n)
-        total_train_loss /= len(training_files)
-        total_train_accuracy /= len(training_files)
-        total_train_precision /= len(training_files)
+                n = bar.n+1
+                bar.set_postfix(loss = loss.item(), accuracy = accuracy, precision = precision, total_loss = total_train_loss/n, total_accuracy = total_train_accuracy/n, total_precision = total_train_precision/n)
+        n = len(training_files)
+        total_train_loss /= n
+        total_train_accuracy /= n
+        total_train_precision /= n
         
         model.eval()
         with torch.no_grad():
             with tqdm(validation_files, desc = 'Validation...', leave=False) as bar:
-                batch = torch.load(examples_folder / item['file'], weights_only=True).to(device, dtype=torch.float32)
-                tensors = extract_tensors(batch)
-                input = tensors[:-1]
-                expect = input[-1]
+                for item in bar:
+                    batch = torch.load(examples_folder / item['file'], weights_only=True).to(device, dtype=torch.float32)
+                    tensors = extract_tensors(batch)
+                    input = tensors[:-1]
+                    expect = tensors[-1]
 
-                output = model(*input)
-                loss = loss_fn(output, expect)
-                accuracy, precision = accuracy_precision_fn(output, expect)
-                bar.update(1)
-                total_val_loss += loss.item()
-                total_val_accuracy += accuracy
-                total_val_precision += precision
-        total_val_loss /= len(validation_files)
-        total_val_accuracy /= len(validation_files)
-        total_val_precision /= len(validation_files)
+                    output = model(*input).squeeze()
+                    loss = loss_fn(output, expect)
+                    accuracy, precision = accuracy_precision_fn(output, expect)
+
+                    total_val_loss += loss.item()
+                    total_val_accuracy += accuracy
+                    total_val_precision += precision
+                    
+        n = len(validation_files)
+        total_val_loss /= n
+        total_val_accuracy /= n
+        total_val_precision /= n
         print(f"Validation: loss={total_val_loss:.4f} \taccuracy={total_val_accuracy:.4f} \tprecision={total_val_precision:.4f}")
         history.append({
             'total_train_loss': total_train_loss,
