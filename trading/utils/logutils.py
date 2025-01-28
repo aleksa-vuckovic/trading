@@ -6,7 +6,7 @@ from logging.handlers import RotatingFileHandler
 def remove_handlers(logger: logging.Logger):
     for handler in logger.handlers[:]:
         logger.removeHandler(handler)
-def configure_logging(testing: bool = False):
+def configure_logging(testing: bool = False, console: bool = False):
     date = str(dateutils.now(tz = dateutils.CET).strftime("%Y-%m-%d %H-%M-%S"))
     logroot = Path("./logs/test") if testing else Path("./logs/prod")
     logbin = Path("./logs/bin")
@@ -48,6 +48,6 @@ def configure_logging(testing: bool = False):
     models.propagate = False
     models.addHandler(file_handlers["models"])
     for logger in [root, data, yahoo, models]:
-        """if not testing:
-            logger.addHandler(console_handler)"""
+        if console:
+            logger.addHandler(console_handler)
         logger.setLevel(logging.INFO)

@@ -1,4 +1,4 @@
-from ...utils import dateutils
+from ...utils import dateutils, common
 from ...data import aggregate, nasdaq
 import random
 import time
@@ -65,7 +65,8 @@ class PriceTarget(Enum):
             return (1-x)/(1+x)
         raise Exception("Unknown price target type")
     
-    def plot(self):
+    @staticmethod
+    def plot():
         x = torch.linspace(-0.15, 0.15, 100, dtype=torch.float32)
         for i, pt in enumerate(PriceTarget):
             fig = plt.figure(i // 4)
@@ -97,17 +98,15 @@ def generate_input(
     d1_volumes = torch.tensor(d1_volumes[-D1_PRICES:], dtype=torch.float64)
     h1_prices = torch.tensor(h1_prices[-H1_PRICES:], dtype=torch.float64)
     h1_volumes = torch.tensor(h1_volumes[-H1_PRICES:], dtype=torch.float64)
-
-    #2. Normalize prices and volumes
-    last_price = float(d1_prices[-1])
-    d1_prices /= last_price
-    h1_prices /= last_price
-
-    shares = aggregate.get_shares_outstanding_at(ticker, end_time)
-    d1_volumes /= shares
-    h1_volumes /= shares
-    market_cap = torch.tensor([last_price*shares], dtype=torch.float64)
+    last_price = float(h1_prices[-1])
+    market_cap = torch.tensor([last_price*aggregate.get_shares_outstanding_at(ticker, end_time)], dtype=torch.float64)
     
+    #2. Normalize prices and volumes
+    common.normalize_in_place(d1_prices)
+    common.normalize_in_place(d1_volumes)
+    common.normalize_in_place(h1_prices)
+    common.normalize_in_place(h1_volumes)
+
     #3. Get the textual data
     market_summary = aggregate.get_market_summary(end_time)
     company_summary = aggregate.get_company_summary(ticker)
@@ -119,7 +118,11 @@ def generate_input(
             output = model(**inputs).pooler_output.flatten()
         text_inputs.append(output)
     
-    return torch.cat([d1_prices, d1_volumes, h1_prices, h1_volumes, *text_inputs, market_cap], dim=0), last_price
+    result = torch.cat([d1_prices, d1_volumes, h1_prices, h1_volumes, *text_inputs, market_cap], dim=0)
+    bad_entries = torch.logical_or(result.isnan(), result.isinf()).sum().item()
+    if bad_entries > 0:
+        raise Exception(f"Generated example has {bad_entries} nans or infs.")
+    return result, last_price
 
 def generate_example(
     ticker: nasdaq.NasdaqListedEntry,

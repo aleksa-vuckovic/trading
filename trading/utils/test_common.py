@@ -4,8 +4,29 @@ import time
 from pathlib import Path
 import shutil
 import json
+import torch
 
 class TestCommon(unittest.TestCase):
+
+    def test_normalize_in_place(self):
+        tensor = torch.tensor([[1,2,3,4],[5,6,7,8]], dtype=torch.float32)
+        expect = torch.tensor([[1,2/3,1,4],[5,6/7,1,8]], dtype=torch.float32)
+        maxes = common.normalize_in_place(tensor, 1, 2, dim=1)
+        self.assertEqual(8, (tensor==expect).sum().item())
+        self.assertEqual((2,1), tuple(maxes.shape))
+
+        tensor = torch.tensor([[1,2,torch.nan,4],[5,torch.inf,7,8]], dtype=torch.float32)
+        expect = torch.tensor([[1,torch.nan,torch.nan,4],[5,torch.nan,0,8]], dtype=torch.float32)
+        common.normalize_in_place(tensor, 1,2, dim=1)
+        self.assertEqual(5, (tensor==expect).sum().item())
+        self.assertEqual(expect.isnan().sum().item(), tensor.isnan().sum().item())
+
+        tensor = torch.tensor([[[1,2,3],[4,5,6]],[[7,8,9],[10,11,12]]], dtype=torch.float32)
+        expect = torch.tensor([[[1/7,2/8,3/9],[4/10,5/11,6/12]],[[1,1,1],[1,1,1]]], dtype=torch.float32)
+        maxes = common.normalize_in_place(tensor)
+        self.assertEqual(12, (tensor==expect).sum().item())
+        self.assertEqual((1,2,3), tuple(maxes.shape))
+
     def test_binary_search(self):
         collection = [
             {"time": 1},
@@ -32,7 +53,7 @@ class TestCommon(unittest.TestCase):
         base_timeout = 0.05
         #create a method that always throws an exception
         invocations = 0
-        @common.backup_timeout(exc_type=TestException, behavior=common.BackupBehavior.NONE, base_timeout=base_timeout, backoff_factor=2)
+        @common.backup_timeout(exc_type=TestException, behavior=common.BackupBehavior.DEFAULT, base_timeout=base_timeout, backoff_factor=2)
         def test_method():
             nonlocal invocations
             invocations += 1
