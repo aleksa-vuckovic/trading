@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 #Using 1/6th for validation
 examples_folder = Path(__file__).parent / 'examples'
 checkpoint_file = Path(__file__).parent / 'checkpoint.pth'
-learning_rate = 10e-4
+special_checkpoint_file = Path(__file__).parent / 'special_checkpoint.pth'
+learning_rate = 10e-6
 
 
 def get_all_files() -> list[dict]:
@@ -31,12 +32,14 @@ def get_validation_files() -> list[str]:
 def run_loop(max_epochs = 100000000):
     training_files = get_training_files()
     validation_files = get_validation_files()
-    logger.info(f"Loaded {len(training_files)} training and {len(validation_files)} validation batches")
-    model = Model()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logger.info(f"Loaded {len(training_files)} training and {len(validation_files)} validation batches.")
+    logger.info(f"Device: {device}")
+    model = Model().to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     #loss_fn = torch.nn.MSELoss()
     def loss_fn(x, y):
-        eps = 1e-6
+        eps = 1e-5
         loss = -torch.log(1 + eps - torch.abs(x - y) / (1+torch.abs(y)))
         return loss.mean()
     def accuracy_precision_fn(output: torch.Tensor, expect: torch.Tensor) -> float:
@@ -46,10 +49,10 @@ def run_loop(max_epochs = 100000000):
         hits = torch.logical_and(output, expect).sum().item()
         output_n = output.sum().item()
         expect_n = expect.sum().item()
-        return hits / output_n if output_n else 1, hits / expect_n if expect_n else 1
+        return hits / output_n if output_n else 0 if expect_n else 1, hits / expect_n if expect_n else 1
 
     if checkpoint_file.exists():
-        data = torch.load(checkpoint_file, weights_only=True)
+        data = torch.load(checkpoint_file, weights_only=True, map_location=device)
         model.load_state_dict(data['model_state_dict'])
         optimizer.load_state_dict(data['optimizer_state_dict'])
         epoch = data['epoch'] + 1
@@ -59,9 +62,6 @@ def run_loop(max_epochs = 100000000):
         logger.info(f"No state, starting from scratch.")
         epoch = 1
         history = []
-    
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
 
     def extract_tensors(batch: torch.Tensor) -> torch.Tensor:
         series1 = batch[:,example.D1_PRICES_I:example.D1_PRICES_I+example.D1_PRICES]
@@ -140,12 +140,13 @@ def run_loop(max_epochs = 100000000):
         })
         epoch += 1
 
-        torch.save({
+        savedict = {
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'epoch': epoch,
             'history': history
-        }, checkpoint_file)
+        }
+        torch.save(savedict, checkpoint_file)
 
             
 
