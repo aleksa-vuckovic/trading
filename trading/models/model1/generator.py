@@ -87,7 +87,7 @@ def run_ordered_loop(hour: int = 16):
                         logger.info(f"Skipping {ticker.symbol} at index {entry} for time {dateutils.unix_to_datetime(unix_time)} because of first trade time.")
                         entry = len(tickers) - 1
                         continue
-                    current.append(example.generate_example(ticker, unix_time))
+                    current.append(example.generate_example(ticker, unix_time+60)) #One min later because the interval is open at the end in all series returning methods.
                     bar.update(1)
                 except:
                     logger.error(f"Failed to generate example for {ticker.symbol} for {unix_time}", exc_info=True)

@@ -19,9 +19,9 @@ _CACHE: Path = common.CACHE / _MODULE
     live_delay=12*3600
 )
 @common.backup_timeout(behavior=common.BackupBehavior.RETHROW)
-def _get_news(ticker: str, unix_from: int, unix_to: int) -> list[dict]:
+def _get_news(ticker: str, unix_from: float, unix_to: float) -> list[dict]:
     ticker = ticker.lower()
-    url = f"https://seekingalpha.com/api/v3/symbols/{ticker}/news?filter[since]={unix_from}&filter[until]={unix_to}&id={ticker}&include=author&isMounting=true&page[size]=50&page[number]="
+    url = f"https://seekingalpha.com/api/v3/symbols/{ticker}/news?filter[since]={int(unix_from)}&filter[until]={int(unix_to)}&id={ticker}&include=author&isMounting=true&page[size]=50&page[number]="
     i = 1
     ret = []
     while True:
@@ -40,7 +40,7 @@ def _get_news(ticker: str, unix_from: int, unix_to: int) -> list[dict]:
         if len(data) < 50:
             break
         i += 1
-    return sorted(ret, key = lambda it: it['unix_time'])
+    return sorted([it for it in ret if it['unix_time'] >= unix_from and it['unix_time'] < unix_to], key = lambda it: it['unix_time'])
     
 def get_news(ticker: str, unix_from: float, unix_to: float) -> list[str]:
     return [it['title'] for it in _get_news(ticker.upper(), unix_from, unix_to)]

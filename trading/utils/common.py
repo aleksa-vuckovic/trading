@@ -179,6 +179,7 @@ def cached_series(
     The result MUST be a dictionary, list or None, and the time series part MUST be a list or None.
     The time series should be validated and filtered already.
     The underlying method is assumed to be closed at the start and open at the end of the interval.
+        The return of this method is guaranteed to be closed at the start and open at the end.
     It is also assumed to return data sorted by timestamp!
     Args:
         cache_root - The root folder path where cache files are to be stored.
@@ -251,10 +252,10 @@ def cached_series(
                 last_data = data
                 series = get_series(data)
                 first = binary_search(series, get_timestamp, unix_from, BinarySearchEdge.HIGH)
-                last = binary_search(series, get_timestamp, unix_to, BinarySearchEdge.LOW)
-                if first is None or last is None:
+                last = binary_search(series, get_timestamp, unix_to, BinarySearchEdge.HIGH)
+                if first is None or last==0:
                     return
-                result.extend(series[first:last+1])
+                result.extend(series[first:last])
 
             for id in range(start_id, min(end_id, now_id)+1):
                 if id == now_id:

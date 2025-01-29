@@ -91,12 +91,12 @@ class TestCommon(unittest.TestCase):
                 "series": [{"time": float(it), "data": it} for it in range(int(unix_from), int(unix_to) )]
             }
         
-        test1 = get_series(15, unix_to=30, type="type10")
-        test2 = get_series(15, unix_to=30, type="other")
-        self.assertEqual(15, len(test1))
-        self.assertEqual(15, len(test2))
+        test1 = get_series(15, unix_to=29, type="type10")
+        test2 = get_series(15, unix_to=29, type="other")
+        self.assertEqual(14, len(test1))
+        self.assertEqual(14, len(test2))
         self.assertEqual(15, test1[0]['data'])
-        self.assertEqual(29, test2[-1]['data'])
+        self.assertEqual(28, test2[-1]['data'])
         type10_path = cache / "type10"
         other_path = cache / "other"
         self.assertTrue(type10_path.exists())
