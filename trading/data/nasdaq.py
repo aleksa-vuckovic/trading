@@ -78,6 +78,12 @@ class NasdaqListedEntry:
             pass
         return self.name
 
+    def long_name(self) -> str:
+        try:
+            return self.name[:self.name.index(' - ')].strip()
+        except:
+            return self.name
+
     @staticmethod
     def yn_to_bool(yn: str) -> bool:
         if yn.lower() == 'y':

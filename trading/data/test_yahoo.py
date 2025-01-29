@@ -6,8 +6,8 @@ class TestQuery(unittest.TestCase):
     def test_yahoo_pricing_h1(self):
         prices, volume = yahoo.get_yahoo_pricing(
             'nvda',
-            dateutils.str_to_unix("2023-12-01 00:00:00", tz = dateutils.EST),
-            dateutils.str_to_unix("2024-01-15 00:00:00", tz = dateutils.EST),
+            dateutils.str_to_unix("2023-12-01 00:00:00", tz = dateutils.ET),
+            dateutils.str_to_unix("2024-01-15 00:00:00", tz = dateutils.ET),
             yahoo.Interval.H1
         )
         self.assertTrue(prices)
@@ -22,8 +22,8 @@ class TestQuery(unittest.TestCase):
     def test_yahoo_pricing_d1(self):
         prices, volume = yahoo.get_yahoo_pricing(
             'nvda',
-            dateutils.str_to_unix("2021-12-01 00:00:00", tz = dateutils.EST),
-            dateutils.str_to_unix("2022-01-15 00:00:00", tz = dateutils.EST),
+            dateutils.str_to_unix("2021-12-01 00:00:00", tz = dateutils.ET),
+            dateutils.str_to_unix("2022-01-15 00:00:00", tz = dateutils.ET),
             yahoo.Interval.D1
         )
         self.assertTrue(prices)

@@ -1,4 +1,4 @@
-from . import nasdaq, macrotrends, yahoo, zacks, seekingalpha
+from . import nasdaq, macrotrends, yahoo, zacks, seekingalpha, globenewswire
 from ..utils import common
 import logging
 
@@ -45,4 +45,8 @@ def get_company_summary(ticker: nasdaq.NasdaqListedEntry) -> str:
         logger.error(f"Failed to fetch company summary for {ticker}")
         return ""
 def get_company_news(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float) -> str:
-    return ". ".join(seekingalpha.get_news(ticker.symbol, unix_from, unix_to)[-7:])
+    try:
+        news = seekingalpha.get_news(ticker.symbol, unix_from, unix_to)
+    except:
+        news = globenewswire.get_news(ticker, unix_from, unix_to)
+    return ". ".join(news[-7:])

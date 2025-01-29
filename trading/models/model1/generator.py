@@ -21,7 +21,7 @@ h_offset = 75*24*3600
 tickers = aggregate.get_sorted_tickers()
 
 def get_next_time(unix_time: float, hour: int | None = None) -> float:
-    time = dateutils.unix_to_datetime(unix_time, tz = dateutils.EST)
+    time = dateutils.unix_to_datetime(unix_time, tz = dateutils.ET)
     if time.minute or time.second or time.microsecond:
         time = time.replace(minute=0, second=0, microsecond=0)
         time = time + timedelta(hours = 1)
@@ -37,7 +37,7 @@ def get_next_time(unix_time: float, hour: int | None = None) -> float:
     return time.timestamp()
 
 def get_prev_time(unix_time: float, hour: int | None = None) -> float:
-    time = dateutils.unix_to_datetime(unix_time, tz = dateutils.EST)
+    time = dateutils.unix_to_datetime(unix_time, tz = dateutils.ET)
     if time.minute or time.second or time.microsecond:
         time = time.replace(minute = 0, second = 0, microsecond = 0)
         time = time + timedelta(hours = 1)

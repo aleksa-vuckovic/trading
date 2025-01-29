@@ -122,7 +122,7 @@ def backup_timeout(
     *,
     exc_type = TooManyRequestsException,
     behavior: BackupBehavior = BackupBehavior.SLEEP | BackupBehavior.RETHROW,
-    base_timeout: float = 10.0,
+    base_timeout: float = 30.0,
     backoff_factor: float = 2.0
 ):
     last_break = None

@@ -94,7 +94,7 @@ def _get_yahoo_pricing(
         vols = arrays['volume']
         times = arrays['timestamp']
         for key in arrays.keys():
-            arrays[key] = [it for index,it in enumerate(arrays[key]) if vols[index] and times[index] >= unix_from and times[index] <= unix_to]
+            arrays[key] = [it for index,it in enumerate(arrays[key]) if vols[index] and times[index] >= unix_from and times[index] < unix_to]
         return arrays
     def try_adjust(arrays):
         try:

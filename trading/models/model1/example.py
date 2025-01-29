@@ -94,11 +94,11 @@ def generate_input(
     if len(h1_prices) < H1_PRICES:
         raise Exception(f'Failed to fetch enough hourly prices for {ticker.symbol}. Got {len(h1_prices)}')
     
+    last_price = float(h1_prices[-1])
     d1_prices = torch.tensor(d1_prices[-D1_PRICES:], dtype=torch.float64)
     d1_volumes = torch.tensor(d1_volumes[-D1_PRICES:], dtype=torch.float64)
     h1_prices = torch.tensor(h1_prices[-H1_PRICES:], dtype=torch.float64)
     h1_volumes = torch.tensor(h1_volumes[-H1_PRICES:], dtype=torch.float64)
-    last_price = float(h1_prices[-1])
     market_cap = torch.tensor([last_price*aggregate.get_shares_outstanding_at(ticker, end_time)], dtype=torch.float64)
     
     #2. Normalize prices and volumes
@@ -138,8 +138,8 @@ def generate_example(
         Where expect is a value from 0 to 1.
     """
     data, last_price = generate_input(ticker, end_time)
-    h_after_prices, _ = aggregate.get_hourly_pricing(ticker, end_time + 10, dateutils.add_business_days_unix(end_time, 3, tz=dateutils.EST))
-    d_after_prices, _ = aggregate.get_daily_pricing(ticker, end_time + 10, dateutils.add_business_days_unix(end_time, 5, tz=dateutils.EST))
+    h_after_prices, _ = aggregate.get_hourly_pricing(ticker, end_time + 10, dateutils.add_business_days_unix(end_time, 3, tz=dateutils.ET))
+    d_after_prices, _ = aggregate.get_daily_pricing(ticker, end_time + 10, dateutils.add_business_days_unix(end_time, 5, tz=dateutils.ET))
     if len(h_after_prices) < 7:
         raise Exception(f"Failed to fetch enough hourly after prices for {ticker.symbol}. Got {len(h_after_prices)}.")
     if len(d_after_prices) < 3:

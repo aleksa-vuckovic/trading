@@ -13,7 +13,7 @@ _MODULE: str = __name__.split(".")[-1]
 _CACHE: Path = common.CACHE / _MODULE
 
 def _format_date(unix: int) -> str:
-    return dateutils.unix_to_datetime(unix, tz = dateutils.EST)\
+    return dateutils.unix_to_datetime(unix, tz = dateutils.ET)\
         .strftime('%b-%d-%Y')\
         .replace("-0", "-")\
         .replace("jun", "june")\
