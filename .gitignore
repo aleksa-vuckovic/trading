@@ -14,3 +14,4 @@ examples_bin/
 **/*loop_state.json
 config.py
 checkpoint.pth
+/main.py
