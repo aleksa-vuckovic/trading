@@ -182,11 +182,10 @@ def get_info(ticker: str) -> dict:
 def get_shares(ticker: str) -> int:
     key = 'impliedSharesOutstanding'
     info = get_info(ticker)
-    if key in info:
+    if key in info and info[key]:
         return float(info[key])
     key = 'sharesOutstanding'
-    if key in info:
-        return float(info[key])
+    return float(info[key])
 def get_summary(ticker: str) -> str:
     key = 'longBusinessSummary'
     return str(get_info(ticker)[key])

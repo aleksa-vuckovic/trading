@@ -20,9 +20,14 @@ def get_sorted_tickers() -> list[dict]:
     for it in nasdaq.get_filtered_entries():
         try:
             first_trade = get_first_trade_time(it)
-            tickers.append({"ticker": it, "unix_time": first_trade})
         except:
             logger.error(f"Skipping {it.symbol}. No first trade time.")
+            continue
+        try:
+            yahoo.get_shares(it.symbol)
+            tickers.append({"ticker": it, "unix_time": first_trade})
+        except:
+            logger.error(f"Skipping {it.symbol}. No shares outstanding.")
     return sorted(tickers, key=lambda it: it["unix_time"])
 
 def get_hourly_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float) -> tuple[list[float], list[float]]:
