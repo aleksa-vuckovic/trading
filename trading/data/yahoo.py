@@ -12,6 +12,8 @@ import math
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
 _CACHE: Path = common.CACHE / _MODULE
+_MIN_AFTER_FIRST_TRADE = 14*24*3600 # The minimum time after the first trade time to query for prices
+_MIN_ADJUSTMENT_PERIOD = 10*24*3600
 
 class Interval(Enum):
     M1 = '1m'
@@ -33,23 +35,24 @@ class Event(Enum):
     SPLIT = 'split'
     EARNINGS = 'earn'
 
-def _create_yahoo_finance_pricing_query(
+def _get_yahoo_pricing_raw(
     ticker: str,
     start_time: float, #unix
     end_time: float, #unix
     interval: Interval,
     events: list[Event] = [Event.DIVIDEND, Event.SPLIT, Event.EARNINGS],
     include_pre_post = False
-) -> str:
-    if interval == Interval.H1:
-        earliest = time.time() - 729*24*3600
-        start_time = max(start_time, earliest)
-        end_time = start_time + 1 if end_time < start_time else end_time
+) -> dict:
     result =  f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker.upper()}"
     result += f"?period1={int(start_time)}&period2={math.ceil(end_time)}&interval={interval.value}"
     result += f"&incldePrePost={str(include_pre_post).lower()}&events={"|".join([it.value for it in events])}"
     result += f"&&lang=en-US&region=US"
-    return result
+    resp = httputils.get_as_browser(result)
+    return json.loads(resp.text)
+
+"""
+
+"""
 
 @common.cached_series(
     cache_root=_CACHE,
@@ -67,13 +70,15 @@ def _get_yahoo_pricing(
     ticker: str,
     unix_from: float, #unix
     unix_to: float, #unix
-    interval: Interval,
-    events: list[Event] = [Event.DIVIDEND, Event.SPLIT, Event.EARNINGS],
-    include_pre_post = False
+    interval: Interval
 ) -> dict:
-    query = _create_yahoo_finance_pricing_query(ticker, unix_from, unix_to, interval, events, include_pre_post)
-    resp = httputils.get_as_browser(query)
-    data = json.loads(resp.text)
+    first_trade_time = get_first_trade_time(ticker)
+    if interval == Interval.H1:
+        unix_from = max(unix_from, time.time() - 729*24*3600)
+    unix_from = max(unix_from, first_trade_time + _MIN_AFTER_FIRST_TRADE)
+    if unix_to <= unix_from:
+        return {"meta": {}, "events": [], "data": []}
+    data = _get_yahoo_pricing_raw(ticker, unix_from, unix_to, interval)
     def get_meta(data):
         return data['chart']['result'][0]['meta']
     def get_events(data):
@@ -98,8 +103,7 @@ def _get_yahoo_pricing(
         return arrays
     def try_adjust(arrays):
         try:
-            resp = httputils.get_as_browser(_create_yahoo_finance_pricing_query(ticker, unix_to - 14*24*3600, unix_to, Interval.D1))
-            d1data = json.loads(resp.text)
+            d1data = _get_yahoo_pricing_raw(ticker, unix_to - _MIN_ADJUSTMENT_PERIOD, unix_to, Interval.D1)
             d1arrays = get_arrays(d1data)
             if not d1arrays['timestamp']:
                 return
@@ -171,7 +175,7 @@ def get_info(ticker: str) -> dict:
     else:
         info = _get_info(ticker)
         mock_time = int(time.time() - 15*24*3600)
-        meta = _get_yahoo_pricing(ticker, mock_time-100, mock_time, Interval.D1)['meta']
+        meta = _get_yahoo_pricing_raw(ticker, mock_time-100, mock_time, Interval.D1)['chart']['result'][0]['meta']
         info = {**info, **meta}
         path.write_text(json.dumps(info))
         return info
@@ -179,13 +183,17 @@ def get_shares(ticker: str) -> int:
     key = 'impliedSharesOutstanding'
     info = get_info(ticker)
     if key in info:
-        return info[key]
+        return float(info[key])
     key = 'sharesOutstanding'
     if key in info:
-        return info[key]
-def get_summary(ticker: str) -> dict:
+        return float(info[key])
+def get_summary(ticker: str) -> str:
     key = 'longBusinessSummary'
-    return get_info(ticker)[key]
+    return str(get_info(ticker)[key])
 def get_first_trade_time(ticker: str) -> float:
+    key = 'firstTradeDateEpochUtc'
+    info = get_info(ticker)
+    if key in info and info[key]:
+        return float(info[key])
     key = 'firstTradeDate'
-    return float(get_info(ticker)[key])
+    return float(info[key])

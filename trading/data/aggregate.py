@@ -19,7 +19,7 @@ def get_sorted_tickers() -> list[dict]:
     tickers = []
     for it in nasdaq.get_filtered_entries():
         try:
-            first_trade = yahoo.get_first_trade_time(it.symbol)
+            first_trade = get_first_trade_time(it.symbol)
             tickers.append({"ticker": it, "unix_time": first_trade})
         except:
             logger.error(f"Skipping {it.symbol}. No first trade time.")
