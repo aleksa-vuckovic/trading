@@ -25,9 +25,15 @@ def get_sorted_tickers() -> list[dict]:
             continue
         try:
             yahoo.get_shares(it.symbol)
-            tickers.append({"ticker": it, "unix_time": first_trade})
         except:
             logger.error(f"Skipping {it.symbol}. No shares outstanding.")
+            continue
+        try:
+            get_company_summary(it)
+        except:
+            logger.error(f"Skipping {it.symbol}. No company summary.")
+            continue
+        tickers.append({"ticker": it, "unix_time": first_trade})
     return sorted(tickers, key=lambda it: it["unix_time"])
 
 def get_hourly_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float) -> tuple[list[float], list[float]]:
@@ -44,11 +50,7 @@ def get_daily_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_t
 def get_market_summary(unix_time: float) -> str:
     return zacks.get_summary(unix_time)
 def get_company_summary(ticker: nasdaq.NasdaqListedEntry) -> str:
-    try:
-        return yahoo.get_summary(ticker.symbol)
-    except:
-        logger.error(f"Failed to fetch company summary for {ticker}")
-        return ""
+    return yahoo.get_summary(ticker.symbol)
 def get_company_news(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float) -> str:
     try:
         news = seekingalpha.get_news(ticker.symbol, unix_from, unix_to)
