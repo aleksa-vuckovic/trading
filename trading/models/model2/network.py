@@ -10,20 +10,11 @@ class RecursiveLayer(torch.nn.Module):
         self.in_features = in_features
         self.out_features = out_features
         self.time_steps = time_steps
-        
-        self.layer = torch.nn.Sequential(
-            torch.nn.Linear(in_features=in_features+out_features, out_features=out_features),
-            torch.nn.ReLU(),
-            torch.nn.Linear(in_features=out_features, out_features=out_features),
-            torch.nn.ReLU()
-        )
+        self.layer = torch.nn.RNN(input_size=in_features, hidden_size=out_features, num_layers=2, batch_first=True)
     
     def forward(self, series: torch.Tensor):
-        cur = torch.zeros([series.shape[0], self.out_features])
-        for i in range(self.time_steps):
-            cur = torch.cat([cur, series[:,:,i]], dim=1)
-            cur = self.layer(cur)
-        return cur
+        series = series.transpose(1,2)
+        return self.layer(series)[1][-1]
 
 class ConvolutionalLayer(torch.nn.Module):
     def __init__(self, input_features: int, output_features: int = 10):
