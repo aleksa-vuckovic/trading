@@ -10,18 +10,12 @@ TOTAL_H1 = 100
 #streams = [torch.cuda.Stream() for it in range(4)]
 
 class RecursiveLayer(torch.nn.Module):
-    def __init__(self, in_features: int, out_features: int, time_steps: int):
+    def __init__(self, in_features: int, out_features: int):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.time_steps = time_steps
         self.layer = torch.nn.RNN(input_size=in_features, hidden_size=out_features, num_layers=2, batch_first=True)
-    
-    _device = None
-    def get_device(self):
-        if not self._device:
-            self._device = next(self.parameters()).device
-        return self._device
+
     def forward(self, series: torch.Tensor):
         series = series.transpose(1,2)
         return self.layer(series)[1][-1]
@@ -47,14 +41,14 @@ class Model(torch.nn.Module):
         super().__init__()
         self.daily_conv = torch.nn.Sequential(
             ConvolutionalLayer(input_features=3, output_features=10),
-            RecursiveLayer(in_features=10, out_features=10, time_steps=TOTAL_D1)
+            RecursiveLayer(in_features=10, out_features=10)
         )
         self.hourly_conv = torch.nn.Sequential(
             ConvolutionalLayer(input_features=3, output_features=10),
-            RecursiveLayer(in_features=10, out_features=10, time_steps=TOTAL_H1)
+            RecursiveLayer(in_features=10, out_features=10)
         )
-        self.daily = RecursiveLayer(in_features=3, out_features=10, time_steps=TOTAL_D1)
-        self.hourly = RecursiveLayer(in_features=3, out_features=10, time_steps=TOTAL_H1)
+        self.daily = RecursiveLayer(in_features=3, out_features=10)
+        self.hourly = RecursiveLayer(in_features=3, out_features=10)
 
         self.dense = torch.nn.Sequential(
             torch.nn.Linear(in_features=40, out_features=40),
