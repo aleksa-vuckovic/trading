@@ -1,22 +1,21 @@
-from .network import Model, extract_tensors
 from pathlib import Path
 import torch
 from torch import optim
 from tqdm import tqdm
-from ..model1.train import get_training_files, get_validation_files, create_stats
 import logging
-import config
+from ..model1.train import get_training_files, get_validation_files, create_stats
+from .network import Model, extract_tensors
 from ..utils import Batches
 
 logger = logging.getLogger(__name__)
 checkpoint_file = Path(__file__).parent / 'checkpoint.pth'
 special_checkpoint_file = Path(__file__).parent / 'special_checkpoint.pth'
-learning_rate = 10e-4
+learning_rate = 10e-6
 
 def run_loop(max_epochs = 100000000):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    training_batches = Batches(get_training_files(), merge=10000//config.batch_size, device = device)
-    validation_batches = Batches(get_validation_files(), merge=10000//config.batch_size, device=device)
+    training_batches = Batches(get_training_files(), device=device)
+    validation_batches = Batches(get_validation_files(), device=device)
     logger.info(f"Device: {device}")
     logger.info(f"Loaded {len(training_batches)} training and {len(validation_batches)} validation batches.")
 
@@ -77,3 +76,10 @@ def run_loop(max_epochs = 100000000):
             'history': history
         }
         torch.save(savedict, checkpoint_file)
+
+            
+
+
+
+                
+                
