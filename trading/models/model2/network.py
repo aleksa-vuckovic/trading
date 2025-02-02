@@ -30,11 +30,12 @@ class ConvolutionalLayer(torch.nn.Module):
     def __init__(self, input_features: int, output_features: int = 10):
         super().__init__()
         self.layer = torch.nn.Sequential(
-            torch.nn.Conv1d(in_channels = input_features, out_channels = 5, kernel_size = 5, stride = 1, padding=2),
+            torch.nn.Conv1d(in_channels = input_features, out_channels = input_features*3, kernel_size = 5, stride = 1, padding=2),
             torch.nn.ReLU(),
-            torch.nn.Conv1d(in_channels = 5, out_channels = 5, kernel_size = 5, stride = 1, padding=2),
+            torch.nn.Conv1d(in_channels = input_features*3, out_channels = input_features*3, kernel_size = 5, stride = 1, padding=2),
             torch.nn.ReLU(),
-            torch.nn.Conv1d(in_channels = 5, out_channels = output_features, kernel_size=5, stride = 1, padding=2)
+            torch.nn.Conv1d(in_channels = input_features*3, out_channels = output_features, kernel_size=5, stride = 1, padding=2),
+            torch.nn.ReLU()
         )
 
     def forward(self, series):
