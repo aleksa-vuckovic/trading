@@ -89,8 +89,8 @@ class Model(torch.nn.Module):
     @staticmethod
     def print_summary():
         model = Model()
-        input = [(config.batch_size, TOTAL_D1)]*2
-        input += [(config.batch_size, TOTAL_H1)]*2
+        input = [(config.batch_size*10, TOTAL_D1)]*2
+        input += [(config.batch_size*10, TOTAL_H1)]*2
         torchinfo.summary(model, input_size=input)
 
 

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 #Using 1/6th for validation
 checkpoint_file = Path(__file__).parent / 'checkpoint.pth'
 special_checkpoint_file = Path(__file__).parent / 'special_checkpoint.pth'
-learning_rate = 10e-6
+learning_rate = 10e-4
 
 def run_loop(max_epochs = 100000000):
     training_files = get_training_files()
@@ -39,13 +39,12 @@ def run_loop(max_epochs = 100000000):
         epoch = 1
         history = []
 
-
-    
     while epoch < max_epochs:
         model.train()
         with tqdm(training_files, desc=f"Epoch {epoch}", leave=True) as bar:
             for item in bar:
                 batch = torch.load(examples_folder / item['file'], weights_only=True).to(device, dtype=torch.float32)
+                logger.info(f"Loaded batch with shape {batch.shape}")
                 tensors = extract_tensors(batch)
                 input = tensors[:-1]
                 expect = tensors[-1]
