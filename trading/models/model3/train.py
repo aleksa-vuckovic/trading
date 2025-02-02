@@ -1,27 +1,24 @@
-from .network import Model, extract_tensors
-import os
 from pathlib import Path
-import re
 import torch
 from torch import optim
 from tqdm import tqdm
-from ..model1.train import examples_folder, get_training_files, get_validation_files, create_stats
 import logging
-from ...utils import common
-from ..model1 import example
+from ..model1.train import get_training_files, get_validation_files, create_stats
+from .network import Model, extract_tensors
+from ..utils import Batches
 
 logger = logging.getLogger(__name__)
-#Using 1/6th for validation
 checkpoint_file = Path(__file__).parent / 'checkpoint.pth'
 special_checkpoint_file = Path(__file__).parent / 'special_checkpoint.pth'
 learning_rate = 10e-6
 
 def run_loop(max_epochs = 100000000):
-    training_files = get_training_files()
-    validation_files = get_validation_files()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info(f"Loaded {len(training_files)} training and {len(validation_files)} validation batches.")
+    training_batches = Batches(get_training_files(), device=device)
+    validation_batches = Batches(get_validation_files(), device=device)
     logger.info(f"Device: {device}")
+    logger.info(f"Loaded {len(training_batches)} training and {len(validation_batches)} validation batches.")
+
     model = Model().to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     train_stats = create_stats('train')
@@ -41,9 +38,8 @@ def run_loop(max_epochs = 100000000):
 
     while epoch < max_epochs:
         model.train()
-        with tqdm(training_files, desc=f"Epoch {epoch}", leave=True) as bar:
-            for item in bar:
-                batch = torch.load(examples_folder / item['file'], weights_only=True).to(device, dtype=torch.float32)
+        with tqdm(training_batches, desc=f"Epoch {epoch}", leave=True) as bar:
+            for batch in bar:
                 tensors = extract_tensors(batch)
                 input = tensors[:-1]
                 expect = tensors[-1]
@@ -58,9 +54,8 @@ def run_loop(max_epochs = 100000000):
         
         model.eval()
         with torch.no_grad():
-            with tqdm(validation_files, desc = 'Validation...', leave=False) as bar:
-                for item in bar:
-                    batch = torch.load(examples_folder / item['file'], weights_only=True).to(device, dtype=torch.float32)
+            with tqdm(validation_batches, desc = 'Validation...', leave=False) as bar:
+                for batch in bar:
                     tensors = extract_tensors(batch)
                     input = tensors[:-1]
                     expect = tensors[-1]

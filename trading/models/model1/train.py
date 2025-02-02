@@ -1,22 +1,20 @@
-from .network import Model
+from .network import Model, extract_input
 import os
 from pathlib import Path
 import re
 import torch
 from torch import optim
 from tqdm import tqdm
-from . import example
 import logging
-from ...utils import common
+from ..utils import StatCollector, StatContainer, Batches
 
 logger = logging.getLogger(__name__)
-#Using 1/6th for validation
 examples_folder = Path(__file__).parent / 'examples'
 checkpoint_file = Path(__file__).parent / 'checkpoint.pth'
 special_checkpoint_file = Path(__file__).parent / 'special_checkpoint.pth'
 learning_rate = 10e-7
 
-class Accuracy(common.StatCollector):
+class Accuracy(StatCollector):
     def __init__(self):
         super().__init__('accuracy')
     
@@ -28,7 +26,7 @@ class Accuracy(common.StatCollector):
         expect_n = expect.sum().item()
         return hits / output_n if output_n else 0 if expect_n else 1
     
-class Precision(common.StatCollector):
+class Precision(StatCollector):
     def __init__(self):
         super().__init__('precision')
 
@@ -39,7 +37,7 @@ class Precision(common.StatCollector):
         expect_n = expect.sum().item()
         return hits / expect_n if expect_n else 1
 
-class Miss(common.StatCollector):
+class Miss(StatCollector):
     def __init__(self):
         super().__init__('miss')
     
@@ -49,7 +47,7 @@ class Miss(common.StatCollector):
         total_n = output.sum().item()
         return misses_n / total_n if total_n else 0
     
-class CustomLoss(common.StatCollector):
+class CustomLoss(StatCollector):
     def __init__(self):
         super().__init__('loss')
     
@@ -58,29 +56,29 @@ class CustomLoss(common.StatCollector):
         loss = -torch.log(1 + eps - torch.abs(output - expect) / (1+torch.abs(expect)))
         return loss.mean()
     
-def create_stats(name: str) -> common.StatContainer:
-    return common.StatContainer(CustomLoss(), Accuracy(), Precision(), Miss(), name=name)
+def create_stats(name: str) -> StatContainer:
+    return StatContainer(CustomLoss(), Accuracy(), Precision(), Miss(), name=name)
 
 
 def get_all_files() -> list[dict]:
     pattern = re.compile(r"([^_]+)_batch(\d+)-(\d+).pt")
     files = [ pattern.fullmatch(it) for it in os.listdir(examples_folder)]
-    files = [ {'file': it.group(0), 'source': it.group(1), 'batch': int(it.group(2)), 'hour': int(it.group(3))} for it in files if it ]
+    files = [ {'file': examples_folder / it.group(0), 'source': it.group(1), 'batch': int(it.group(2)), 'hour': int(it.group(3))} for it in files if it ]
     return sorted(files, key=lambda it: (it['source'], it['hour'], it['batch']))
 all_files = get_all_files()
 
-def get_training_files() -> list[str]:
-    return [it for it in all_files if it['batch'] % 6]
+def get_training_files() -> list[Path]:
+    return [it['file'] for it in all_files if it['batch'] % 6]
 
-def get_validation_files() -> list[str]:
-    return [it for it in all_files if it['batch']%6 == 0]
+def get_validation_files() -> list[Path]:
+    return [it['file'] for it in all_files if it['batch']%6 == 0]
 
 def run_loop(max_epochs = 100000000):
-    training_files = get_training_files()
-    validation_files = get_validation_files()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info(f"Loaded {len(training_files)} training and {len(validation_files)} validation batches.")
+    training_batches = Batches(get_training_files(), device=device)
+    validation_batches = Batches(get_validation_files(), device=device)
     logger.info(f"Device: {device}")
+    logger.info(f"Loaded {len(training_batches)} training and {len(validation_batches)} validation batches.")
     model = Model().to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     train_stats = create_stats('train')
@@ -97,26 +95,13 @@ def run_loop(max_epochs = 100000000):
         logger.info(f"No state, starting from scratch.")
         epoch = 1
         history = []
-
-    def extract_tensors(batch: torch.Tensor) -> torch.Tensor:
-        series1 = batch[:,example.D1_PRICES_I:example.D1_PRICES_I+example.D1_PRICES]
-        series2 = batch[:,example.D1_VOLUMES_I:example.D1_VOLUMES_I+example.D1_PRICES]
-        series3 = batch[:,example.H1_PRICES_I:example.H1_PRICES_I+example.H1_PRICES]
-        series4 = batch[:,example.H1_VOLUMES_I:example.H1_VOLUMES_I+example.H1_PRICES]
-        text1 = batch[:,example.TEXT1_I:example.TEXT1_I+example.TEXT_EMBEDDING_SIZE]
-        text2 = batch[:,example.TEXT2_I:example.TEXT2_I+example.TEXT_EMBEDDING_SIZE]
-        text3 = batch[:,example.TEXT3_I:example.TEXT3_I+example.TEXT_EMBEDDING_SIZE]
-        expect = batch[:,example.D1_TARGET_I]
-        expect = example.PriceTarget.TANH_10_10.get_price(expect)
-        return series1, series2, series3, series4, text1, text2, text3, expect
     
     while epoch < max_epochs:
         model.train()
-        with tqdm(training_files, desc=f"Epoch {epoch}", leave=True) as bar:
-            for item in bar:
-                batch = torch.load(examples_folder / item['file'], weights_only=True).to(device, dtype=torch.float32)
+        with tqdm(training_batches, desc=f"Epoch {epoch}", leave=True) as bar:
+            for batch in bar:
                 logger.info(f"Loaded a batch of shape {batch.shape}")
-                tensors = extract_tensors(batch)
+                tensors = extract_input(batch)
                 input = tensors[:-1]
                 expect = tensors[-1]
 
@@ -130,10 +115,9 @@ def run_loop(max_epochs = 100000000):
         
         model.eval()
         with torch.no_grad():
-            with tqdm(validation_files, desc = 'Validation...', leave=False) as bar:
-                for item in bar:
-                    batch = torch.load(examples_folder / item['file'], weights_only=True).to(device, dtype=torch.float32)
-                    tensors = extract_tensors(batch)
+            with tqdm(validation_batches, desc = 'Validation...', leave=False) as bar:
+                for batch in bar:
+                    tensors = extract_input(batch)
                     input = tensors[:-1]
                     expect = tensors[-1]
 
