@@ -1,6 +1,9 @@
 import torch
 import math
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 class Batches:
     def __init__(self, files: list[str | Path], merge: int = 1, device: str = "cpu", dtype = torch.float32):
@@ -22,6 +25,7 @@ class Batches:
             files = self.batches.files[self.i:self.i+self.batches.merge]
             result = torch.cat([torch.load(it, weights_only=True) for it in files], dim=0).to(device = self.batches.device, dtype=self.batches.dtype)
             self.i += len(files)
+            logger.info(f"Loaded batch with shape {result.shape}")
             return result
 
     def __iter__(self):
