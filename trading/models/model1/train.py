@@ -7,13 +7,59 @@ from torch import optim
 from tqdm import tqdm
 from . import example
 import logging
+from ...utils import common
 
 logger = logging.getLogger(__name__)
 #Using 1/6th for validation
 examples_folder = Path(__file__).parent / 'examples'
 checkpoint_file = Path(__file__).parent / 'checkpoint.pth'
 special_checkpoint_file = Path(__file__).parent / 'special_checkpoint.pth'
-learning_rate = 10e-6
+learning_rate = 10e-7
+
+class Accuracy(common.StatCollector):
+    def __init__(self):
+        super().__init__('accuracy')
+    
+    def _calculate(self, expect, output):
+        output = output > 0.5
+        expect = expect > 0.5
+        hits = torch.logical_and(output, expect).sum().item()
+        output_n = output.sum().item()
+        expect_n = expect.sum().item()
+        return hits / output_n if output_n else 0 if expect_n else 1
+    
+class Precision(common.StatCollector):
+    def __init__(self):
+        super().__init__('precision')
+
+    def _calculate(self, expect, output):
+        output = output > 0.5
+        expect = expect > 0.5
+        hits = torch.logical_and(output, expect).sum().item()
+        expect_n = expect.sum().item()
+        return hits / expect_n if expect_n else 1
+
+class Miss(common.StatCollector):
+    def __init__(self):
+        super().__init__('miss')
+    
+    def _calculate(self, expect, output):
+        output = output > 0.2
+        misses_n = torch.logical_and(expect < 0, output).sum().item()
+        total_n = output.sum().item()
+        return misses_n / total_n if total_n else 0
+    
+class CustomLoss(common.StatCollector):
+    def __init__(self):
+        super().__init__('loss')
+    
+    def _calculate(self, expect, output):
+        eps = 1e-5
+        loss = -torch.log(1 + eps - torch.abs(output - expect) / (1+torch.abs(expect)))
+        return loss.mean()
+    
+def create_stats(name: str) -> common.StatContainer:
+    return common.StatContainer(CustomLoss(), Accuracy(), Precision(), Miss(), name=name)
 
 
 def get_all_files() -> list[dict]:
@@ -37,19 +83,8 @@ def run_loop(max_epochs = 100000000):
     logger.info(f"Device: {device}")
     model = Model().to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    #loss_fn = torch.nn.MSELoss()
-    def loss_fn(x, y):
-        eps = 1e-5
-        loss = -torch.log(1 + eps - torch.abs(x - y) / (1+torch.abs(y)))
-        return loss.mean()
-    def accuracy_precision_fn(output: torch.Tensor, expect: torch.Tensor) -> float:
-        #Take 0.5 as the breaking point, and asses how many of these are recognized
-        output = output > 0.5
-        expect = expect > 0.5
-        hits = torch.logical_and(output, expect).sum().item()
-        output_n = output.sum().item()
-        expect_n = expect.sum().item()
-        return hits / output_n if output_n else 0 if expect_n else 1, hits / expect_n if expect_n else 1
+    train_stats = create_stats('train')
+    val_stats = create_stats('val')
 
     if checkpoint_file.exists():
         data = torch.load(checkpoint_file, weights_only=True, map_location=device)
@@ -77,12 +112,6 @@ def run_loop(max_epochs = 100000000):
     
     while epoch < max_epochs:
         model.train()
-        total_train_loss = 0
-        total_train_accuracy = 0
-        total_train_precision = 0
-        total_val_loss = 0
-        total_val_accuracy = 0
-        total_val_precision = 0
         with tqdm(training_files, desc=f"Epoch {epoch}", leave=True) as bar:
             for item in bar:
                 batch = torch.load(examples_folder / item['file'], weights_only=True).to(device, dtype=torch.float32)
@@ -93,20 +122,11 @@ def run_loop(max_epochs = 100000000):
 
                 optimizer.zero_grad()
                 output = model(*input).squeeze()
-                loss = loss_fn(output, expect)
-                accuracy, precision = accuracy_precision_fn(output, expect)
+                loss = train_stats.update(expect, output)
                 loss.backward()
                 optimizer.step()
                 
-                total_train_loss += loss.item()
-                total_train_accuracy += accuracy
-                total_train_precision += precision
-                n = bar.n+1
-                bar.set_postfix(loss = loss.item(), accuracy = accuracy, precision = precision, total_loss = total_train_loss/n, total_accuracy = total_train_accuracy/n, total_precision = total_train_precision/n)
-        n = len(training_files)
-        total_train_loss /= n
-        total_train_accuracy /= n
-        total_train_precision /= n
+                bar.set_postfix_str(str(train_stats))
         
         model.eval()
         with torch.no_grad():
@@ -118,26 +138,12 @@ def run_loop(max_epochs = 100000000):
                     expect = tensors[-1]
 
                     output = model(*input).squeeze()
-                    loss = loss_fn(output, expect)
-                    accuracy, precision = accuracy_precision_fn(output, expect)
-
-                    total_val_loss += loss.item()
-                    total_val_accuracy += accuracy
-                    total_val_precision += precision
+                    val_stats.update(expect, output)
                     
-        n = len(validation_files)
-        total_val_loss /= n
-        total_val_accuracy /= n
-        total_val_precision /= n
-        print(f"Validation: loss={total_val_loss:.4f} \taccuracy={total_val_accuracy:.4f} \tprecision={total_val_precision:.4f}")
-        history.append({
-            'total_train_loss': total_train_loss,
-            'total_train_accuracy': total_train_accuracy,
-            'total_train_precision': total_train_precision,
-            'total_val_loss': total_val_loss,
-            'total_val_accuracy': total_val_accuracy,
-            'total_val_precision': total_val_precision
-        })
+        print(str(val_stats))
+        history.append({**train_stats.to_dict(), **val_stats.to_dict(), 'epoch': epoch})
+        train_stats.clear()
+        val_stats.clear()
         epoch += 1
 
         savedict = {
