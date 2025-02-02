@@ -1,115 +1,94 @@
 import torch
-from . import example
 import math
 import torchinfo
-from . import generator
 import config
+from ..model1 import example
 
-
-class IndividualSeriesLayer(torch.nn.Module):
-    """
-    10 layer, 12+90+350=452...
-    ----------------------------
-    1 conv+relu, 1*x->5*(x-3)
-    1 conv+relu, 5*(x-3)->10*(x-7)
-    --
-    1 avgpool,   10*(x-7)->10*((x-7)//5)
-    1 conv+relu,  10*t->10*(t-5)
-    1 avgpool,   10*(t-5)->10*((t-5)//5)
-    1 conv+relu, 10-
-    """
-    def __init__(self, input_length: int, output_features: int = 100):
+class RecursiveLayer(torch.nn.Module):
+    def __init__(self, in_features: int, out_features: int, time_steps: int):
         super().__init__()
-        self.conv1 = torch.nn.Sequential(
-            torch.nn.Conv1d(in_channels = 1, out_channels = 5, kernel_size = 4, stride = 1),
+        self.in_features = in_features
+        self.out_features = out_features
+        self.time_steps = time_steps
+        
+        self.layer = torch.nn.Sequential(
+            torch.nn.Linear(in_features=in_features+out_features, out_features=out_features),
             torch.nn.ReLU(),
-            torch.nn.BatchNorm1d(num_features=5),
-            torch.nn.Conv1d(in_channels = 5, out_channels = 10, kernel_size = 5, stride = 1),
-            torch.nn.ReLU(),
-            torch.nn.BatchNorm1d(num_features=10)
+            torch.nn.Linear(in_features=out_features, out_features=out_features),
+            torch.nn.ReLU()
         )
-        inner_features = input_length-3-4
+    
+    def forward(self, series: torch.Tensor):
+        cur = torch.zeros([series.shape[0], self.out_features])
+        for i in range(self.time_steps):
+            cur = torch.cat([cur, series[:,:,i]], dim=1)
+            cur = self.layer(cur)
+        return cur
 
-        self.conv2 = torch.nn.Sequential(
-            torch.nn.AvgPool1d(kernel_size=5),
-            torch.nn.Conv1d(in_channels = 10, out_channels = 10, kernel_size = 6, stride = 1),
+class ConvolutionalLayer(torch.nn.Module):
+    def __init__(self, input_features: int, output_features: int = 10):
+        super().__init__()
+        self.layer = torch.nn.Sequential(
+            torch.nn.Conv1d(in_channels = input_features, out_channels = 5, kernel_size = 5, stride = 1, padding=2),
             torch.nn.ReLU(),
-            torch.nn.BatchNorm1d(num_features=10),
-            torch.nn.AvgPool1d(kernel_size=5),
-            torch.nn.Conv1d(in_channels=10, out_channels=15, kernel_size=6, stride=2),
+            torch.nn.Conv1d(in_channels = 5, out_channels = 5, kernel_size = 5, stride = 1, padding=2),
             torch.nn.ReLU(),
-            torch.nn.BatchNorm1d(num_features=15, eps=0.0001),
-        )
-        outer_features = ((inner_features//5-5)//5-6)//2+1
-
-        self.concat_features = math.ceil(output_features/2)
-        self.dense = torch.nn.Sequential(
-            torch.nn.Linear(in_features=outer_features*15, out_features=output_features//2),
-            torch.nn.Tanh()
+            torch.nn.Conv1d(in_channels = 5, out_channels = output_features, kernel_size=5, stride = 1, padding=2)
         )
 
     def forward(self, series):
-        series = torch.unsqueeze(series, dim = 1)
-        inner = self.conv1(series)
-        outer = self.dense(torch.flatten(self.conv2(inner), start_dim=1))
-        inner = torch.flatten(inner, start_dim=1)
-        return torch.concat([inner[:,-self.concat_features:], outer], dim=1)
-
-class SeriesLayer(torch.nn.Module):
-    """40 layers"""
-    def __init__(self, output_features: int = 100):
-        super().__init__()
-        self.individual_layers = torch.nn.ModuleList([
-            IndividualSeriesLayer(input_length=example.D1_PRICES if i < 2 else example.H1_PRICES, output_features=output_features)
-            for i in range(4)
-        ])
-    
-    def forward(self, series1, series2, series3, series4):
-        series = [series1, series2, series3, series4]
-        results = [self.individual_layers[i](series[i]) for i in range(4)]
-        return torch.concat(results, dim=1)
+        return self.layer(series)
 
 class Model(torch.nn.Module):
     """64 layers"""
-    def __init__(self, individual_text_features: int = 40, final_text_features: int = 100, series_features: int = 100):
+    def __init__(self):
         super().__init__()
-        self.text_layer = TextLayer(individual_features=individual_text_features, out_features=final_text_features)
-        self.series_layer = SeriesLayer(output_features=series_features)
+        self.daily_conv = torch.nn.Sequential(
+            ConvolutionalLayer(input_features=3, output_features=10),
+            RecursiveLayer(in_features=10, out_features=10, time_steps=example.D1_PRICES)
+        )
+        self.hourly_conv = torch.nn.Sequential(
+            ConvolutionalLayer(input_features=3, output_features=10),
+            RecursiveLayer(in_features=10, out_features=10, time_steps=example.H1_PRICES)
+        )
+        self.daily = RecursiveLayer(in_features=3, out_features=10, time_steps=example.D1_PRICES)
+        self.hourly = RecursiveLayer(in_features=3, out_features=10, time_steps=example.H1_PRICES)
 
-        combined_features = final_text_features + series_features*4
-        self.dense1 = torch.nn.Sequential(
-            torch.nn.Linear(in_features=combined_features, out_features=100),
-            torch.nn.Tanh()
-        )
-        self.dense2 = torch.nn.Sequential(
-            torch.nn.Linear(in_features=100, out_features=10),
-            torch.nn.Tanh()
-        )
-        self.dense3 = torch.nn.Sequential(
+        self.dense = torch.nn.Sequential(
+            torch.nn.Linear(in_features=40, out_features=40),
+            torch.nn.ReLU(),
+            torch.nn.Linear(in_features=40, out_features=10),
+            torch.nn.ReLU(),
             torch.nn.Linear(in_features=10, out_features=1),
             torch.nn.Tanh()
         )
-    def forward(self, series1, series2, series3, series4, text1, text2, text3):
-        text_out = self.text_layer(text1, text2, text3)
-        series_out = self.series_layer(series1, series2, series3, series4)
-        combined = torch.concat([series_out, text_out], dim = 1)
-        res = self.dense1(combined)
-        res = self.dense2(res)
-        res = self.dense3(res)
-        return res
+
+    def forward(self, daily_p, daily_v, hourly_p, hourly_v):
+        daily = torch.cat([
+            torch.unsqueeze(daily_p, dim=1),
+            torch.unsqueeze(daily_v, dim=1),
+            torch.unsqueeze(daily_p*daily_v, dim=1)
+        ], dim=1)
+        hourly = torch.cat([
+            torch.unsqueeze(hourly_p, dim=1),
+            torch.unsqueeze(hourly_v, dim=1),
+            torch.unsqueeze(hourly_p*hourly_v, dim=1)
+        ], dim=1)
+
+        output = torch.cat([
+            self.daily_conv(daily),
+            self.daily(daily),
+            self.hourly_conv(hourly),
+            self.hourly(hourly)
+        ], dim=1)
+
+        return self.dense(output)
     
     @staticmethod
     def print_summary():
         model = Model()
         input = [(config.batch_size, example.D1_PRICES)]*2
         input += [(config.batch_size, example.H1_PRICES)]*2
-        input += [(config.batch_size, example.TEXT_EMBEDDING_SIZE)]*3
         torchinfo.summary(model, input_size=input)
 
-    
-"""64 layers * 100 features * 8 bytes ~ 50kB
-    50kB * 5000 examples = 250MB
 
-    Let's keep it 1000 examples per batch
-
-"""

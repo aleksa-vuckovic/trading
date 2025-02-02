@@ -18,8 +18,6 @@ time_frame_end = dateutils.str_to_unix(config.time_frame_end)
 time_frame_start = dateutils.str_to_unix(config.time_frame_start)
 h_offset = 75*24*3600
 
-tickers = aggregate.get_sorted_tickers()
-
 def get_next_time(unix_time: float, hour: int | None = None) -> float:
     time = dateutils.unix_to_datetime(unix_time, tz = dateutils.ET)
     if time.minute or time.second or time.microsecond:
@@ -54,6 +52,7 @@ def get_prev_time(unix_time: float, hour: int | None = None) -> float:
 
 
 def run_ordered_loop(hour: int = 16):
+    tickers = aggregate.get_sorted_tickers()
     state_path = Path(__file__).parent / 'ordered_loop_state.json'
     if not state_path.exists():
         state_path.write_text('{}')
