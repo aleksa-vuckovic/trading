@@ -71,7 +71,9 @@ def extract_tensors(batch: torch.Tensor) -> torch.Tensor:
     hourly_p = batch[:,example.H1_PRICES_I:example.H1_PRICES_I+example.H1_PRICES]
     hourly_v = batch[:,example.H1_VOLUMES_I:example.H1_VOLUMES_I+example.H1_PRICES]
     daily_p = (daily_p[:,-TOTAL_D1:]-daily_p[:,-TOTAL_D1-1:-1])/daily_p[:,-TOTAL_D1-1:-1]
+    daily_v = daily_v[:,-TOTAL_D1:]
     hourly_p = (hourly_p[:,-TOTAL_H1:]-hourly_p[:,-TOTAL_H1-1:-1])/hourly_p[:,-TOTAL_H1-1:-1]
+    hourly_v = hourly_v[:,-TOTAL_H1:]
     expect = batch[:,example.D1_TARGET_I]
     expect = example.PriceTarget.TANH_10_10.get_price(expect)
     return daily_p, daily_v, hourly_p, hourly_v, expect
