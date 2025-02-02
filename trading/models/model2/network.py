@@ -7,6 +7,8 @@ from ..model1 import example
 TOTAL_D1 = 100
 TOTAL_H1 = 100
 
+streams = [torch.cuda.Stream() for it in range(4)]
+
 class RecursiveLayer(torch.nn.Module):
     def __init__(self, in_features: int, out_features: int, time_steps: int):
         super().__init__()
@@ -74,13 +76,14 @@ class Model(torch.nn.Module):
             torch.unsqueeze(hourly_p*hourly_v, dim=1)
         ], dim=1)
 
-        output = torch.cat([
-            self.daily_conv(daily),
-            self.daily(daily),
-            self.hourly_conv(hourly),
-            self.hourly(hourly)
-        ], dim=1)
-
+        layers = [self.daily_conv, self.daily, self.hourly_conv, self.hourly]
+        inputs = [daily, daily, hourly, hourly]
+        outputs = []
+        for i in range(4):
+            with torch.cuda.stream(streams[i]):
+                outputs.append(layers[i](inputs[i]))
+        torch.cuda.synchronize()
+        output = torch.cat(outputs, dim=1)
         return self.dense(output)
     
     @staticmethod
