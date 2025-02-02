@@ -4,6 +4,9 @@ import torchinfo
 import config
 from ..model1 import example
 
+TOTAL_D1 = 100
+TOTAL_H1 = 100
+
 class RecursiveLayer(torch.nn.Module):
     def __init__(self, in_features: int, out_features: int, time_steps: int):
         super().__init__()
@@ -17,9 +20,15 @@ class RecursiveLayer(torch.nn.Module):
             torch.nn.Linear(in_features=out_features, out_features=out_features),
             torch.nn.ReLU()
         )
+
     
+    _device = None
+    def get_device(self):
+        if not self._device:
+            self._device = next(self.parameters()).device
+        return self._device
     def forward(self, series: torch.Tensor):
-        cur = torch.zeros([series.shape[0], self.out_features])
+        cur = torch.zeros([series.shape[0], self.out_features]).to(self.get_device())
         for i in range(self.time_steps):
             cur = torch.cat([cur, series[:,:,i]], dim=1)
             cur = self.layer(cur)
@@ -45,14 +54,14 @@ class Model(torch.nn.Module):
         super().__init__()
         self.daily_conv = torch.nn.Sequential(
             ConvolutionalLayer(input_features=3, output_features=10),
-            RecursiveLayer(in_features=10, out_features=10, time_steps=example.D1_PRICES)
+            RecursiveLayer(in_features=10, out_features=10, time_steps=TOTAL_D1)
         )
         self.hourly_conv = torch.nn.Sequential(
             ConvolutionalLayer(input_features=3, output_features=10),
-            RecursiveLayer(in_features=10, out_features=10, time_steps=example.H1_PRICES)
+            RecursiveLayer(in_features=10, out_features=10, time_steps=TOTAL_H1)
         )
-        self.daily = RecursiveLayer(in_features=3, out_features=10, time_steps=example.D1_PRICES)
-        self.hourly = RecursiveLayer(in_features=3, out_features=10, time_steps=example.H1_PRICES)
+        self.daily = RecursiveLayer(in_features=3, out_features=10, time_steps=TOTAL_D1)
+        self.hourly = RecursiveLayer(in_features=3, out_features=10, time_steps=TOTAL_H1)
 
         self.dense = torch.nn.Sequential(
             torch.nn.Linear(in_features=40, out_features=40),
@@ -87,8 +96,16 @@ class Model(torch.nn.Module):
     @staticmethod
     def print_summary():
         model = Model()
-        input = [(config.batch_size, example.D1_PRICES)]*2
-        input += [(config.batch_size, example.H1_PRICES)]*2
+        input = [(config.batch_size, TOTAL_D1)]*2
+        input += [(config.batch_size, TOTAL_H1)]*2
         torchinfo.summary(model, input_size=input)
 
 
+def extract_tensors(batch: torch.Tensor) -> torch.Tensor:
+    daily_p = batch[:,example.D1_PRICES_I:example.D1_PRICES_I+example.D1_PRICES]
+    daily_v = batch[:,example.D1_VOLUMES_I:example.D1_VOLUMES_I+example.D1_PRICES]
+    hourly_p = batch[:,example.H1_PRICES_I:example.H1_PRICES_I+example.H1_PRICES]
+    hourly_v = batch[:,example.H1_VOLUMES_I:example.H1_VOLUMES_I+example.H1_PRICES]
+    expect = batch[:,example.D1_TARGET_I]
+    expect = example.PriceTarget.TANH_10_10.get_price(expect)
+    return daily_p[:,-TOTAL_D1:], daily_v[:,-TOTAL_D1:], hourly_p[:,-TOTAL_H1:], hourly_v[:,-TOTAL_H1:], expect

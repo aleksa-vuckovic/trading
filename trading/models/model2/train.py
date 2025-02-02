@@ -1,4 +1,4 @@
-from .network import Model
+from .network import Model, extract_tensors
 import os
 from pathlib import Path
 import re
@@ -39,14 +39,7 @@ def run_loop(max_epochs = 100000000):
         epoch = 1
         history = []
 
-    def extract_tensors(batch: torch.Tensor) -> torch.Tensor:
-        daily_p = batch[:,example.D1_PRICES_I:example.D1_PRICES_I+example.D1_PRICES]
-        daily_v = batch[:,example.D1_VOLUMES_I:example.D1_VOLUMES_I+example.D1_PRICES]
-        hourly_p = batch[:,example.H1_PRICES_I:example.H1_PRICES_I+example.H1_PRICES]
-        hourly_v = batch[:,example.H1_VOLUMES_I:example.H1_VOLUMES_I+example.H1_PRICES]
-        expect = batch[:,example.D1_TARGET_I]
-        expect = example.PriceTarget.TANH_10_10.get_price(expect)
-        return daily_p, daily_v, hourly_p, hourly_v, expect
+
     
     while epoch < max_epochs:
         model.train()
