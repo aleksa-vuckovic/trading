@@ -75,5 +75,5 @@ def extract_tensors(batch: dict[str, Tensor]) -> tuple[Tensor, Tensor, Tensor]:
         return tensor.transpose(1,2)
     daily = process(daily)
     hourly = process(hourly)
-    check_tensors[daily, hourly, after]
+    check_tensors([daily, hourly, after])
     return daily, hourly, after

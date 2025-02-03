@@ -3,8 +3,6 @@ import torchinfo
 from torch import Tensor
 import config
 from ..model2.network import RecursiveLayer, ConvolutionalLayer
-from ..utils import relativize_in_place, PriceTarget, check_tensors
-from . import example
 
 TOTAL_POINTS = 100
 INPUT_FEATURES = 6
@@ -32,7 +30,7 @@ class Model(torch.nn.Module):
             torch.nn.Sigmoid(),
             torch.nn.Linear(in_features=5*INPUT_FEATURES, out_features=10),
             torch.nn.Sigmoid(),
-            torch.nn.BatchNorm1d(num_features=2*INPUT_FEATURES),
+            torch.nn.BatchNorm1d(num_features=10, momentum=0.5),
             torch.nn.Linear(in_features=10, out_features=1),
             torch.nn.Tanh()
         )

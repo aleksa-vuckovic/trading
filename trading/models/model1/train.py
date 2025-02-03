@@ -54,6 +54,9 @@ class CustomLoss(StatCollector):
         loss = -torch.log(1 + eps - torch.abs(output - expect) / (1+torch.abs(expect)))
         return loss.mean()
     
+"""
+Goals: loss < 0.2, accuracy > 0.7, precision > 0.2, miss < 0.1
+"""
 def create_stats(name: str) -> StatContainer:
     return StatContainer(CustomLoss(), Accuracy(), Precision(), Miss(), name=name)
 

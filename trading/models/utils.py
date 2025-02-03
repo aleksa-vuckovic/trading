@@ -225,7 +225,7 @@ class StatCollector:
         return {'running': self.running, 'last': self.last}
     
     def __str__(self):
-        return f"{self.name}={self.running:.3f}({self.last:.2f})"
+        return f"{self.name}={self.running:.4f}({self.last:.2f})"
 
 class StatContainer:
     stats: list[StatCollector]

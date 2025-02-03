@@ -5,8 +5,9 @@ from torch import optim
 from tqdm import tqdm
 from ..model1.train import create_stats
 from ..model5.train import training_files, validation_files
+from ..model5.network import extract_tensors
 from ..utils import Batches
-from .network import Model, extract_tensors
+from .network import Model
 
 logger = logging.getLogger(__name__)
 checkpoint_file = Path(__file__).parent / 'checkpoint.pth'
@@ -15,8 +16,8 @@ learning_rate = 10e-6
 
 def run_loop(max_epochs = 10000):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    training_batches = Batches(training_files, device=device)
-    validation_batches = Batches(validation_files, device=device)
+    training_batches = Batches(training_files, device=device, merge=10)
+    validation_batches = Batches(validation_files, device=device, merge=10)
     logger.info(f"Device: {device}")
     logger.info(f"Loaded {len(training_batches)} training and {len(validation_batches)} validation batches.")
     model = Model().to(device)
