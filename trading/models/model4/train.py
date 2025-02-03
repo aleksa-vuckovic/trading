@@ -21,14 +21,16 @@ def run_loop(max_epochs = 100000000):
     logger.info(f"Loaded {len(training_batches)} training and {len(validation_batches)} validation batches.")
 
     model = Model().to(device)
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    #optimizer = optim.Adam(model.parameters(), lr=learning_rate, betas=[0.8, 0.8])
+    #optimizer = optim.Adadelta(model.parameters(), lr=learning_rate*100000)
+    optimizer = optim.SGD(model.parameters(), lr=learning_rate*10, weight_decay=0.1)
     train_stats = create_stats('train')
     val_stats = create_stats('val')
 
     if checkpoint_file.exists():
         data = torch.load(checkpoint_file, weights_only=True, map_location=device)
         model.load_state_dict(data['model_state_dict'])
-        optimizer.load_state_dict(data['optimizer_state_dict'])
+        #optimizer.load_state_dict(data['optimizer_state_dict'])
         epoch = data['epoch'] + 1
         history = data['history']
         logger.info(f"Restored state from epoch {epoch-1}")
