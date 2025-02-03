@@ -15,12 +15,7 @@ class RecursiveLayer(torch.nn.Module):
         self.in_features = in_features
         self.out_features = out_features
         self.layer = torch.nn.RNN(input_size=in_features, hidden_size=out_features, num_layers=2, batch_first=True)
-    
-    _device = None
-    def get_device(self):
-        if not self._device:
-            self._device = next(self.parameters()).device
-        return self._device
+
     def forward(self, series: torch.Tensor):
         series = series.transpose(1,2)
         return self.layer(series)[1][-1]
