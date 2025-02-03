@@ -1,9 +1,10 @@
-from . import example
-from pathlib import Path
 import os
 import torch
 import logging
+from pathlib import Path
 from ...utils import common
+from ..utils import normalize_in_place
+from . import example
 
 examples_bin_folder = Path(__file__).parent / 'examples_bin'
 examples_folder = Path(__file__).parent / 'examples'
@@ -23,10 +24,10 @@ def fix_nan_inf():
         target_prices = good_batches[:, example.D1_TARGET_I:] + 1
         last_prices = good_batches[:, example.H1_VOLUMES_I-1].unsqueeze(dim = 1)
         good_batches[:, example.D1_TARGET_I:] = target_prices / last_prices - 1
-        common.normalize_in_place(good_batches, start_index=example.D1_PRICES_I, count=example.D1_PRICES, dim=1)
-        common.normalize_in_place(good_batches, start_index=example.D1_VOLUMES_I, count=example.D1_PRICES, dim=1)
-        common.normalize_in_place(good_batches, start_index=example.H1_PRICES_I, count=example.H1_PRICES, dim=1)
-        common.normalize_in_place(good_batches, start_index=example.H1_VOLUMES_I, count=example.H1_PRICES, dim=1)
+        normalize_in_place(good_batches, start_index=example.D1_PRICES_I, count=example.D1_PRICES, dim=1)
+        normalize_in_place(good_batches, start_index=example.D1_VOLUMES_I, count=example.D1_PRICES, dim=1)
+        normalize_in_place(good_batches, start_index=example.H1_PRICES_I, count=example.H1_PRICES, dim=1)
+        normalize_in_place(good_batches, start_index=example.H1_VOLUMES_I, count=example.H1_PRICES, dim=1)
         torch.save(good_batches, examples_folder / file)
         logger.info(f'Batch {file}.\t Discard {bad_count}.\t Keep {good_count}.\t Avg mcap: {market_cap}')
 

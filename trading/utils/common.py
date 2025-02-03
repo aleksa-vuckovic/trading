@@ -13,29 +13,6 @@ import torch
 logger = logging.getLogger(__name__)
 CACHE = Path(__file__).parent.parent / "data" / "cache"
 
-def normalize_in_place(tensor: torch.Tensor, start_index: int = 0, count: int = -1, dim: int = 0) -> torch.Tensor:
-    """
-    Divides elements from start_index by the value of the largest element.
-    For each batch separately.
-    Returns the array of values used the normalize each batch, of shape (batches,)
-    """
-    total_dims = len(tensor.shape)
-    if dim >= total_dims:
-        raise Exception(f"Dimension {dim} not valid for shape {tensor.shape}.")
-    i = start_index
-    j = start_index+count if count>=0 else tensor.shape[dim]
-    if tensor.shape[dim] < j:
-        raise Exception(f"End index {j} not valid form dimension {dim} of shape {tensor.shape}.")
-    index = tuple()
-    for it in range(total_dims):
-        if dim == it:
-            index += (slice(i,j),)
-        else:
-            index += (slice(None),)
-    maxes, indices = torch.max(tensor[index], dim=dim, keepdim=True)
-    tensor[index] = tensor[index] / maxes
-    return maxes
-
 class BinarySearchEdge(Enum):
     LOW ='low'
     HIGH = 'high'

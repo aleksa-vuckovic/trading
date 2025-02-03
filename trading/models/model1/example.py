@@ -1,15 +1,10 @@
-from ...utils import dateutils, common
-from ...data import aggregate, nasdaq
-import random
 import time
-import numpy as np
 import logging
 import torch
-from torch.autograd import Function
 from transformers import BertTokenizer, BertModel
-import math
-from enum import Enum
-from matplotlib import pyplot as plt
+from ...utils import dateutils, common
+from ...data import aggregate, nasdaq
+from ..utils import normalize_in_place
 
 logger = logging.getLogger(__name__)
 
@@ -30,55 +25,6 @@ D1_TARGET_I = MARKET_CAP_I + 1
 D2_TARGET_I = D1_TARGET_I + 1
 D7_TARGET_I = D2_TARGET_I + 1
 
-class PriceTarget(Enum):
-    LINEAR_0_5 = 'Linear 0 to 5%'
-    LINEAR_0_10 = 'Linear 0 to 10%'
-    LINEAR_5_5 = 'Linear -5 to 5%'
-    LINEAR_10_10 = 'Linear -10 to 10%'
-    SIGMOID_0_5 = 'Sigmoid 0 to 5%'
-    SIGMOID_0_10 = 'Sigmoid 0 to 10%'
-    TANH_5_5 = 'Tanh -5 to 5%'
-    TANH_10_10 = 'Tanh -10 to 10%'
-
-
-    def get_price(self, normalized_values: torch.Tensor):
-        x = normalized_values
-        if self == PriceTarget.LINEAR_0_5:
-            return torch.clamp(x, min=0, max=0.05)
-        if self == PriceTarget.LINEAR_0_10:
-            return torch.clamp(x, min=0, max=0.1)
-        if self == PriceTarget.LINEAR_5_5:
-            return torch.clamp(x, min=-0.05, max=0.05)
-        if self == PriceTarget.LINEAR_10_10:
-            return torch.clamp(x, min=-0.1, max=0.1)
-        if self == PriceTarget.SIGMOID_0_5:
-            x = torch.exp(300*x-6)
-            return x/(1+x)
-        if self == PriceTarget.SIGMOID_0_10:
-            x = torch.exp(150*x-7.5)
-            return x/(1+x)
-        if self == PriceTarget.TANH_5_5:
-            x = torch.exp(-150*x)
-            return (1-x)/(1+x)
-        if self == PriceTarget.TANH_10_10:
-            x = torch.exp(-60*x)
-            return (1-x)/(1+x)
-        raise Exception("Unknown price target type")
-    
-    @staticmethod
-    def plot():
-        x = torch.linspace(-0.15, 0.15, 100, dtype=torch.float32)
-        for i, pt in enumerate(PriceTarget):
-            fig = plt.figure(i // 4)
-            fig.suptitle(f'Window {i//4}')
-            axes = fig.add_subplot(2,2,i%4 + 1)
-            axes.plot(x, pt.get_price(x), label=pt.name)
-            axes.set_title(pt.name)
-            axes.grid(True)
-
-        [plt.figure(it).tight_layout() for it in plt.get_fignums()]
-        plt.show()
-
 def generate_input(
     ticker: nasdaq.NasdaqListedEntry,
     end_time: float
@@ -87,10 +33,10 @@ def generate_input(
     d1_start_time = (end_time-(D1_PRICES/5*7*1.2+5)*24*3600)
     h1_start_time = (end_time-(H1_PRICES/6/5*7*1.5+5)*24*3600)
 
-    d1_prices, d1_volumes = aggregate.get_daily_pricing(ticker, d1_start_time, end_time)
+    d1_prices, d1_volumes = aggregate.get_daily_pricing(ticker, d1_start_time, end_time, return_quotes=['close', 'volume'])
     if len(d1_prices) < D1_PRICES:
         raise Exception(f'Failed to fetch enough daily prices for {ticker.symbol}. Got {len(d1_prices)}')
-    h1_prices, h1_volumes = aggregate.get_hourly_pricing(ticker, h1_start_time, end_time)
+    h1_prices, h1_volumes = aggregate.get_hourly_pricing(ticker, h1_start_time, end_time, return_quotes=['close', 'volume'])
     if len(h1_prices) < H1_PRICES:
         raise Exception(f'Failed to fetch enough hourly prices for {ticker.symbol}. Got {len(h1_prices)}')
     
@@ -102,10 +48,10 @@ def generate_input(
     market_cap = torch.tensor([last_price*aggregate.get_shares_outstanding_at(ticker, end_time)], dtype=torch.float64)
     
     #2. Normalize prices and volumes
-    common.normalize_in_place(d1_prices)
-    common.normalize_in_place(d1_volumes)
-    common.normalize_in_place(h1_prices)
-    common.normalize_in_place(h1_volumes)
+    normalize_in_place(d1_prices)
+    normalize_in_place(d1_volumes)
+    normalize_in_place(h1_prices)
+    normalize_in_place(h1_volumes)
 
     #3. Get the textual data
     market_summary = aggregate.get_market_summary(end_time)

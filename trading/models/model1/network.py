@@ -1,10 +1,10 @@
 import torch
-from . import example
 import math
 import torchinfo
-from . import generator
 import config
-
+from ..utils import PriceTarget
+from . import example
+from . import generator
 
 class IndividualTextLayer(torch.nn.Module):
     """
@@ -213,7 +213,7 @@ def extract_input(batch: torch.Tensor) -> torch.Tensor:
     text2 = batch[:,example.TEXT2_I:example.TEXT2_I+example.TEXT_EMBEDDING_SIZE]
     text3 = batch[:,example.TEXT3_I:example.TEXT3_I+example.TEXT_EMBEDDING_SIZE]
     expect = batch[:,example.D1_TARGET_I]
-    expect = example.PriceTarget.TANH_10_10.get_price(expect)
+    expect = PriceTarget.TANH_10_10.get_price(expect)
     return series1, series2, series3, series4, text1, text2, text3, expect
     
 """64 layers * 100 features * 8 bytes ~ 50kB

@@ -1,15 +1,14 @@
-from . import example
-from ...utils import dateutils
-from ...data import nasdaq, aggregate
-import time
 import logging
-from pathlib import Path
 import json
-from datetime import datetime, timedelta
 import torch
+from pathlib import Path
 from tqdm import tqdm
 import config
+from ...utils import dateutils
+from ...data import aggregate
 from ..utils import get_next_time
+from . import example
+
 
 logger = logging.getLogger(__name__)
 examples_folder = Path(__file__).parent / 'examples'
@@ -33,7 +32,7 @@ def run_ordered_loop(hour: int = 16):
     unix_time: float = state['unix_time']
     entry: int = state['entry']
 
-    current = []
+    current: list[dict[str, torch.Tensor]] = []
     while True:
         with tqdm(total=config.batch_size, desc=f'Generating batch {iter+1} ({hour})', leave=True) as bar:
             while len(current) < config.batch_size:
@@ -60,14 +59,14 @@ def run_ordered_loop(hour: int = 16):
                     logger.error(f"Failed to generate example for {ticker.symbol} for {unix_time}", exc_info=True)
         if not current:
             break
-        tensor = torch.stack(current, dim=0)
+        data = {key:torch.stack([it[key] for it in current], dim=0) for key in current[0].keys()}
         iter += 1
-        torch.save(tensor, examples_folder / f"{config.batch_prefix}_batch{iter}-{hour}.pt")
+        torch.save(data, examples_folder / f"{config.batch_prefix}_batch{iter}-{hour}.pt")
         state = {'iter': iter, 'unix_time': unix_time, 'entry': entry}
         total_state = json.loads(state_path.read_text())
         total_state[str(hour)] = state
         state_path.write_text(json.dumps(total_state))
-        logger.info(f"Wrote batch number {iter}({hour}) of size {tensor.shape[0]}")
+        logger.info(f"Wrote batch number {iter}({hour}).")
         if len(current) < config.batch_size:
             break
         current.clear()
