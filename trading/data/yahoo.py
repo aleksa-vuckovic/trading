@@ -143,7 +143,7 @@ def get_yahoo_pricing(
     unix_from: float, #unix
     unix_to: float, #unix
     interval: Interval,
-    return_quote = 'close'
+    return_quotes = ['close', 'volume']
 ) -> tuple[list[float], list[float]]:
     """
     Returns the pricing as two arrays - prices and volume.
@@ -155,7 +155,7 @@ def get_yahoo_pricing(
     if interval != Interval.D1 and interval != Interval.H1:
         raise ValueError(f'Only H1 and D1 are supported. Got {interval.name}.')
     data = _get_yahoo_pricing(ticker, unix_from, unix_to, interval)['data']
-    return ([it[return_quote[0]] for it in data], [it['v'] for it in data])
+    return tuple([it[quote[0]] for it in data] for quote in return_quotes)
 
 def get_splits(data: dict) -> dict:
     if 'splits' in data['events']:

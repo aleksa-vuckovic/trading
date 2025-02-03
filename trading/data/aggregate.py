@@ -36,16 +36,16 @@ def get_sorted_tickers() -> list[dict]:
         tickers.append({"ticker": it, "unix_time": first_trade})
     return sorted(tickers, key=lambda it: it["unix_time"])
 
-def get_hourly_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float) -> tuple[list[float], list[float]]:
+def get_hourly_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, return_quotes=['close', 'volume']) -> tuple:
     """
-    Returns a tuple of arrays - prices and volumes.
+    Returns a tuple of arrays of the requested quotes.
     """
-    return yahoo.get_yahoo_pricing(ticker.symbol, unix_from, unix_to, yahoo.Interval.H1)
-def get_daily_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float) -> tuple[list[float], list[float]]:
+    return yahoo.get_yahoo_pricing(ticker.symbol, unix_from, unix_to, yahoo.Interval.H1, return_quotes=return_quotes)
+def get_daily_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, return_quotes=['close', 'volume']) -> tuple:
     """
-    Returns a tuple of arrays - prices and volumes.
+    Returns a tuple of arrays of the requested quotes.
     """
-    return yahoo.get_yahoo_pricing(ticker.symbol, unix_from, unix_to, yahoo.Interval.D1)
+    return yahoo.get_yahoo_pricing(ticker.symbol, unix_from, unix_to, yahoo.Interval.D1, return_quotes=return_quotes)
 
 def get_market_summary(unix_time: float) -> str:
     return zacks.get_summary(unix_time)

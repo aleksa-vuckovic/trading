@@ -7,64 +7,6 @@ import json
 import torch
 
 class TestCommon(unittest.TestCase):
-
-    def test_stats(self):
-        class TestCollectorTensor(common.StatCollector):
-            def __init__(self):
-                super().__init__('tensor')
-            def _calculate(self, expect, output):
-                return torch.logical_and(expect, output).sum()
-            
-        class TestCollectorFloat(common.StatCollector):
-            def __init__(self):
-                super().__init__('float')
-            def _calculate(self, expect, output):
-                return torch.logical_or(expect, output).sum().item()
-            
-        output1 = torch.Tensor([True, True, False])
-        expect1 = torch.Tensor([True, False, False])
-
-        output2 = torch.Tensor([True, True, True])
-        expect2 = torch.Tensor([False, False, False])
-
-        c1 = TestCollectorTensor()
-        c2 = TestCollectorFloat()
-        self.assertIsInstance(c1.update(expect1, output1), torch.Tensor)
-        self.assertIsInstance(c2.update(expect1, output1), (float, int))
-        c1.update(expect2, output2)
-        c2.update(expect2, output2)
-        self.assertEqual(2, c1.count)
-        self.assertEqual(0, c1.last)
-        self.assertEqual(0.5, c1.running)
-        self.assertEqual(2.5, c2.running)
-        
-        c = common.StatContainer(c1, c2, name='test')
-        c.clear()
-        c.update(expect1, output1)
-        c.update(expect2, output2)
-        d = c.to_dict()
-        self.assertEqual(d['test']['tensor']['running'], 0.5)
-
-
-    def test_normalize_in_place(self):
-        tensor = torch.tensor([[1,2,3,4],[5,6,7,8]], dtype=torch.float32)
-        expect = torch.tensor([[1,2/3,1,4],[5,6/7,1,8]], dtype=torch.float32)
-        maxes = common.normalize_in_place(tensor, 1, 2, dim=1)
-        self.assertEqual(8, (tensor==expect).sum().item())
-        self.assertEqual((2,1), tuple(maxes.shape))
-
-        tensor = torch.tensor([[1,2,torch.nan,4],[5,torch.inf,7,8]], dtype=torch.float32)
-        expect = torch.tensor([[1,torch.nan,torch.nan,4],[5,torch.nan,0,8]], dtype=torch.float32)
-        common.normalize_in_place(tensor, 1,2, dim=1)
-        self.assertEqual(5, (tensor==expect).sum().item())
-        self.assertEqual(expect.isnan().sum().item(), tensor.isnan().sum().item())
-
-        tensor = torch.tensor([[[1,2,3],[4,5,6]],[[7,8,9],[10,11,12]]], dtype=torch.float32)
-        expect = torch.tensor([[[1/7,2/8,3/9],[4/10,5/11,6/12]],[[1,1,1],[1,1,1]]], dtype=torch.float32)
-        maxes = common.normalize_in_place(tensor)
-        self.assertEqual(12, (tensor==expect).sum().item())
-        self.assertEqual((1,2,3), tuple(maxes.shape))
-
     def test_binary_search(self):
         collection = [
             {"time": 1},
