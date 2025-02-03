@@ -18,6 +18,11 @@ def get_batch_files(path: Path) -> list[dict]:
     files = [ {'file': path / it.group(0), 'source': it.group(1), 'batch': int(it.group(2)), 'hour': int(it.group(3))} for it in files if it ]
     return sorted(files, key=lambda it: (it['source'], it['hour'], it['batch']))
 
+def check_tensors(tensors: list[torch.Tensor] | dict[object, torch.Tensor], allow_zeros=True):
+    if isinstance(tensors, list):
+        for tensor in tensors: check_tensor(tensor)
+    elif isinstance(tensors, dict):
+        for tensor in tensors.values(): check_tensor(tensor)
 def check_tensor(tensor: torch.Tensor, allow_zeros=True):
     result = tensor.isnan() | tensor.isinf()
     if not allow_zeros: result = result | (tensor == 0)
