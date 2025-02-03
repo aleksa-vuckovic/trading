@@ -1,13 +1,22 @@
 import torch
 import math
 import logging
+import re
+import os
 from pathlib import Path
 from enum import Enum
+from pathlib import Path
 from matplotlib import pyplot as plt
 from datetime import timedelta
 from ..utils import dateutils
 
 logger = logging.getLogger(__name__)
+
+def get_batch_files(path: Path) -> list[dict]:
+    pattern = re.compile(r"([^_]+)_batch(\d+)-(\d+).pt")
+    files = [ pattern.fullmatch(it) for it in os.listdir(path)]
+    files = [ {'file': path / it.group(0), 'source': it.group(1), 'batch': int(it.group(2)), 'hour': int(it.group(3))} for it in files if it ]
+    return sorted(files, key=lambda it: (it['source'], it['hour'], it['batch']))
 
 def check_tensor(tensor: torch.Tensor, allow_zeros=True):
     result = tensor.isnan() | tensor.isinf()

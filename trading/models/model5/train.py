@@ -1,82 +1,26 @@
-"""from .network import Model, extract_input
-import os
-from pathlib import Path
-import re
+import logging
 import torch
+from pathlib import Path
 from torch import optim
 from tqdm import tqdm
-import logging
-from ..utils import StatCollector, StatContainer, Batches
+from ..model1.train import create_stats
+from ..utils import Batches, get_batch_files
+from .network import Model, extract_tensors
 
 logger = logging.getLogger(__name__)
 examples_folder = Path(__file__).parent / 'examples'
 checkpoint_file = Path(__file__).parent / 'checkpoint.pth'
 special_checkpoint_file = Path(__file__).parent / 'special_checkpoint.pth'
-learning_rate = 10e-7
+learning_rate = 10e-6
 
-class Accuracy(StatCollector):
-    def __init__(self):
-        super().__init__('accuracy')
-    
-    def _calculate(self, expect, output):
-        output = output > 0.5
-        expect = expect > 0.5
-        hits = torch.logical_and(output, expect).sum().item()
-        output_n = output.sum().item()
-        expect_n = expect.sum().item()
-        return hits / output_n if output_n else 0 if expect_n else 1
-    
-class Precision(StatCollector):
-    def __init__(self):
-        super().__init__('precision')
+all_files = get_batch_files(examples_folder)
+training_files = [it['file'] for it in all_files if it['batch'] % 6]
+validation_files = [it['file'] for it in all_files if it['batch']%6 == 0]
 
-    def _calculate(self, expect, output):
-        output = output > 0.5
-        expect = expect > 0.5
-        hits = torch.logical_and(output, expect).sum().item()
-        expect_n = expect.sum().item()
-        return hits / expect_n if expect_n else 1
-
-class Miss(StatCollector):
-    def __init__(self):
-        super().__init__('miss')
-    
-    def _calculate(self, expect, output):
-        output = output > 0.2
-        misses_n = torch.logical_and(expect < 0, output).sum().item()
-        total_n = output.sum().item()
-        return misses_n / total_n if total_n else 0
-    
-class CustomLoss(StatCollector):
-    def __init__(self):
-        super().__init__('loss')
-    
-    def _calculate(self, expect, output):
-        eps = 1e-5
-        loss = -torch.log(1 + eps - torch.abs(output - expect) / (1+torch.abs(expect)))
-        return loss.mean()
-    
-def create_stats(name: str) -> StatContainer:
-    return StatContainer(CustomLoss(), Accuracy(), Precision(), Miss(), name=name)
-
-
-def get_all_files() -> list[dict]:
-    pattern = re.compile(r"([^_]+)_batch(\d+)-(\d+).pt")
-    files = [ pattern.fullmatch(it) for it in os.listdir(examples_folder)]
-    files = [ {'file': examples_folder / it.group(0), 'source': it.group(1), 'batch': int(it.group(2)), 'hour': int(it.group(3))} for it in files if it ]
-    return sorted(files, key=lambda it: (it['source'], it['hour'], it['batch']))
-all_files = get_all_files()
-
-def get_training_files() -> list[Path]:
-    return [it['file'] for it in all_files if it['batch'] % 6]
-
-def get_validation_files() -> list[Path]:
-    return [it['file'] for it in all_files if it['batch']%6 == 0]
-
-def run_loop(max_epochs = 100000000):
+def run_loop(max_epochs = 10000):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    training_batches = Batches(get_training_files(), device=device)
-    validation_batches = Batches(get_validation_files(), device=device)
+    training_batches = Batches(training_files, device=device)
+    validation_batches = Batches(validation_files, device=device)
     logger.info(f"Device: {device}")
     logger.info(f"Loaded {len(training_batches)} training and {len(validation_batches)} validation batches.")
     model = Model().to(device)
@@ -101,7 +45,7 @@ def run_loop(max_epochs = 100000000):
         with tqdm(training_batches, desc=f"Epoch {epoch}", leave=True) as bar:
             for batch in bar:
                 logger.info(f"Loaded a batch of shape {batch.shape}")
-                tensors = extract_input(batch)
+                tensors = extract_tensors(batch)
                 input = tensors[:-1]
                 expect = tensors[-1]
 
@@ -117,14 +61,14 @@ def run_loop(max_epochs = 100000000):
         with torch.no_grad():
             with tqdm(validation_batches, desc = 'Validation...', leave=False) as bar:
                 for batch in bar:
-                    tensors = extract_input(batch)
+                    tensors = extract_tensors(batch)
                     input = tensors[:-1]
                     expect = tensors[-1]
 
                     output = model(*input).squeeze()
                     val_stats.update(expect, output)
                     
-        print(str(val_stats))
+        print(f"Validation: {val_stats}")
         history.append({**train_stats.to_dict(), **val_stats.to_dict(), 'epoch': epoch})
         train_stats.clear()
         val_stats.clear()
@@ -137,10 +81,3 @@ def run_loop(max_epochs = 100000000):
             'history': history
         }
         torch.save(savedict, checkpoint_file)
-
-            
-
-
-"""
-                
-                
