@@ -204,7 +204,7 @@ class Model(torch.nn.Module):
         input += [(config.batch_size, example.TEXT_EMBEDDING_SIZE)]*3
         torchinfo.summary(model, input_size=input)
 
-def extract_input(batch: torch.Tensor) -> torch.Tensor:
+def extract_tensors(batch: torch.Tensor) -> torch.Tensor:
     series1 = batch[:,example.D1_PRICES_I:example.D1_PRICES_I+example.D1_PRICES]
     series2 = batch[:,example.D1_VOLUMES_I:example.D1_VOLUMES_I+example.D1_PRICES]
     series3 = batch[:,example.H1_PRICES_I:example.H1_PRICES_I+example.H1_PRICES]

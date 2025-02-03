@@ -1,12 +1,10 @@
-from .network import Model, extract_input
-import os
-from pathlib import Path
-import re
 import torch
+import logging
+from pathlib import Path
 from torch import optim
 from tqdm import tqdm
-import logging
-from ..utils import StatCollector, StatContainer, Batches
+from ..utils import StatCollector, StatContainer, Batches, get_batch_files
+from .network import Model, extract_tensors
 
 logger = logging.getLogger(__name__)
 examples_folder = Path(__file__).parent / 'examples'
@@ -59,24 +57,14 @@ class CustomLoss(StatCollector):
 def create_stats(name: str) -> StatContainer:
     return StatContainer(CustomLoss(), Accuracy(), Precision(), Miss(), name=name)
 
-
-def get_all_files() -> list[dict]:
-    pattern = re.compile(r"([^_]+)_batch(\d+)-(\d+).pt")
-    files = [ pattern.fullmatch(it) for it in os.listdir(examples_folder)]
-    files = [ {'file': examples_folder / it.group(0), 'source': it.group(1), 'batch': int(it.group(2)), 'hour': int(it.group(3))} for it in files if it ]
-    return sorted(files, key=lambda it: (it['source'], it['hour'], it['batch']))
-all_files = get_all_files()
-
-def get_training_files() -> list[Path]:
-    return [it['file'] for it in all_files if it['batch'] % 6]
-
-def get_validation_files() -> list[Path]:
-    return [it['file'] for it in all_files if it['batch']%6 == 0]
+all_files = get_batch_files(examples_folder)
+training_files = [it['file'] for it in all_files if it['batch'] % 6]
+validation_files = [it['file'] for it in all_files if it['batch']%6 == 0]
 
 def run_loop(max_epochs = 100000000):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    training_batches = Batches(get_training_files(), device=device)
-    validation_batches = Batches(get_validation_files(), device=device)
+    training_batches = Batches(training_files, device=device)
+    validation_batches = Batches(validation_files, device=device)
     logger.info(f"Device: {device}")
     logger.info(f"Loaded {len(training_batches)} training and {len(validation_batches)} validation batches.")
     model = Model().to(device)
@@ -100,8 +88,7 @@ def run_loop(max_epochs = 100000000):
         model.train()
         with tqdm(training_batches, desc=f"Epoch {epoch}", leave=True) as bar:
             for batch in bar:
-                logger.info(f"Loaded a batch of shape {batch.shape}")
-                tensors = extract_input(batch)
+                tensors = extract_tensors(batch)
                 input = tensors[:-1]
                 expect = tensors[-1]
 
@@ -117,7 +104,7 @@ def run_loop(max_epochs = 100000000):
         with torch.no_grad():
             with tqdm(validation_batches, desc = 'Validation...', leave=False) as bar:
                 for batch in bar:
-                    tensors = extract_input(batch)
+                    tensors = extract_tensors(batch)
                     input = tensors[:-1]
                     expect = tensors[-1]
 

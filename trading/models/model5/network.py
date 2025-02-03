@@ -64,13 +64,14 @@ def extract_tensors(batch: dict[str, Tensor]) -> tuple[Tensor, Tensor, Tensor]:
     after = (after[:,example.D1_AFTER_I] - daily[:,-1,example.CLOSE_I]) / daily[:,-1,example.CLOSE_I]
     after = PriceTarget.TANH_10_10.get_price(after)
     def process(tensor: Tensor):
-        tensor = tensor[:,-TOTAL_POINTS,:]
-        #1 Append high-low
-        tensor = torch.concat([tensor, (tensor[:,:,example.HIGH_I] - tensor[:,:,example.LOW_I]).unsqueeze(dim=2)], dim=2)
+        tensor = tensor[:,-TOTAL_POINTS:,:]
+        #1 Append high-low relative to low
+        relative_span = (tensor[:,:,example.HIGH_I] - tensor[:,:,example.LOW_I]) / tensor[:,:,example.LOW_I]
+        tensor = torch.concat([tensor, relative_span.unsqueeze(dim=2)], dim=2)
         #2 Relativize open to close
         tensor[:,:,example.OPEN_I] = (tensor[:,:,example.CLOSE_I] - tensor[:,:,example.OPEN_I]) / tensor[:,:,example.OPEN_I]
-        #3 Time relativize close, low, high, volume, high-low
-        relativize_in_place(tensor[:,:,1:], dim=1)
+        #3 Time relativize close, low, high, volume
+        relativize_in_place(tensor[:,:,1:-1], dim=1)
         return tensor.transpose(1,2)
     daily = process(daily)
     hourly = process(hourly)
