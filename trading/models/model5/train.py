@@ -44,7 +44,6 @@ def run_loop(max_epochs = 10000):
         model.train()
         with tqdm(training_batches, desc=f"Epoch {epoch}", leave=True) as bar:
             for batch in bar:
-                logger.info(f"Loaded a batch of shape {batch.shape}")
                 tensors = extract_tensors(batch)
                 input = tensors[:-1]
                 expect = tensors[-1]

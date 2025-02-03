@@ -4,7 +4,7 @@ from pathlib import Path
 from torch import optim
 from tqdm import tqdm
 from ..utils import StatCollector, StatContainer, Batches, get_batch_files
-from .network import Model, extract_input
+from .network import Model, extract_tensors
 
 logger = logging.getLogger(__name__)
 examples_folder = Path(__file__).parent / 'examples'
@@ -88,8 +88,7 @@ def run_loop(max_epochs = 100000000):
         model.train()
         with tqdm(training_batches, desc=f"Epoch {epoch}", leave=True) as bar:
             for batch in bar:
-                logger.info(f"Loaded a batch of shape {batch.shape}")
-                tensors = extract_input(batch)
+                tensors = extract_tensors(batch)
                 input = tensors[:-1]
                 expect = tensors[-1]
 
@@ -105,7 +104,7 @@ def run_loop(max_epochs = 100000000):
         with torch.no_grad():
             with tqdm(validation_batches, desc = 'Validation...', leave=False) as bar:
                 for batch in bar:
-                    tensors = extract_input(batch)
+                    tensors = extract_tensors(batch)
                     input = tensors[:-1]
                     expect = tensors[-1]
 

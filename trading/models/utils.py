@@ -176,10 +176,16 @@ class Batches:
             if self.i >= len(self.batches.files):
                 raise StopIteration()
             files = self.batches.files[self.i:self.i+self.batches.merge]
-            result = torch.cat([torch.load(it, weights_only=True) for it in files], dim=0).to(device = self.batches.device, dtype=self.batches.dtype)
+            data = [torch.load(it, weights_only=True) for it in files]
+            if isinstance(data[0], dict):
+                data = {key:torch.cat([it[key] for it in data], dim=0).to(device=self.batches.device, dtype=self.batches.dtype) for key in data[0].keys()}
+                shapes = {key:data[key].shape for key in data.keys()}
+                logger.info(f"Loaded batch with shape {shapes}")
+            else:
+                data = torch.cat([torch.load(it, weights_only=True) for it in files], dim=0).to(device = self.batches.device, dtype=self.batches.dtype)
+                logger.info(f"Loaded batch with shape {data.shape}")
             self.i += len(files)
-            logger.info(f"Loaded batch with shape {result.shape}")
-            return result
+            return data
 
     def __iter__(self):
         return Batches.Iterator(self)
