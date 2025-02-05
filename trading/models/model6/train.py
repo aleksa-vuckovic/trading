@@ -8,7 +8,7 @@ from ..utils import TrainingPlan
 from .network import Model
 
 logger = logging.getLogger(__name__)
-checkpoints_folder = Path(__file__).parent / 'checkpoint.pth'
+checkpoints_folder = Path(__file__).parent / 'checkpoints'
 initial_lr = 10e-6
 
 def run_loop(max_epoch = 10000):
@@ -16,5 +16,5 @@ def run_loop(max_epoch = 10000):
     plan.with_optimizer(torch.optim.Adam(plan.model.parameters()))
     add_stats(plan)
     add_batches(plan, examples_folder=examples_folder, extract_tensors=extract_tensors, merge=10)
-    add_triggers(plan, checkpoints_folder=checkpoints_folder, initial_lr=initial_lr,)
+    add_triggers(plan, checkpoints_folder=checkpoints_folder, initial_lr=initial_lr)
     plan.run(max_epoch=max_epoch)

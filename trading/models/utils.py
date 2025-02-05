@@ -415,7 +415,7 @@ class TrainingPlan:
             plan.optimizer.load_state_dict(save_dict['optimizer_state_dict'])
             plan.epoch = save_dict['epoch'] + 1
             plan.data = {**plan.data, **save_dict['data']}
-            logger.info(f"Loaded state from epoch {plan.epoch}.")
+            logger.info(f"Loaded state from epoch {save_dict['epoch']}.")
     
     class LearningRateAction(Action):
         def __init__(self, value: float):

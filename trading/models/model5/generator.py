@@ -61,7 +61,10 @@ def run_ordered_loop(hour: int = 16):
             break
         data = {key:torch.stack([it[key] for it in current], dim=0) for key in current[0].keys()}
         iter += 1
-        torch.save(data, examples_folder / f"{config.batch_prefix}_batch{iter}-{hour}.pt")
+        batch_file = examples_folder / f"{config.batch_prefix}_batch{iter}-{hour}.pt"
+        if batch_file.exists():
+            raise Exception(f"Batch file {batch_file} already exists.")
+        torch.save(data, batch_file)
         state = {'iter': iter, 'unix_time': unix_time, 'entry': entry}
         total_state = json.loads(state_path.read_text())
         total_state[str(hour)] = state

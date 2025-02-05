@@ -61,7 +61,7 @@ def add_stats(plan: TrainingPlan):
     )
 
 def add_batches(plan: TrainingPlan, examples_folder: Path = examples_folder, extract_tensors: Callable|None=None, merge:int=1):
-    all_files = get_batch_files(examples_folder)[:10]
+    all_files = get_batch_files(examples_folder)
     training_files = [it['file'] for it in all_files if it['batch'] % 6]
     validation_files = [it['file'] for it in all_files if it['batch']%6 == 0]
     return plan.with_batches(
@@ -74,7 +74,7 @@ def add_triggers(plan: TrainingPlan, checkpoints_folder: Path, initial_lr: float
         .then(TrainingPlan.StatHistoryAction())\
         .then(TrainingPlan.CheckpointAction(checkpoints_folder / 'primary_checkpoint.pth', primary=True))
     
-    for loss, lr_factor in [(100, 1), (0.25, 0.5), (0.2, 0.1), (0.15, 0.05), (0.1, 0.01)]:
+    for loss, lr_factor in [(100, 1), (0.4, 1), (0.35, 1), (0.3, 1), (0.25, 0.5), (0.2, 0.1), (0.15, 0.05), (0.1, 0.01)]:
         plan.when(TrainingPlan.StatTrigger('loss', upper_bound=loss, trigger_once=True))\
             .then(TrainingPlan.CheckpointAction(checkpoints_folder / f'loss_{int(loss*100)}_checkpoint.pth'))\
             .then(TrainingPlan.LearningRateAction(initial_lr*lr_factor))
