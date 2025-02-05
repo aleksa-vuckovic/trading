@@ -2,7 +2,7 @@ import time
 import logging
 import torch
 from transformers import BertTokenizer, BertModel
-from ...utils import dateutils, common
+from ...utils import dateutils
 from ...data import aggregate, nasdaq
 from ..utils import normalize_in_place
 

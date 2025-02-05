@@ -7,6 +7,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 _API_KEY = "2mpdazNwFmxCMwRVx87Crv4JwoSWwqoe"
+#_API_KEY = "t_EpcFm2mmah_opokpJm4F7bUqmiSZNN"
 _MODULE = __name__.split(".")[-1]
 _CACHE = common.CACHE / _MODULE
 class Interval(Enum):
@@ -24,7 +25,7 @@ class Interval(Enum):
     live_delay=3600,
     return_series_only=True
 )
-@common.backup_timeout()
+@common.backup_timeout(behavior=common.BackupBehavior.RETHROW)
 def _get_polygon_pricing(
     ticker: str,
     unix_from: float,
