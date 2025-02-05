@@ -45,6 +45,7 @@ def _get_polygon_pricing(
             data['results'][i]['t'] /= 1000.0
     adjust_timestamps(data)
     while 'next_url' in data and data['next_url']:
+        break
         logger.info(f"Next page. Results count = {data['resultsCount'] if 'resultsCount' in data else None}")
         logger.info(f"RESULTS[-5:] (total={len(data['results'])}) = \n{data['results'][-3:]}")
         resp = httputils.get_as_browser(f"{data['next_url']}&adjusted={str(adjusted).lower()}&sort=asc&apiKey={_API_KEY}")

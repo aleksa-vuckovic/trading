@@ -3,14 +3,14 @@ import logging
 from pathlib import Path
 from torch import optim
 from tqdm import tqdm
-from ..utils import StatCollector, StatContainer, Batches, get_batch_files
+from typing import Callable
+from ..utils import StatCollector, StatContainer, Batches, get_batch_files, TrainingPlan
 from .network import Model, extract_tensors
 
 logger = logging.getLogger(__name__)
 examples_folder = Path(__file__).parent / 'examples'
-checkpoint_file = Path(__file__).parent / 'checkpoint.pth'
-special_checkpoint_file = Path(__file__).parent / 'special_checkpoint.pth'
-learning_rate = 10e-7
+checkpoints_folder = Path(__file__).parent / 'checkpoints'
+initial_lr = 10e-7
 
 class Accuracy(StatCollector):
     def __init__(self):
@@ -54,83 +54,44 @@ class CustomLoss(StatCollector):
         loss = -torch.log(1 + eps - torch.abs(output - expect) / (1+torch.abs(expect)))
         return loss.mean()
     
-"""
-Goals: loss < 0.2, accuracy > 0.7, precision > 0.2, miss < 0.1
-"""
-def create_stats(name: str) -> StatContainer:
-    return StatContainer(CustomLoss(), Accuracy(), Precision(), Miss(), name=name)
+def add_stats(plan: TrainingPlan):
+    return plan.with_stats(
+        StatContainer(CustomLoss(), Accuracy(), Precision(), Miss(), name='train'),
+        StatContainer(CustomLoss(), Accuracy(), Precision(), Miss(), name='val')
+    )
 
-all_files = get_batch_files(examples_folder)
-training_files = [it['file'] for it in all_files if it['batch'] % 6]
-validation_files = [it['file'] for it in all_files if it['batch']%6 == 0]
+def add_batches(plan: TrainingPlan, examples_folder: Path = examples_folder, extract_tensors: Callable|None=None, merge:int=1):
+    all_files = get_batch_files(examples_folder)[:10]
+    training_files = [it['file'] for it in all_files if it['batch'] % 6]
+    validation_files = [it['file'] for it in all_files if it['batch']%6 == 0]
+    return plan.with_batches(
+        Batches(training_files, extract_tensors=extract_tensors, merge=merge),
+        Batches(validation_files,extract_tensors=extract_tensors, merge=merge)
+    )
 
-def run_loop(max_epochs = 100000000):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    training_batches = Batches(training_files, device=device)
-    validation_batches = Batches(validation_files, device=device)
-    logger.info(f"Device: {device}")
-    logger.info(f"Loaded {len(training_batches)} training and {len(validation_batches)} validation batches.")
-    model = Model().to(device)
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    train_stats = create_stats('train')
-    val_stats = create_stats('val')
-
-    if checkpoint_file.exists():
-        data = torch.load(checkpoint_file, weights_only=True, map_location=device)
-        model.load_state_dict(data['model_state_dict'])
-        optimizer.load_state_dict(data['optimizer_state_dict'])
-        epoch = data['epoch'] + 1
-        history = data['history']
-        logger.info(f"Restored state from epoch {epoch-1}")
-    else:
-        logger.info(f"No state, starting from scratch.")
-        epoch = 1
-        history = []
+def add_triggers(plan: TrainingPlan, checkpoints_folder: Path, initial_lr: float) -> TrainingPlan:
+    plan.when(TrainingPlan.AlwaysTrigger())\
+        .then(TrainingPlan.StatHistoryAction())\
+        .then(TrainingPlan.CheckpointAction(checkpoints_folder / 'primary_checkpoint.pth', primary=True))
     
-    while epoch < max_epochs:
-        model.train()
-        with tqdm(training_batches, desc=f"Epoch {epoch}", leave=True) as bar:
-            for batch in bar:
-                tensors = extract_tensors(batch)
-                input = tensors[:-1]
-                expect = tensors[-1]
+    for loss, lr_factor in [(100, 1), (0.25, 0.5), (0.2, 0.1), (0.15, 0.05), (0.1, 0.01)]:
+        plan.when(TrainingPlan.StatTrigger('loss', upper_bound=loss, trigger_once=True))\
+            .then(TrainingPlan.CheckpointAction(checkpoints_folder / f'loss_{int(loss*100)}_checkpoint.pth'))\
+            .then(TrainingPlan.LearningRateAction(initial_lr*lr_factor))
+    for precision in range(5, 100, 5):
+        plan.when(TrainingPlan.StatTrigger('precision', lower_bound=precision/100, trigger_once=True))\
+            .then(TrainingPlan.CheckpointAction(checkpoints_folder / f"precision_{precision}_checkpoint.pth"))
+    for accuracy in range(60, 100, 5):
+        plan.when(TrainingPlan.StatTrigger('accuracy', lower_bound=accuracy/100, trigger_once=True))\
+            .then(TrainingPlan.CheckpointAction(checkpoints_folder / f"accuracy_{accuracy}_checkpoint.pth"))
+    
+    return plan
+    
 
-                optimizer.zero_grad()
-                output = model(*input).squeeze()
-                loss = train_stats.update(expect, output)
-                loss.backward()
-                optimizer.step()
-                
-                bar.set_postfix_str(str(train_stats))
-        
-        model.eval()
-        with torch.no_grad():
-            with tqdm(validation_batches, desc = 'Validation...', leave=False) as bar:
-                for batch in bar:
-                    tensors = extract_tensors(batch)
-                    input = tensors[:-1]
-                    expect = tensors[-1]
-
-                    output = model(*input).squeeze()
-                    val_stats.update(expect, output)
-                    
-        print(str(val_stats))
-        history.append({**train_stats.to_dict(), **val_stats.to_dict(), 'epoch': epoch})
-        train_stats.clear()
-        val_stats.clear()
-        epoch += 1
-
-        savedict = {
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'epoch': epoch,
-            'history': history
-        }
-        torch.save(savedict, checkpoint_file)
-
-            
-
-
-
-                
-                
+def run_loop(max_epoch = 100000000):
+    plan = TrainingPlan(Model())
+    plan.with_optimizer(torch.optim.Adam(plan.model.parameters()))
+    add_stats(plan)
+    add_batches(plan, examples_folder=examples_folder, extract_tensors=extract_tensors, merge=1)
+    add_triggers(plan, checkpoints_folder=checkpoints_folder, initial_lr=initial_lr)
+    plan.run(max_epoch=max_epoch)
