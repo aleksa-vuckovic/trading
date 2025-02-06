@@ -1,13 +1,12 @@
-from enum import Enum
-import requests
 import json
-from ..utils import httputils, dateutils, common
 import yfinance
-from pathlib import Path
-from datetime import datetime
 import logging
 import time
 import math
+from enum import Enum
+from pathlib import Path
+from ..utils import httputils, common
+
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]

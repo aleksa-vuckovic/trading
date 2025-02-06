@@ -64,10 +64,10 @@ def binary_search(
             i = mid
     return j if edge == BinarySearchEdge.HIGH else i if edge == BinarySearchEdge.LOW else None
 
-def _find_host(url: str) -> str | None:
-    host = re.search(r"https?://(www.)?([^/\.]*)", url)
+def find_host(url: str) -> str | None:
+    host = re.search(r"https?://([^/]*)", url)
     if host:
-        return host.group(2)
+        return host.group(1)
     return None
 
 class BadResponseException(Exception):
@@ -75,7 +75,7 @@ class BadResponseException(Exception):
     url: str
     response: requests.Response
     def __init__(self, url: str, response: requests.Response):
-        self.module = _find_host(url)
+        self.module = find_host(url)
         self.url = url
         self.response = response
     def __str__(self):
@@ -87,7 +87,7 @@ class TooManyRequestsException(Exception):
     response: requests.Response
     def __init__(self, url: str, response: requests.Response):
         super().__init__()
-        self.module = _find_host(url)
+        self.module = find_host(url)
         self.url = url
         self.response = response
     
