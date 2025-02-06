@@ -10,7 +10,9 @@ from .network import Model
 logger = logging.getLogger(__name__)
 checkpoints_folder = Path(__file__).parent / 'checkpoints'
 initial_lr = 10e-6
-
+"""
+This is a model is only different from model5 in that it introduces batch normalization.
+"""
 def run_loop(max_epoch = 10000):
     plan = TrainingPlan(Model())
     plan.with_optimizer(torch.optim.Adam(plan.model.parameters()))

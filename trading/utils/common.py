@@ -8,7 +8,6 @@ from enum import Enum
 import json
 from typing import Callable, Any
 from enum import Enum, Flag, auto
-import torch
 
 logger = logging.getLogger(__name__)
 CACHE = Path(__file__).parent.parent / "data" / "cache"

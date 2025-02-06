@@ -60,3 +60,35 @@ def market_close_unix(date: str):
     if not re.match(pattern, date):
         raise ValueError(f'Invalid date {date}. The pattern is {pattern}.')
     return str_to_unix(f"{date} 16:00:00", tz = ET)
+
+def get_next_working_time(unix_time: float, hour: int | None = None) -> float:
+    time = unix_to_datetime(unix_time, tz = ET)
+    if time.minute or time.second or time.microsecond:
+        time = time.replace(minute=0, second=0, microsecond=0)
+        time = time + timedelta(hours = 1)
+    if is_weekend_datetime(time) or time.hour >= (hour or 16):
+        time = time.replace(hour = hour or 9)
+        time += timedelta(days=1)
+        while is_weekend_datetime(time):
+            time += timedelta(days=1)
+    elif time.hour < (hour or 9):
+        time = time.replace(hour = hour or 9)
+    else:
+        time = time.replace(hour = time.hour + 1)
+    return time.timestamp()
+
+def get_prev_working_time(unix_time: float, hour: int | None = None) -> float:
+    time = unix_to_datetime(unix_time, tz = ET)
+    if time.minute or time.second or time.microsecond:
+        time = time.replace(minute = 0, second = 0, microsecond = 0)
+        time = time + timedelta(hours = 1)
+    if is_weekend_datetime(time) or time.hour <= (hour or 9):
+        time = time.replace(hour = hour or 16)
+        time -= timedelta(days=1)
+        while is_weekend_datetime(time):
+            time -= timedelta(days = 1)
+    elif time.hour > (hour or 16):
+        time = time.replace(hour = hour or 16)
+    else:
+        time = time.replace(hour = time.hour - 1)
+    return time.timestamp()

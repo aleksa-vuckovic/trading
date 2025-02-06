@@ -7,7 +7,6 @@ from tqdm import tqdm
 from typing import Callable
 from ...utils import dateutils
 from ...data import aggregate, nasdaq
-from ..utils import get_next_time
 from . import example
 
 
@@ -34,7 +33,7 @@ def run_ordered_loop(hour: int = 16, folder: Path = Path(__file__).parent, gener
         with tqdm(total=config.batch_size, desc=f'Generating batch {iter+1} ({hour})', leave=True) as bar:
             while len(current) < config.batch_size:
                 if entry >= len(tickers) - 1 or entry < 0:
-                    new_time = get_next_time(unix_time, hour=hour)
+                    new_time = dateutils.get_next_working_time(unix_time, hour=hour)
                     if new_time > time_frame_end:
                         logger.info(f"Finished. (new time is now bigger than end time)")
                         break

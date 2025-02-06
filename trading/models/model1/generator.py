@@ -9,7 +9,6 @@ from datetime import datetime, timedelta
 import torch
 from tqdm import tqdm
 import config
-from ..utils import get_next_time
 
 logger = logging.getLogger(__name__)
 time_frame_end = dateutils.str_to_unix(config.time_frame_end)
@@ -34,7 +33,7 @@ def run_ordered_loop(hour: int = 16, folder: Path = Path(__file__).parent, ):
         with tqdm(total=config.batch_size, desc=f'Generating batch {iter+1} ({hour})', leave=True) as bar:
             while len(current) < config.batch_size:
                 if entry >= len(tickers) - 1 or entry < 0:
-                    new_time = get_next_time(unix_time, hour=hour)
+                    new_time = dateutils.get_next_working_time(unix_time, hour=hour)
                     if new_time > time_frame_end:
                         logger.info(f"Finished. (new time is now bigger than end time)")
                         break

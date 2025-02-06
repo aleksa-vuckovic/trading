@@ -9,7 +9,11 @@ logger = logging.getLogger(__name__)
 examples_folder = Path(__file__).parent / 'examples'
 checkpoints_folder = Path(__file__).parent / 'checkpoints'
 initial_lr = 10e-6
-
+"""
+This is a model trained on data up to the period starting at 14:30.
+    That means that it is most effectively utilized between 15:30 when the data is initally
+    available and 16 when the market closes.
+"""
 def run_loop(max_epoch = 10000):
     plan = TrainingPlan(Model())
     plan.with_optimizer(torch.optim.Adam(plan.model.parameters()))

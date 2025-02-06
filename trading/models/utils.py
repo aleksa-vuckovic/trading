@@ -10,8 +10,6 @@ from pathlib import Path
 from tqdm import tqdm
 from typing import Callable, Any
 from matplotlib import pyplot as plt
-from datetime import timedelta
-from ..utils import dateutils
 
 logger = logging.getLogger(__name__)
 STAT_HISTORY = 'stat_history'
@@ -33,38 +31,6 @@ def check_tensor(tensor: torch.Tensor, allow_zeros=True):
     bad_entries = result.sum().item()
     if bad_entries > 0:
         raise Exception(f"Found {bad_entries} unwanted inf, nan {'or 0 ' if allow_zeros else ''} values in tensors.")
-
-def get_next_time(unix_time: float, hour: int | None = None) -> float:
-    time = dateutils.unix_to_datetime(unix_time, tz = dateutils.ET)
-    if time.minute or time.second or time.microsecond:
-        time = time.replace(minute=0, second=0, microsecond=0)
-        time = time + timedelta(hours = 1)
-    if dateutils.is_weekend_datetime(time) or time.hour >= (hour or 16):
-        time = time.replace(hour = hour or 9)
-        time += timedelta(days=1)
-        while dateutils.is_weekend_datetime(time):
-            time += timedelta(days=1)
-    elif time.hour < (hour or 9):
-        time = time.replace(hour = hour or 9)
-    else:
-        time = time.replace(hour = time.hour + 1)
-    return time.timestamp()
-
-def get_prev_time(unix_time: float, hour: int | None = None) -> float:
-    time = dateutils.unix_to_datetime(unix_time, tz = dateutils.ET)
-    if time.minute or time.second or time.microsecond:
-        time = time.replace(minute = 0, second = 0, microsecond = 0)
-        time = time + timedelta(hours = 1)
-    if dateutils.is_weekend_datetime(time) or time.hour <= (hour or 9):
-        time = time.replace(hour = hour or 16)
-        time -= timedelta(days=1)
-        while dateutils.is_weekend_datetime(time):
-            time -= timedelta(days = 1)
-    elif time.hour > (hour or 16):
-        time = time.replace(hour = hour or 16)
-    else:
-        time = time.replace(hour = time.hour - 1)
-    return time.timestamp()
 
 def relativize_in_place(tensor: torch.Tensor, start_index: int = 0, count: int = -1, dim: int = 0, use_previous: bool = False):
     """
