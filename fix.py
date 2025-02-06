@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def fix_live_series():
     root = Path(__file__).parent / 'trading' / 'data' / 'cache' / 'yahoo'
-    for file in sorted(os.listdir(root))[2:]:
+    for file in sorted(os.listdir(root)):
         #Delete last 150 h1 prices
         path = root / file / 'H1'
         live_path = path / 'live'
