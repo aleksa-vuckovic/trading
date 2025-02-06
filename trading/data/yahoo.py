@@ -52,7 +52,8 @@ def _get_yahoo_pricing_raw(
     time_step_fn= lambda args: 10000000 if args[1] == Interval.H1 else 50000000,
     series_field="data",
     timestamp_field="t",
-    live_delay=3600,
+    live_delay_fn=lambda args: common.get_delay_for_interval(args[1]),
+    refresh_delay_fn=None,
     return_series_only=False
 )
 @common.backup_timeout()

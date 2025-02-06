@@ -16,7 +16,8 @@ _CACHE: Path = common.CACHE / _MODULE
     time_step_fn=100000000,
     series_field=None,
     timestamp_field="unix_time",
-    live_delay=12*3600
+    live_delay_fn=3600,
+    refresh_delay_fn=12*3600
 )
 @common.backup_timeout(behavior=common.BackupBehavior.RETHROW)
 def _get_news(ticker: str, unix_from: float, unix_to: float) -> list[dict]:

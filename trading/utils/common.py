@@ -13,8 +13,13 @@ logger = logging.getLogger(__name__)
 CACHE = Path(__file__).parent.parent / "data" / "cache"
 
 class Interval(Enum):
-    D1 = 24*3600
-    H1 = 3600
+    D1 = '1 day'
+    H1 = '1 hour'
+
+def get_delay_for_interval(interval: Interval) -> float:
+    if interval == Interval.D1: return 8*3600.0
+    if interval == Interval.H1: return 3600.0
+    raise ValueError(f"Unknown interval {interval}.")
 
 reserved_windows_filenames = {
     "CON", "PRN", "AUX", "NUL",
@@ -158,10 +163,11 @@ def cached_series(
     include_args: list[str | int] | str | int = [],
     cache_root: Path | None = None,
     path_fn: Callable[[list], Path] = None,
-    time_step_fn: int | float | Callable[[list], float] = lambda include_args: 10000000,
+    time_step_fn: int | float | Callable[[list], float] = lambda include_args: 10000000.0,
     series_field: str | None = None,
     timestamp_field: str | int = "unix_time",
-    live_delay: float = 3600,
+    live_delay_fn: float | int | Callable[[list], float|int] = 3600, #Difference between data at time t, and time t' when the data is actually available.
+    refresh_delay_fn: float | int | Callable[[list], float|int] | None = None, #Minimum time between 2 live fetches. Default - equal to live delay.
     return_series_only: bool = False
 ):
     """
@@ -188,6 +194,7 @@ def cached_series(
         raise Exception('At least one of cache_root or path_fn must be set.')
     series_path = [int(it) if re.fullmatch(r"\d+", it) else it for it in (series_field or "").split(".") if it]
     include_args = include_args if isinstance(include_args, list) else [include_args]
+    if refresh_delay_fn is None: refresh_delay_fn = live_delay_fn
     def get_series(data) -> list:
         try:
             ret = data
@@ -225,6 +232,8 @@ def cached_series(
             args = list(args)
             unix_from, unix_to = get_unix_args(args, kwargs)
             include = [args[it] if isinstance(it, int) else kwargs[it] for it in include_args]
+            live_delay = live_delay_fn(include) if callable(live_delay_fn) else live_delay_fn
+            refresh_delay = refresh_delay_fn(include) if callable(refresh_delay_fn) else refresh_delay_fn
             if cache_root:
                 path = cache_root
                 if include:
@@ -235,7 +244,9 @@ def cached_series(
             path.mkdir(parents=True,exist_ok=True)
             time_step = int(time_step_fn(include) if callable(time_step_fn) else int(time_step_fn))
             
-            unix_now = time.time()
+            unix_now = time.time() - live_delay #last available time point
+            unix_to = min(unix_to, unix_now)
+            unix_from = min(unix_from, unix_to)
             start_id = int(unix_from) // time_step
             end_id = (int(unix_to) if unix_to%1 else int(unix_to)-1) // time_step
             now_id = int(unix_now) // time_step
@@ -251,10 +262,9 @@ def cached_series(
                     return
                 result.extend(series[first:last])
 
-            for id in range(start_id, min(end_id, now_id)+1):
+            for id in range(start_id, end_id+1):
                 if id == now_id:
                     #live data
-                    until = min(unix_now, float((id+1)*time_step), unix_to)
                     subpath = path / "live"
                     metapath = path / "meta"
                     #Check if meta exists and make sure the live id is current.
@@ -271,7 +281,7 @@ def cached_series(
                         subpath.write_text(json.dumps(data))
                         extend(data)
                         meta["live"] = {"id": id, "fetch": unix_now}
-                    elif meta["live"]["fetch"] < min(until, unix_now - live_delay):
+                    elif meta["live"]["fetch"] < min(unix_to, unix_now - refresh_delay):
                         data = json.loads(subpath.read_text())
                         set_unix_args(args, kwargs, meta["live"]["fetch"], unix_now)
                         new_data = func(*args, **kwargs)

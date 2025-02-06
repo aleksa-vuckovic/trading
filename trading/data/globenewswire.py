@@ -66,7 +66,8 @@ def _get_news_internal(orgs: list[str], keywords: list[str], unix_from: float, u
     time_step_fn=100000000,
     series_field=None,
     timestamp_field="unix_time",
-    live_delay=12*3600,
+    live_delay_fn=3600, #let's say that news is an hour late usually
+    refresh_delay_fn=2*3600,
     return_series_only=True
 )
 def _get_news(org: str, unix_from: float, unix_to: float) -> list[dict]:

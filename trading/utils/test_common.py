@@ -102,7 +102,8 @@ class TestCommon(unittest.TestCase):
             time_step_fn= time_step,
             series_field=None,
             timestamp_field="time",
-            live_delay=1
+            live_delay_fn=0,
+            refresh_delay_fn=1
         )
         def get_series(unix_from: float,  unix_to: float):
             nonlocal invocations

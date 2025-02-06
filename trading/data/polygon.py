@@ -23,7 +23,8 @@ def _interval_to_str(interval: Interval) -> str:
     time_step_fn=lambda args: 10000000 if args[1] == common.Interval.H1 else 50000000,
     series_field="results",
     timestamp_field="t",
-    live_delay=3600,
+    live_delay_fn=lambda args: common.get_delay_for_interval(args[1].value),
+    refresh_delay_fn=None,
     return_series_only=True
 )
 @common.backup_timeout(behavior=common.BackupBehavior.RETHROW)
@@ -31,7 +32,7 @@ def _get_polygon_pricing(
     ticker: str,
     unix_from: float,
     unix_to: float,
-    timespan: common.Interval,
+    timespan: Interval,
     adjusted: bool = True
 ) -> dict:
     ticker = ticker.upper()

@@ -1,6 +1,8 @@
 import unittest
+from ..utils import dateutils
+from ..utils.common import Interval
 from . import yahoo
-from ..utils import dateutils, logutils
+
 
 class TestQuery(unittest.TestCase):
     def test_yahoo_pricing_h1(self):
@@ -8,7 +10,7 @@ class TestQuery(unittest.TestCase):
             'nvda',
             dateutils.str_to_unix("2023-12-01 00:00:00", tz = dateutils.ET),
             dateutils.str_to_unix("2024-01-15 00:00:00", tz = dateutils.ET),
-            yahoo.Interval.H1,
+            Interval.H1,
             return_quotes=['close', 'volume', 'low', 'high', 'open']
         )
         self.assertTrue(prices and volume and low and high and open)
@@ -27,7 +29,7 @@ class TestQuery(unittest.TestCase):
             'nvda',
             dateutils.str_to_unix("2021-12-01 00:00:00", tz = dateutils.ET),
             dateutils.str_to_unix("2022-01-15 00:00:00", tz = dateutils.ET),
-            yahoo.Interval.D1,
+            Interval.D1,
             return_quotes=['close', 'volume', 'low', 'open', 'high']
         )
         self.assertTrue(prices)
