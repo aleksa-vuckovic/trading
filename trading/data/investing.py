@@ -1,4 +1,9 @@
-https://tvc4.investing.com/58a16e76cc4c411b480ca39abbdfc764/1738769433/1/1/8/symbols?symbol=NASDAQ%20%3AMSFT
+from ..utils import httputils
+
+def _get_info(ticker: str) -> dict:
+  url = f"https://tvc4.investing.com/58a16e76cc4c411b480ca39abbdfc764/1738769433/1/1/8/symbols?symbol=NASDAQ%20%3A{ticker.upper()}"
+  
+
 https://tvc4.investing.com/58a16e76cc4c411b480ca39abbdfc764/1738769433/1/1/8/symbols?symbol=NYSE%20%3AXOM
 {
   "name": "MSFT",

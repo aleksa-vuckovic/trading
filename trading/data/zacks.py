@@ -12,13 +12,17 @@ logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
 _CACHE: Path = common.CACHE / _MODULE
 
-def _format_date(unix: int) -> str:
+def _format_date(unix: float) -> str:
     return dateutils.unix_to_datetime(unix, tz = dateutils.ET)\
         .strftime('%b-%d-%Y')\
         .replace("-0", "-")\
         .replace("jun", "june")\
         .lower()
 
+@common.cached_scalar(
+    include_args=[0],
+    path_fn=lambda args: _CACHE / _format_date(args[0])
+)
 @common.backup_timeout()
 def _get_summary(unix_time: int) -> str:
     #First find the id by searching through the pages
@@ -44,13 +48,5 @@ def _get_summary(unix_time: int) -> str:
     logger.fatal(f"Couldn't find date {dates[0]} in pages from {start_page} to {end_page}.")
     return ""
 
-def get_summary(unix_time: int) -> str:
-    path = _CACHE
-    path.mkdir(parents = True, exist_ok=True)
-    date = _format_date(unix_time)
-    path /= date
-    if path.exists():
-        return path.read_text()
-    data = _get_summary(unix_time)
-    path.write_text(data)
-    return data
+def get_summary(unix_time: float) -> str:
+    return _get_summary(unix_time)

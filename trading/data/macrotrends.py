@@ -12,11 +12,13 @@ _MODULE: str = __name__.split(".")[-1]
 _CACHE = common.CACHE / _MODULE
 
 
+@common.cached_scalar(
+    include_args=[0],
+    cache_root=_CACHE
+)
 @common.backup_timeout(behavior=common.BackupBehavior.RETHROW)
-def _get_shares_outstanding_raw(ticker: nasdaq.NasdaqListedEntry) -> dict[str, str]:
-    shortName = re.sub(r'\s+', '-', ticker.short_name().strip())
-    shortName = shortName.replace(".", "").lower()
-    url = f"https://www.macrotrends.net/stocks/charts/{ticker.symbol}/{shortName}/shares-outstanding"
+def _get_shares_outstanding(ticker: str, short_name: str) -> dict[str, str]:
+    url = f"https://www.macrotrends.net/stocks/charts/{ticker}/{short_name}/shares-outstanding"
     resp = httputils.get_as_browser(url)
     soup = BeautifulSoup(resp.text, "html.parser")
     tables = soup.find_all("table", class_="historical_data_table")
@@ -33,12 +35,8 @@ def _get_shares_outstanding_raw(ticker: nasdaq.NasdaqListedEntry) -> dict[str, s
                 result[values[0]] = values[1]
             except:
                 logger.error("Failed to load cells for shares outstanding from macrotrends.", exc_info=True)
-    return result
-
-def _get_shares_outstanding(ticker: nasdaq.NasdaqListedEntry) -> list[dict]:
-    raw = _get_shares_outstanding_raw(ticker)
     res = []
-    for key,value in raw.items():
+    for key,value in result.items():
         try:
             unix_time = dateutils.str_to_unix(key, format = '%Y' if len(key) == 4 else '%Y-%m-%d')
             shares = int(value.replace(",", ""))
@@ -51,14 +49,7 @@ def get_shares_outstanding(ticker: nasdaq.NasdaqListedEntry) -> list[dict]:
     """
     Returns shares outstanding fully, as provided by macrotrends.
     """
-    path = _CACHE
-    path.mkdir(parents = True, exist_ok=True)
-    path /= ticker.symbol.lower()
-    if path.exists():
-        return json.loads(path.read_text())
-    data = _get_shares_outstanding(ticker)
-    path.write_text(json.dumps(data))
-    return data
+    return _get_shares_outstanding(ticker.symbol.upper(), re.sub(r'\s+', '-', ticker.short_name().strip()).replace(".", "").lower())
 
 def get_shares_outstanding_at(ticker: nasdaq.NasdaqListedEntry, unix_time: int) -> float:
     data = get_shares_outstanding(ticker)

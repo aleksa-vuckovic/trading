@@ -59,10 +59,10 @@ def _get_news_internal(orgs: list[str], keywords: list[str], unix_from: float, u
     return result
 
 @common.cached_series(
-    cache_root=_CACHE,
     unix_from_arg=1,
     unix_to_arg=2,
     include_args=[0],
+    cache_root=_CACHE,
     time_step_fn=100000000,
     series_field=None,
     timestamp_field="unix_time",

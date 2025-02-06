@@ -55,10 +55,10 @@ def _get_yahoo_pricing_raw(
 """
 
 @common.cached_series(
-    cache_root=_CACHE,
     unix_from_arg=1,
     unix_to_arg=2,
     include_args=[0,3],
+    cache_root=_CACHE,
     time_step_fn= lambda args: 10000000 if args[1] == Interval.H1 else 50000000,
     series_field="data",
     timestamp_field="t",
@@ -149,12 +149,9 @@ def get_yahoo_pricing(
     Returns the pricing as two arrays - prices and volume.
     Zero volume entries are filtered out.
     """
-    ticker = ticker.upper()
-    path = _CACHE  / ticker
-    path.mkdir(parents = True, exist_ok = True)
     if interval != Interval.D1 and interval != Interval.H1:
         raise ValueError(f'Only H1 and D1 are supported. Got {interval.name}.')
-    data = _get_yahoo_pricing(ticker, unix_from, unix_to, interval)['data']
+    data = _get_yahoo_pricing(ticker.upper(), unix_from, unix_to, interval)['data']
     return tuple([it[quote[0]] for it in data] for quote in return_quotes)
 
 def get_splits(data: dict) -> dict:
@@ -162,23 +159,18 @@ def get_splits(data: dict) -> dict:
         return data['events']['splits']
     return {}
 
+@common.cached_scalar(
+    include_args=[0],
+    path_fn=lambda args: _CACHE / args[0] / 'info'
+)
 def _get_info(ticker: str) -> dict:
-    return yfinance.Ticker(ticker).info
+    info = yfinance.Ticker(ticker).info
+    mock_time = int(time.time() - 15*24*3600)
+    meta = _get_yahoo_pricing_raw(ticker, mock_time-100, mock_time, Interval.D1)['chart']['result'][0]['meta']
+    return {**info, **meta}
 
 def get_info(ticker: str) -> dict:
-    ticker = ticker.upper()
-    path = _MODULE / _CACHE / ticker
-    path.mkdir(parents = True, exist_ok = True)
-    path /= 'info'
-    if path.exists():
-        return json.loads(path.read_text())
-    else:
-        info = _get_info(ticker)
-        mock_time = int(time.time() - 15*24*3600)
-        meta = _get_yahoo_pricing_raw(ticker, mock_time-100, mock_time, Interval.D1)['chart']['result'][0]['meta']
-        info = {**info, **meta}
-        path.write_text(json.dumps(info))
-        return info
+    return _get_info(ticker.upper())
 def get_shares(ticker: str) -> int:
     key = 'impliedSharesOutstanding'
     info = get_info(ticker)

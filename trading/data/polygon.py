@@ -15,10 +15,10 @@ class Interval(Enum):
     D1 = '1/day'
 
 @common.cached_series(
-    cache_root=_CACHE,
     unix_from_arg=1,
     unix_to_arg=2,
     include_args=[0,3],
+    cache_root=_CACHE,
     time_step_fn=lambda args: 10000000 if args[1] == Interval.H1 else 50000000,
     series_field="results",
     timestamp_field="t",

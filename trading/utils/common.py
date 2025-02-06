@@ -139,11 +139,12 @@ def backup_timeout(
     return decorate
 
 def cached_series(
-    cache_root: Path,
     *,
     unix_from_arg: str | int = 1,
     unix_to_arg: str | int = 2,
     include_args: list[str | int] | str | int = [],
+    cache_root: Path | None = None,
+    path_fn: Callable[[list], Path] = None,
     time_step_fn: int | float | Callable[[list], float] = lambda include_args: 10000000,
     series_field: str | None = None,
     timestamp_field: str | int = "unix_time",
@@ -158,7 +159,6 @@ def cached_series(
         The return of this method is guaranteed to be closed at the start and open at the end.
     It is also assumed to return data sorted by timestamp!
     Args:
-        cache_root - The root folder path where cache files are to be stored.
         include_args - Arguments to be included as time series inputs.
         time_step - The maximum time step with which to query the underlying method.
         time_step_fn - Determines the time step used when fetching the data. Can be a constant, or a method with one argument - the include_args list.
@@ -171,7 +171,8 @@ def cached_series(
         with the proper series set.
 
     """
-    cache_root.mkdir(parents=True, exist_ok=True)
+    if cache_root is None and path_fn is None:
+        raise Exception('At least one of cache_root or path_fn must be set.')
     series_path = [int(it) if re.fullmatch(r"\d+", it) else it for it in (series_field or "").split(".") if it]
     include_args = include_args if isinstance(include_args, list) else [include_args]
     def get_series(data) -> list:
@@ -210,12 +211,16 @@ def cached_series(
         def wrapper(*args, **kwargs):
             args = list(args)
             unix_from, unix_to = get_unix_args(args, kwargs)
-            include_raw = [args[it] if isinstance(it, int) else kwargs[it] for it in include_args]
-            include_str = [it.name if isinstance(it, Enum) else str(it) for it in include_raw]
-            include = "-".join(include_str)
-            path = cache_root / include if include else cache_root
-            path.mkdir(parents=True, exist_ok=True)
-            time_step = int(time_step_fn(include_raw) if callable(time_step_fn) else int(time_step_fn))
+            include = [args[it] if isinstance(it, int) else kwargs[it] for it in include_args]
+            if cache_root:
+                path = cache_root
+                if include:
+                    for arg in include:
+                        path /= arg.name if isinstance(arg, Enum) else str(arg)
+            else:
+                path = path_fn(include)
+            path.mkdir(parents=True,exist_ok=True)
+            time_step = int(time_step_fn(include) if callable(time_step_fn) else int(time_step_fn))
             
             unix_now = time.time()
             start_id = int(unix_from) // time_step
@@ -277,5 +282,40 @@ def cached_series(
                         subpath.write_text(json.dumps(data))
                         extend(data)
             return  result if return_series_only else set_series(last_data, result)
+        return wrapper
+    return decorate
+
+
+def cached_scalar(
+    *,
+    include_args: list[str | int] | str | int = [],
+    cache_root: Path | None = None,
+    path_fn: Callable[[list], Path] = None
+):
+    """
+    Caches the function return values, per unique set of include_args.
+    Either cache_root OR path has to be set.
+        If cache_root is set, the cached response is stored in cache_root/all/include/args.
+        If path is set, it's invoked with the raw include_args and a Path is expected.
+    """
+    if cache_root is None and path_fn is None:
+        raise Exception('At least one of cache_root or path_fn must be set.')
+    include_args = include_args if isinstance(include_args, list) else [include_args]
+    def decorate(func):
+        def wrapper(*args, **kwargs):
+            include = [args[it] if isinstance(it, int) else kwargs[it] for it in include_args]
+            if cache_root:
+                path = cache_root
+                if include:
+                    for arg in include:
+                        path /= arg.name if isinstance(arg, Enum) else str(arg)
+            else:
+                path = path_fn(include)
+            if path.exists():
+                return json.loads(path.read_text())
+            path.parent.mkdir(parents=True,exist_ok=True)
+            result = func(*args, **kwargs)
+            path.write_text(json.dumps(result))
+            return result
         return wrapper
     return decorate

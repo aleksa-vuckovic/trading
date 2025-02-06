@@ -1,10 +1,10 @@
-from . import common
 import unittest
 import time
-from pathlib import Path
 import shutil
 import json
-import torch
+from enum import Enum
+from pathlib import Path
+from . import common
 
 class TestCommon(unittest.TestCase):
     def test_binary_search(self):
@@ -130,4 +130,37 @@ class TestCommon(unittest.TestCase):
         self.assertGreater(series[2]["time"], unix_to)
         self.assertEqual(series[0]["time"] + 1, series[1]["time"])
         self.assertEqual(2, invocations)
-        self.assertEqual(4, len(json.loads(livepath.read_text()))) #Make sure previous data is not deleted
+        self.assertEqual(4, len(json.loads(livepath.read_text()))) #Make sure previous data is not deleted 
+
+    def test_cache_scalar_decorator(self):
+        cache = Path("./_test_cache")
+        if cache.exists():
+            shutil.rmtree(cache)
+        invocations = 0
+        class Test(Enum):
+            A = 'aa'
+        @common.cached_scalar(
+            include_args=[0,1],
+            cache_root=cache
+        )
+        def get_scalar(name: str, typ: Test) -> dict:
+            nonlocal invocations
+            invocations += 1
+            return {'name': name, 'typ': typ.name}
+        
+        self.assertEqual({'name':'test','typ':Test.A.name}, get_scalar('test', Test.A))
+        path = cache/'test'/'A'
+        self.assertTrue(path.exists())
+        self.assertEqual(json.loads(path.read_text()), get_scalar('test', Test.A))
+        self.assertEqual(1, invocations)
+
+        @common.cached_scalar(
+            include_args=[0],
+            path_fn=lambda args: cache/f'test-{args[0]}'
+        )
+        def get_scalar(name: str):
+            return name
+        self.assertEqual('test', get_scalar('test'))
+        path = cache/'test-test'
+        self.assertTrue(path.exists())
+        self.assertEqual('test', json.loads(path.read_text()))
