@@ -1,25 +1,26 @@
-from ..utils import httputils, common
-from enum import Enum
 import math
-import time
 import json
 import logging
+from ..utils import httputils, common
+from ..utils.common import Interval
 
 logger = logging.getLogger(__name__)
 _API_KEY = "2mpdazNwFmxCMwRVx87Crv4JwoSWwqoe"
 #_API_KEY = "t_EpcFm2mmah_opokpJm4F7bUqmiSZNN"
 _MODULE = __name__.split(".")[-1]
 _CACHE = common.CACHE / _MODULE
-class Interval(Enum):
-    H1 = '1/hour'
-    D1 = '1/day'
+
+def _interval_to_str(interval: Interval) -> str:
+    if interval == Interval.H1: return '1/hour'
+    if interval == Interval.D1: return '1/day'
+    raise Exception(f'Unknown interval {Interval}')
 
 @common.cached_series(
     unix_from_arg=1,
     unix_to_arg=2,
     include_args=[0,3],
     cache_root=_CACHE,
-    time_step_fn=lambda args: 10000000 if args[1] == Interval.H1 else 50000000,
+    time_step_fn=lambda args: 10000000 if args[1] == common.Interval.H1 else 50000000,
     series_field="results",
     timestamp_field="t",
     live_delay=3600,
@@ -30,14 +31,14 @@ def _get_polygon_pricing(
     ticker: str,
     unix_from: float,
     unix_to: float,
-    timespan: Interval,
+    timespan: common.Interval,
     adjusted: bool = True
 ) -> dict:
     ticker = ticker.upper()
     unix_from = int(unix_from*1000)
     unix_to = math.ceil(unix_to*1000)
     logger.info(f"Fetching from {unix_from} to {unix_to}")
-    url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/{timespan.value}/{unix_from}/{unix_to}?"
+    url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/{_interval_to_str(timespan)}/{unix_from}/{unix_to}?"
     url += f"adjusted={str(adjusted).lower()}&sort=asc&apiKey={_API_KEY}"
     resp = httputils.get_as_browser(url)
     data = json.loads(resp.text)

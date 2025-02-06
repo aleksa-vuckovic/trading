@@ -12,6 +12,9 @@ from enum import Enum, Flag, auto
 logger = logging.getLogger(__name__)
 CACHE = Path(__file__).parent.parent / "data" / "cache"
 
+class Interval(Enum):
+    D1 = 24*3600
+    H1 = 3600
 
 reserved_windows_filenames = {
     "CON", "PRN", "AUX", "NUL",

@@ -6,6 +6,7 @@ import math
 from enum import Enum
 from pathlib import Path
 from ..utils import httputils, common
+from ..utils.common import Interval
 
 
 logger = logging.getLogger(__name__)
@@ -14,20 +15,10 @@ _CACHE: Path = common.CACHE / _MODULE
 _MIN_AFTER_FIRST_TRADE = 14*24*3600 # The minimum time after the first trade time to query for prices
 _MIN_ADJUSTMENT_PERIOD = 10*24*3600
 
-class Interval(Enum):
-    M1 = '1m'
-    M2 = '2m'
-    M5 = '5m'
-    M15 = '15m'
-    M30 = '30m'
-    M60 = '60m'
-    M90 = '90m'
-    H1 = '1h'
-    D1 = '1d'
-    D5 = '5d'
-    W1 = '1wk'
-    MO1 = '1mo'
-    MO3 = '3mo'
+def _interval_to_str(interval: Interval) -> str:
+    if interval == Interval.H1: return '1h'
+    if interval == Interval.D1: return '1d'
+    raise Exception(f"Unknown interval {interval}.")
 
 class Event(Enum):
     DIVIDEND = 'div'
@@ -43,7 +34,7 @@ def _get_yahoo_pricing_raw(
     include_pre_post = False
 ) -> dict:
     result =  f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker.upper()}"
-    result += f"?period1={int(start_time)}&period2={math.ceil(end_time)}&interval={interval.value}"
+    result += f"?period1={int(start_time)}&period2={math.ceil(end_time)}&interval={_interval_to_str(interval)}"
     result += f"&incldePrePost={str(include_pre_post).lower()}&events={"|".join([it.value for it in events])}"
     result += f"&&lang=en-US&region=US"
     resp = httputils.get_as_browser(result)
@@ -148,8 +139,6 @@ def get_pricing(
     Returns the pricing as two arrays - prices and volume.
     Zero volume entries are filtered out.
     """
-    if interval != Interval.D1 and interval != Interval.H1:
-        raise ValueError(f'Only H1 and D1 are supported. Got {interval.name}.')
     data = _get_yahoo_pricing(ticker.upper(), unix_from, unix_to, interval)['data']
     return tuple([it[quote[0]] for it in data] for quote in return_quotes)
 

@@ -2,16 +2,16 @@ import json
 import logging
 import math
 from pathlib import Path
-from enum import Enum
 from ..utils import httputils, common
+from ..utils.common import Interval
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
 _CACHE: Path = common.CACHE / _MODULE
 
-class Interval(Enum):
-  D1 = 'D'
-  H1 = '60'
+def _interval_to_str(interval: Interval) -> str:
+  if interval == Interval.H1: return '60'
+  if interval == Interval.D1: return 'D'
 
 carrier = "bc26ca13e9d438b569fcb3b5769c64e2/1738843815"
 
@@ -40,7 +40,7 @@ def _get_pricing(ticker: str, unix_from: float, unix_to: float, interval: Interv
   ticker = info['ticker']
   unix_from = int(unix_from)
   unix_to = math.ceil(unix_to)
-  url = f"https://tvc4.investing.com/58a16e76cc4c411b480ca39abbdfc764/1738769433/1/1/8/history?symbol={ticker}&resolution={interval.value}&from={unix_from}&to={unix_to}"
+  url = f"https://tvc4.investing.com/58a16e76cc4c411b480ca39abbdfc764/1738769433/1/1/8/history?symbol={ticker}&resolution={_interval_to_str(interval)}&from={unix_from}&to={unix_to}"
   resp = httputils.get_as_browser(url)
   data = json.loads(resp.text)
   if data['s'] != 'ok':
