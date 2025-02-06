@@ -12,26 +12,22 @@ import config
 from ..utils import get_next_time
 
 logger = logging.getLogger(__name__)
-examples_folder = Path(__file__).parent / 'examples'
-if not examples_folder.exists():
-    examples_folder.mkdir()
 time_frame_end = dateutils.str_to_unix(config.time_frame_end)
 time_frame_start = dateutils.str_to_unix(config.time_frame_start)
 h_offset = 75*24*3600
 
-def run_ordered_loop(hour: int = 16):
-    tickers = aggregate.get_sorted_tickers()
-    state_path = Path(__file__).parent / 'ordered_loop_state.json'
-    if not state_path.exists():
-        state_path.write_text('{}')
+def run_ordered_loop(hour: int = 16, folder: Path = Path(__file__).parent, ):
+    examples_folder = folder / 'examples'
+    if not examples_folder.exists(): examples_folder.mkdir(parents=True, exist_ok=True)
+    state_path = folder / 'ordered_loop_state.json'
+    if not state_path.exists(): state_path.write_text('{}')
     total_state = json.loads(state_path.read_text())
-    if str(hour) not in total_state:
-        state = {'iter': 0, 'unix_time': time_frame_start, 'entry': -1}
-    else:
-        state = total_state[str(hour)]
+    if str(hour) not in total_state: state = {'iter': 0, 'unix_time': time_frame_start, 'entry': -1}
+    else: state = total_state[str(hour)]
     iter: int = state['iter']
     unix_time: float = state['unix_time']
     entry: int = state['entry']
+    tickers = aggregate.get_sorted_tickers()
 
     current = []
     while True:

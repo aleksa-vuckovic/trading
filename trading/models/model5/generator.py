@@ -1,36 +1,33 @@
 import logging
 import json
 import torch
+import config
 from pathlib import Path
 from tqdm import tqdm
-import config
+from typing import Callable
 from ...utils import dateutils
-from ...data import aggregate
+from ...data import aggregate, nasdaq
 from ..utils import get_next_time
 from . import example
 
 
 logger = logging.getLogger(__name__)
-examples_folder = Path(__file__).parent / 'examples'
-if not examples_folder.exists():
-    examples_folder.mkdir()
 time_frame_end = dateutils.str_to_unix(config.time_frame_end)
 time_frame_start = dateutils.str_to_unix(config.time_frame_start)
 h_offset = 75*24*3600
 
-def run_ordered_loop(hour: int = 16):
-    tickers = aggregate.get_sorted_tickers()
-    state_path = Path(__file__).parent / 'ordered_loop_state.json'
-    if not state_path.exists():
-        state_path.write_text('{}')
+def run_ordered_loop(hour: int = 16, folder: Path = Path(__file__).parent, generate_example: Callable[[nasdaq.NasdaqListedEntry, float], dict] = example.generate_example):
+    examples_folder = folder / 'examples'
+    if not examples_folder.exists(): examples_folder.mkdir(parents=True, exist_ok=True)
+    state_path = folder / 'ordered_loop_state.json'
+    if not state_path.exists(): state_path.write_text('{}')
     total_state = json.loads(state_path.read_text())
-    if str(hour) not in total_state:
-        state = {'iter': 0, 'unix_time': time_frame_start, 'entry': -1}
-    else:
-        state = total_state[str(hour)]
+    if str(hour) not in total_state: state = {'iter': 0, 'unix_time': time_frame_start, 'entry': -1}
+    else: state = total_state[str(hour)]
     iter: int = state['iter']
     unix_time: float = state['unix_time']
     entry: int = state['entry']
+    tickers = aggregate.get_sorted_tickers()
 
     current: list[dict[str, torch.Tensor]] = []
     while True:
@@ -53,8 +50,10 @@ def run_ordered_loop(hour: int = 16):
                         logger.info(f"Skipping {ticker.symbol} at index {entry} for time {dateutils.unix_to_datetime(unix_time)} because of first trade time.")
                         entry = len(tickers) - 1
                         continue
-                    current.append(example.generate_example(ticker, unix_time+60)) #One min later because the interval is open at the end in all series returning methods.
+                    current.append(generate_example(ticker, unix_time+60)) #One min later because the interval is open at the end in all series returning methods.
                     bar.update(1)
+                except KeyboardInterrupt:
+                    raise
                 except:
                     logger.error(f"Failed to generate example for {ticker.symbol} for {unix_time}", exc_info=True)
         if not current:
