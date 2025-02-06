@@ -40,12 +40,12 @@ def get_hourly_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_
     """
     Returns a tuple of arrays of the requested quotes.
     """
-    return yahoo.get_yahoo_pricing(ticker.symbol, unix_from, unix_to, yahoo.Interval.H1, return_quotes=return_quotes)
+    return yahoo.get_pricing(ticker.symbol, unix_from, unix_to, yahoo.Interval.H1, return_quotes=return_quotes)
 def get_daily_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, return_quotes=['close', 'volume']) -> tuple:
     """
     Returns a tuple of arrays of the requested quotes.
     """
-    return yahoo.get_yahoo_pricing(ticker.symbol, unix_from, unix_to, yahoo.Interval.D1, return_quotes=return_quotes)
+    return yahoo.get_pricing(ticker.symbol, unix_from, unix_to, yahoo.Interval.D1, return_quotes=return_quotes)
 
 def get_market_summary(unix_time: float) -> str:
     return zacks.get_summary(unix_time)

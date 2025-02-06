@@ -137,7 +137,7 @@ def _get_yahoo_pricing(
             processed['data'].append({ it[0]: arrays[it][i] for it in arrays.keys() })
     return processed
 
-def get_yahoo_pricing(
+def get_pricing(
     ticker: str,
     unix_from: float, #unix
     unix_to: float, #unix

@@ -4,7 +4,7 @@ from ..utils import dateutils, logutils
 
 class TestQuery(unittest.TestCase):
     def test_yahoo_pricing_h1(self):
-        prices, volume, low, high, open = yahoo.get_yahoo_pricing(
+        prices, volume, low, high, open = yahoo.get_pricing(
             'nvda',
             dateutils.str_to_unix("2023-12-01 00:00:00", tz = dateutils.ET),
             dateutils.str_to_unix("2024-01-15 00:00:00", tz = dateutils.ET),
@@ -23,7 +23,7 @@ class TestQuery(unittest.TestCase):
         self.assertTrue(len(prices)> 150 and len(prices) < 300)
     
     def test_yahoo_pricing_d1(self):
-        prices, volume, low, high, open = yahoo.get_yahoo_pricing(
+        prices, volume, low, high, open = yahoo.get_pricing(
             'nvda',
             dateutils.str_to_unix("2021-12-01 00:00:00", tz = dateutils.ET),
             dateutils.str_to_unix("2022-01-15 00:00:00", tz = dateutils.ET),
