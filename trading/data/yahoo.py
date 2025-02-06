@@ -161,7 +161,7 @@ def get_splits(data: dict) -> dict:
 
 @common.cached_scalar(
     include_args=[0],
-    path_fn=lambda args: _CACHE / args[0] / 'info'
+    path_fn=lambda args: _CACHE / common.escape_filename(args[0]) / 'info'
 )
 def _get_info(ticker: str) -> dict:
     info = yfinance.Ticker(ticker).info

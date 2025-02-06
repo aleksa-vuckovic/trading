@@ -13,6 +13,17 @@ import torch
 logger = logging.getLogger(__name__)
 CACHE = Path(__file__).parent.parent / "data" / "cache"
 
+
+reserved_windows_filenames = {
+    "CON", "PRN", "AUX", "NUL",
+    *{f"COM{i}" for i in range(1, 10)},
+    *{f"LPT{i}" for i in range(1, 10)}
+}
+def escape_filename(name: str):
+    if name.upper() in reserved_windows_filenames:
+        return f"[[{name}]]"
+    return name
+
 class BinarySearchEdge(Enum):
     LOW ='low'
     HIGH = 'high'
@@ -216,7 +227,7 @@ def cached_series(
                 path = cache_root
                 if include:
                     for arg in include:
-                        path /= arg.name if isinstance(arg, Enum) else str(arg)
+                        path /= escape_filename(arg.name if isinstance(arg, Enum) else str(arg))
             else:
                 path = path_fn(include)
             path.mkdir(parents=True,exist_ok=True)
@@ -308,7 +319,7 @@ def cached_scalar(
                 path = cache_root
                 if include:
                     for arg in include:
-                        path /= arg.name if isinstance(arg, Enum) else str(arg)
+                        path /= escape_filename(arg.name if isinstance(arg, Enum) else str(arg))
             else:
                 path = path_fn(include)
             if path.exists():
