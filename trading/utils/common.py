@@ -200,7 +200,7 @@ def cached_series(
             ret = data
             for it in series_path:
                 ret = data[it]
-            return ret or []
+            return ret if ret is not None else []
         except:
             logger.error("Failed to extract time series.", exc_info=True)
             return []

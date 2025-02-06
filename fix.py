@@ -1,14 +1,51 @@
 import os
 import torch
 import logging
+import json
 from pathlib import Path
-from ...utils import common
-from ..utils import normalize_in_place
-from . import example
+from trading.models.utils import normalize_in_place
+from trading.models.model1 import example
 
 examples_bin_folder = Path(__file__).parent / 'examples_bin'
 examples_folder = Path(__file__).parent / 'examples'
 logger = logging.getLogger(__name__)
+
+
+def fix_live_series():
+    root = Path(__file__).parent / 'trading' / 'data' / 'cache' / 'yahoo'
+    for file in sorted(os.listdir(root))[2:]:
+        #Delete last 150 h1 prices
+        path = root / file / 'H1'
+        live_path = path / 'live'
+        meta_path = path / 'meta'
+        if live_path.exists():
+            live = json.loads(live_path.read_text())
+            meta = json.loads(meta_path.read_text())
+            live['data'] = live['data'][:-140]
+            if live['data']:
+                meta['live']['fetch'] = live['data'][-1]['t']
+                live_path.write_text(json.dumps(live))
+                meta_path.write_text(json.dumps(meta))
+            else:
+                print(f'unlink h1 for {file}')
+                meta_path.unlink()
+                live_path.unlink()
+        #Delete last 20 d1 prices
+        path = root / file / 'D1'
+        live_path = path / 'live'
+        meta_path = path / 'meta'
+        if live_path.exists():
+            live = json.loads(live_path.read_text())
+            meta = json.loads(meta_path.read_text())
+            live['data'] = live['data'][:-20]
+            if live['data']:
+                meta['live']['fetch'] = live['data'][-1]['t']
+                live_path.write_text(json.dumps(live))
+                meta_path.write_text(json.dumps(meta))
+            else:
+                print(f'unlink d1 for {file}')
+                meta_path.unlink()
+                live_path.unlink()
 
 def fix_nan_inf():
     files = os.listdir(examples_bin_folder)

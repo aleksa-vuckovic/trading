@@ -133,6 +133,39 @@ class TestCommon(unittest.TestCase):
         self.assertEqual(2, invocations)
         self.assertEqual(4, len(json.loads(livepath.read_text()))) #Make sure previous data is not deleted 
 
+    def test_cached_series_decorator_live_delay(self):
+        cache = Path("./_test_cache")
+        if cache.exists():
+            shutil.rmtree(cache)
+        time_step = 24*3600
+        now = time.time()
+        @common.cached_series(
+            cache_root=cache,
+            unix_from_arg=0,
+            unix_to_arg=1,
+            include_args=[],
+            time_step_fn= time_step,
+            series_field=None,
+            timestamp_field="time",
+            live_delay_fn=2,
+            refresh_delay_fn=0
+        )
+        def get_series(unix_from: float,  unix_to: float):
+            if now-1 > unix_from and now-1 < unix_to:
+                return [{"time": now-1}]
+            return []
+        
+        unix_from = now-3
+        unix_to = now
+        test1 = get_series(unix_from, unix_to)
+        metapath = cache / "meta"
+        meta = json.loads(metapath.read_text())["live"]
+        self.assertLess(meta['fetch'], now-1)
+        self.assertEqual(0, len(test1))
+        time.sleep(1.1)
+        test2= get_series(unix_from, unix_to)
+        self.assertEqual(1, len(test2))
+
     def test_cache_scalar_decorator(self):
         cache = Path("./_test_cache")
         if cache.exists():
