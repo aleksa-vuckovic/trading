@@ -319,3 +319,30 @@ def cached_scalar(
             return result
         return wrapper
     return decorate
+
+""" Fix zacks
+root = Path(__file__).parent/'trading'/'data'/'cache'/'zacks'
+for file in os.listdir(root):
+    path = root/file
+    path.write_text(json.dumps(path.read_text()))
+    print(path)
+"""
+""" Fix yahoo
+root = Path(__file__).parent/'trading'/'data'/'cache'/'yahoo'
+pattern = re.compile(r'([^\-]+)\-([DH]1)')
+for file in os.listdir(root):
+    match = pattern.fullmatch(file)
+    if match:
+        x = match.group(1)
+        y = match.group(2)
+        from_path = root / file
+        to_path = root / x / y
+        from_path.rename(to_path)
+
+"""
+""" Fix macrotrends
+root = Path(__file__).parent/'trading'/'data'/'cache'/'macrotrends'
+for file in os.listdir(root):
+    path = root / file
+    path.rename(root / file.upper())
+"""
