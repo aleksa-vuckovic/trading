@@ -2,7 +2,8 @@ import time
 import logging
 import torch
 from torch import Tensor
-from ...utils import dateutils
+from ...utils import dateutils, common
+from ...utils.common import Interval
 from ...data import aggregate, nasdaq
 from ..utils import check_tensor
 
@@ -29,10 +30,10 @@ def generate_input(
     d1_start_time = (end_time-(DATA_POINTS/5*7*1.5+5)*24*3600)
     h1_start_time = (end_time-(DATA_POINTS/6/5*7*1.5+5)*24*3600)
     quotes = ['open', 'close', 'low', 'high', 'volume']
-    d1_data = aggregate.get_daily_pricing(ticker, d1_start_time, end_time, return_quotes=quotes)
+    d1_data = aggregate.get_pricing(ticker, d1_start_time, end_time - common.get_delay_for_interval(Interval.D1), Interval.D1, return_quotes=quotes)
     if len(d1_data[0]) < DATA_POINTS:
         raise Exception(f'Failed to fetch enough daily prices for {ticker.symbol}. Got {len(d1_data[0])}')
-    h1_data = aggregate.get_hourly_pricing(ticker, h1_start_time, end_time, return_quotes=quotes)
+    h1_data = aggregate.get_pricing(ticker, h1_start_time, end_time - common.get_delay_for_interval(Interval.H1), Interval.H1, return_quotes=quotes)
     if len(h1_data[0]) < DATA_POINTS:
         raise Exception(f'Failed to fetch enough hourly prices for {ticker.symbol}. Got {len(h1_data[0])}')
     
@@ -48,9 +49,9 @@ def generate_example(
     end_time: float
 ) -> dict[str, Tensor]:
     data = generate_input(ticker, end_time)
-    d1_after_prices, = aggregate.get_hourly_pricing(ticker, end_time + 10, dateutils.add_business_days_unix(end_time, 1, tz=dateutils.ET), return_quotes=['high'])
-    d2_after_prices, = aggregate.get_hourly_pricing(ticker, end_time + 10, dateutils.add_business_days_unix(end_time, 2, tz=dateutils.ET), return_quotes=['high'])
-    d5_after_prices, = aggregate.get_daily_pricing(ticker, end_time + 10, dateutils.add_business_days_unix(end_time, 5, tz=dateutils.ET), return_quotes=['high'])
+    d1_after_prices, = aggregate.get_pricing(ticker, end_time, dateutils.add_business_days_unix(end_time, 1, tz=dateutils.ET), Interval.H1, return_quotes=['high'])
+    d2_after_prices, = aggregate.get_pricing(ticker, end_time, dateutils.add_business_days_unix(end_time, 2, tz=dateutils.ET), Interval.H1, return_quotes=['high'])
+    d5_after_prices, = aggregate.get_pricing(ticker, end_time, dateutils.add_business_days_unix(end_time, 5, tz=dateutils.ET), Interval.D1, return_quotes=['high'])
     if len(d1_after_prices) < 2:
         raise Exception(f"Failed to fetch enough hourly after prices for {ticker.symbol}. Got {len(d1_after_prices)}.")
     if len(d2_after_prices) < 3:

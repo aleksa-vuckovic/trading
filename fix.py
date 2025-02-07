@@ -4,11 +4,26 @@ import logging
 import json
 from pathlib import Path
 from trading.models.utils import normalize_in_place
-from trading.models.model1 import example
+from trading.models import model1, model5
 
 examples_bin_folder = Path(__file__).parent / 'examples_bin'
 examples_folder = Path(__file__).parent / 'examples'
 logger = logging.getLogger(__name__)
+
+
+def fix_model5_examples():
+    root = Path(__file__).parent / 'trading' / 'models' / 'model5' / 'examples'
+    for file in os.listdir(root):
+        path = root / file
+        data = torch.load(path, weights_only=True)
+        d1data = data[model5.example.D1_DATA]
+        d1data[:,1:,:] = d1data[:,:-1,:].clone()
+        data[model5.example.D1_DATA] = d1data
+        torch.save(d1data, path)
+        if file.endswith("15.pt"):
+            newfile = f"{file[:-5]}16.pt"
+            path.rename(root/newfile)
+        print(f"Fixed {newfile}")
 
 
 def fix_live_series():
@@ -54,17 +69,17 @@ def fix_nan_inf():
         indices = torch.logical_or(batch.isnan(), batch.isinf())
         indices = torch.sum(indices, dim=1) > 0
         bad_count = indices.sum().item()
-        market_cap = batch[indices][:,example.MARKET_CAP_I].mean()
+        market_cap = batch[indices][:,model1.example.MARKET_CAP_I].mean()
         indices = torch.logical_not(indices)
         good_count = indices.sum().item()
         good_batches = batch[indices]
-        target_prices = good_batches[:, example.D1_TARGET_I:] + 1
-        last_prices = good_batches[:, example.H1_VOLUMES_I-1].unsqueeze(dim = 1)
-        good_batches[:, example.D1_TARGET_I:] = target_prices / last_prices - 1
-        normalize_in_place(good_batches, start_index=example.D1_PRICES_I, count=example.D1_PRICES, dim=1)
-        normalize_in_place(good_batches, start_index=example.D1_VOLUMES_I, count=example.D1_PRICES, dim=1)
-        normalize_in_place(good_batches, start_index=example.H1_PRICES_I, count=example.H1_PRICES, dim=1)
-        normalize_in_place(good_batches, start_index=example.H1_VOLUMES_I, count=example.H1_PRICES, dim=1)
+        target_prices = good_batches[:, model1.example.D1_TARGET_I:] + 1
+        last_prices = good_batches[:, model1.example.H1_VOLUMES_I-1].unsqueeze(dim = 1)
+        good_batches[:, model1.example.D1_TARGET_I:] = target_prices / last_prices - 1
+        normalize_in_place(good_batches, start_index=model1.example.D1_PRICES_I, count=model1.example.D1_PRICES, dim=1)
+        normalize_in_place(good_batches, start_index=model1.example.D1_VOLUMES_I, count=model1.example.D1_PRICES, dim=1)
+        normalize_in_place(good_batches, start_index=model1.example.H1_PRICES_I, count=model1.example.H1_PRICES, dim=1)
+        normalize_in_place(good_batches, start_index=model1.example.H1_VOLUMES_I, count=model1.example.H1_PRICES, dim=1)
         torch.save(good_batches, examples_folder / file)
         logger.info(f'Batch {file}.\t Discard {bad_count}.\t Keep {good_count}.\t Avg mcap: {market_cap}')
 

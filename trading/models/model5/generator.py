@@ -15,7 +15,11 @@ time_frame_end = dateutils.str_to_unix(config.time_frame_end)
 time_frame_start = dateutils.str_to_unix(config.time_frame_start)
 h_offset = 75*24*3600
 
-def run_ordered_loop(hour: int = 16, folder: Path = Path(__file__).parent, generate_example: Callable[[nasdaq.NasdaqListedEntry, float], dict] = example.generate_example):
+def run_ordered_loop(
+    hour: int = 16,
+    folder: Path = Path(__file__).parent,
+    generate_example: Callable[[nasdaq.NasdaqListedEntry, float], dict] = example.generate_example
+):
     examples_folder = folder / 'examples'
     if not examples_folder.exists(): examples_folder.mkdir(parents=True, exist_ok=True)
     state_path = folder / 'ordered_loop_state.json'
@@ -49,7 +53,7 @@ def run_ordered_loop(hour: int = 16, folder: Path = Path(__file__).parent, gener
                         logger.info(f"Skipping {ticker.symbol} at index {entry} for time {dateutils.unix_to_datetime(unix_time)} because of first trade time.")
                         entry = len(tickers) - 1
                         continue
-                    current.append(generate_example(ticker, unix_time+60)) #One min later because the interval is open at the end in all series returning methods.
+                    current.append(generate_example(ticker, unix_time+1))
                     bar.update(1)
                 except KeyboardInterrupt:
                     raise

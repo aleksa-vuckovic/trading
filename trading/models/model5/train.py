@@ -11,8 +11,7 @@ checkpoints_folder = Path(__file__).parent / 'checkpoints'
 initial_lr = 10e-6
 """
 This is a model trained on data up to the period starting at 14:30.
-    That means that it is most effectively utilized between 15:30 when the data is initally
-    available and 16 when the market closes.
+    This means that it's effectively usable after 15:30.
 """
 def run_loop(max_epoch = 10000):
     plan = TrainingPlan(Model())

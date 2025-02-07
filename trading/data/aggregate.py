@@ -1,5 +1,6 @@
 from . import nasdaq, macrotrends, yahoo, zacks, seekingalpha, globenewswire
 from ..utils import common
+from ..utils.common import Interval
 import logging
 
 logger = logging.getLogger(__name__)
@@ -36,16 +37,8 @@ def get_sorted_tickers() -> list[dict]:
         tickers.append({"ticker": it, "unix_time": first_trade})
     return sorted(tickers, key=lambda it: it["unix_time"])
 
-def get_hourly_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, return_quotes=['close', 'volume']) -> tuple:
-    """
-    Returns a tuple of arrays of the requested quotes.
-    """
-    return yahoo.get_pricing(ticker.symbol, unix_from, unix_to, yahoo.Interval.H1, return_quotes=return_quotes)
-def get_daily_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, return_quotes=['close', 'volume']) -> tuple:
-    """
-    Returns a tuple of arrays of the requested quotes.
-    """
-    return yahoo.get_pricing(ticker.symbol, unix_from, unix_to, yahoo.Interval.D1, return_quotes=return_quotes)
+def get_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, interval: Interval, return_quotes=['close','volume']) -> tuple:
+    return yahoo.get_pricing(ticker.symbol, unix_from, unix_to, interval, return_quotes=return_quotes)
 
 def get_market_summary(unix_time: float) -> str:
     return zacks.get_summary(unix_time)
