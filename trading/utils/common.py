@@ -179,6 +179,7 @@ def backup_timeout(
         return wrapper
     return decorate
 
+_EPS = 0.0000001
 def cached_series(
     *,
     unix_from_arg: str | int = 1,
