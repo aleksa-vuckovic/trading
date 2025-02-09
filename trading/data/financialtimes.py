@@ -5,7 +5,7 @@ import math
 from pathlib import Path
 from ..utils.common import Interval
 from ..utils import httputils, dateutils, common
-from .utils import combine_series
+from .utils import combine_series, fix_daily_timestamps
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
@@ -67,26 +67,23 @@ def _get_period_for_interval(interval: Interval) -> tuple[str, int]:
     if interval == Interval.H1: return 'Hour', 1
     raise Exception(f"Unknown interval {interval}")
 def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
+    result = []
     if interval == Interval.H1:
-        for i in range(len(timestamps)):
-            if not timestamps[i]:
+        for it in timestamps:
+            if not it:
+                result.append(None)
                 continue
-            t = round(timestamps[i])
-            date = dateutils.unix_to_datetime(t, tz=dateutils.ET)
-            if date.hour == 16 and date.minute == 0:
-                timestamps[i] = t - 30*60
-            elif date.minute == 30:
-                timestamps[i] = t - 3600
+            it = round(it)
+            date = dateutils.unix_to_datetime(it, tz=dateutils.ET)
+            if date.hour > 16 or date.hour < 9 or (date.minute != 0 and date.minute != 30):
+                logger.error(f"Unexpected timestamp {date} for period H1. Skipping entry.")
+                result.append(None)
+            elif date.minute == 0:
+                result.append(it - 30*60)
             else:
-                raise Exception(f"Unexpected timestamp {t} for H1")
+                result.append(it - 3600)
     elif interval == Interval.D1:
-        for i in range(len(timestamps)):
-            if not timestamps[i]:
-                continue
-            # For some reason these are returned as 00:00 in UTC
-            date = dateutils.unix_to_datetime(timestamps[i] + 12*3600, dateutils.ET)
-            date = date.replace(hour = 9, minute=30, second=0, microsecond=0)
-            timestamps[i] = date.timestamp()
+        return fix_daily_timestamps(timestamps)
     else:
         raise Exception(f"Unknown interval {interval}")
 
@@ -103,11 +100,10 @@ def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
 )
 def _get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interval) -> dict:
     days = math.ceil((time.time() - unix_from)/(24*3600)) + 1
-    if days <= 0: days = 1
+    if days <= 3: days = 4
     if days > 15: days = 15
     data = _get_pricing_raw(symbol, days, *_get_period_for_interval(interval), realtime=True)
-    timestamps = data['Dates']
-    _fix_timestamps(timestamps, interval)
+    timestamps = _fix_timestamps(data['Dates'], interval)
     elements = data['Elements']
     if len(elements) < 2:
         raise Exception(f"Expected 2 objects in the Elements array (prices and volumes) but got less. Data:\n{data}")

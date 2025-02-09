@@ -1,4 +1,7 @@
+import logging
+from ..utils import dateutils
 
+logger = logging.getLogger(__name__)
 
 def combine_series(
     data: dict,
@@ -34,6 +37,24 @@ def combine_series(
             for key in must_be_truthy:
                 if not data[key][i]: return False
             return True
-    if as_list:
-        return [[data[key][i] for key in must_be_there] for i in range(length) if is_ok(i)]
-    return [{key: data[key][i] for key in keys} for i in range(length) if is_ok(i)]
+    if as_list: return [[data[key][i] for key in must_be_there] for i in range(length) if is_ok(i)]
+    else: return [{key: data[key][i] for key in keys} for i in range(length) if is_ok(i)]
+
+def filter_by_timestamp(data: list[dict|list], unix_from: float, unix_to: float, timestamp_field: str | int = 't') -> list[dict]:
+    return [it for it in data if it[timestamp_field] >= unix_from and it[timestamp_field] < unix_to]
+
+def fix_daily_timestamps(timestamps: list[float|int|None]) -> list[float]:
+    result = []
+    for it in timestamps:
+        if not it:
+            result.append(None)
+            continue
+        # For some reason these are often returned as 00:00 in UTC
+        date = dateutils.unix_to_datetime(it + 12*3600, dateutils.ET)
+        if date.hour > 12:
+            logger.error(f"Unexpected timestamp {it} for period D1. Skipping entry.")
+            result.append(None)
+        else:
+            date = date.replace(hour = 9, minute=30, second=0, microsecond=0)
+            result.append(date.timestamp())
+    return result

@@ -21,3 +21,4 @@ class TestFinancialtimes(unittest.TestCase):
         self.assertTrue(all(highs[i] >= lows[i] and vols[i] for i in range(len(lows))))
         dates = [dateutils.unix_to_datetime(time, tz=dateutils.ET) for time in times]
         self.assertTrue(all(date.hour == 9 and date.minute == 30 and not date.second and not date.microsecond for date in dates))
+        
