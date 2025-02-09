@@ -1,4 +1,5 @@
 import unittest
+import config
 from ..utils import dateutils
 from . import wsj
 

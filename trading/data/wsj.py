@@ -94,11 +94,11 @@ def _fix_timestamps(timestamps: list[float|int|None], interval: Interval) -> lis
         return result
     else: raise Exception(f"Unknown interval {Interval}")
 
-def _get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interval) -> dict:
+def _get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interval, **kwargs) -> dict:
     if interval == Interval.H1: step = 'PT30M'
     elif interval == Interval.D1: step = 'P1D'
     else: raise ValueError(f"Unknown interval {interval}")
-    data = _get_pricing_raw(f"STOCK/US/XNAS/{symbol.upper()}", step, 'D5')
+    data = _get_pricing_raw(f"STOCK/US/XNAS/{symbol.upper()}", step, 'D5', **kwargs)
     def extract_data_points(series: dict) -> dict:
         return {key: [it[index] for it in series['DataPoints']] for index,key in enumerate(series['DesiredDataPoints'])}
     quotes = {'Timestamp': _fix_timestamps(data['TimeInfo']['Ticks'], interval)}

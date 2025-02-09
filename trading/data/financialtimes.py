@@ -24,7 +24,6 @@ def _get_info(symbol: str, exchanges: str = ['NAQ', 'NSQ', 'NMQ']) -> dict:
     if not data: return {}
     return data[0]
 
-@common.backup_timeout(behavior=common.BackupBehavior.RETHROW)
 def _get_pricing_raw(symbol: str, days: int, data_period: str, data_interval: int, realtime: bool):
     info = _get_info(symbol)
     if 'xid' not in info:
@@ -96,6 +95,7 @@ def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
     time_step_fn=10000000,
     timestamp_field='t'
 )
+@common.backup_timeout()
 def _get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interval) -> dict:
     days = math.ceil((time.time() - unix_from)/(24*3600)) + 1
     if days <= 3: days = 4
@@ -118,6 +118,6 @@ def _get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interv
     result['data'] = combine_series(data, timestamp_from=unix_from, timestamp_to=unix_to)
     return result 
 
-def get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interval, return_quotes: list[str] = ['close', 'volume']) -> tuple:
-    data = _get_pricing(symbol, unix_from, unix_to, interval)['data']
+def get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interval, return_quotes: list[str] = ['close', 'volume'], **kwargs) -> tuple:
+    data = _get_pricing(symbol, unix_from, unix_to, interval, **kwargs)['data']
     return tuple([it[quote[0]] for it in data] for quote in return_quotes)

@@ -1,4 +1,5 @@
 import unittest
+import config
 from ..utils import dateutils
 from ..utils.common import Interval
 from . import yahoo
@@ -11,10 +12,11 @@ class TestQuery(unittest.TestCase):
             dateutils.str_to_unix("2023-12-01 00:00:00", tz = dateutils.ET),
             dateutils.str_to_unix("2024-01-15 00:00:00", tz = dateutils.ET),
             Interval.H1,
-            return_quotes=['close', 'volume', 'low', 'high', 'open', 'timestamp']
+            return_quotes=['close', 'volume', 'low', 'high', 'open', 'timestamp'],
+            skip_cache=config.test.skip_cache
         )
-        #self.assertEqual(dateutils.str_to_unix('2023-12-01 10:30:00'), times[0])
-        #self.assertEqual(dateutils.str_to_unix('2024-01-12 16:00:00'), times[-1])
+        self.assertEqual(dateutils.str_to_unix('2023-12-01 10:30:00'), times[0])
+        self.assertEqual(dateutils.str_to_unix('2024-01-12 16:00:00'), times[-1])
         self.assertTrue(prices and volume and low and high and open)
         self.assertGreater(prices[0], 46)
         self.assertLess(prices[0], 47)
@@ -32,10 +34,11 @@ class TestQuery(unittest.TestCase):
             dateutils.str_to_unix("2021-12-01 09:30:00", tz = dateutils.ET),
             dateutils.str_to_unix("2022-01-14 16:00:00", tz = dateutils.ET),
             Interval.D1,
-            return_quotes=['close', 'volume', 'low', 'open', 'high', 'timestamp']
+            return_quotes=['close', 'volume', 'low', 'open', 'high', 'timestamp'],
+            skip_cache=config.test.skip_cache
         )
-        #self.assertEqual(dateutils.str_to_unix('2021-12-01 09:30:00'), times[0])
-        #self.assertEqual(dateutils.str_to_unix('2022-01-14 15:30:00'), times[-1])
+        self.assertEqual(dateutils.str_to_unix('2021-12-01 16:00:00'), times[0])
+        self.assertEqual(dateutils.str_to_unix('2022-01-13 16:00:00'), times[-1])
         self.assertTrue(prices)
         self.assertTrue(volume)
         self.assertAlmostEqual(31.434999465942383, prices[0])

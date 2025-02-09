@@ -14,8 +14,7 @@ def _format_for_url(input: str) -> str:
     input = input.replace('.', '§').replace(',', 'δ')
     return parse.quote(input)
 
-@common.backup_timeout(behavior=common.BackupBehavior.RETHROW | common.BackupBehavior.SLEEP)
-def _get_news_internal(orgs: list[str], keywords: list[str], unix_from: float, unix_to: float) -> list[dict]:
+def _get_news_raw(orgs: list[str], keywords: list[str], unix_from: float, unix_to: float) -> list[dict]:
     url = f"{_BASE_URL}/en/search/"
     if orgs:
         url += "organization/"
@@ -70,12 +69,13 @@ def _get_news_internal(orgs: list[str], keywords: list[str], unix_from: float, u
     refresh_delay_fn=2*3600,
     return_series_only=True
 )
+@common.backup_timeout()
 def _get_news(org: str, unix_from: float, unix_to: float) -> list[dict]:
-    result = _get_news_internal([org], [], unix_from, unix_to)
+    result = _get_news_raw([org], [], unix_from, unix_to)
     result = reversed(result)
     result = [it for it in result if it['unix_time'] >= unix_from and it['unix_time'] < unix_to]
     return sorted(result, key=lambda it: it['unix_time'])
 
-def get_news(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float) -> list[str]:
-    return [it['title'] for it in _get_news(ticker.long_name(), unix_from, unix_to)]
+def get_news(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, **kwargs) -> list[str]:
+    return [it['title'] for it in _get_news(ticker.long_name(), unix_from, unix_to, **kwargs)]
 

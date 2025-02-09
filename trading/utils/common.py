@@ -134,7 +134,7 @@ class BackupBehavior(Flag):
 def backup_timeout(
     *,
     exc_type = TooManyRequestsException,
-    behavior: BackupBehavior = BackupBehavior.SLEEP | BackupBehavior.RETHROW,
+    default_behavior: BackupBehavior = BackupBehavior.RETHROW,
     base_timeout: float = 30.0,
     backoff_factor: float = 2.0
 ):
@@ -147,6 +147,10 @@ def backup_timeout(
             nonlocal last_exception
             nonlocal last_timeout
             time_left: float = last_break and (last_break + last_timeout - time.time())
+            if 'backup_behavior' in kwargs:
+                behavior = kwargs['backup_behavior']
+                del kwargs['backup_behavior']
+            else: behavior = default_behavior
             if time_left and time_left > 0:
                 if BackupBehavior.SLEEP in behavior:
                     time.sleep(time_left)
@@ -175,7 +179,6 @@ def backup_timeout(
         return wrapper
     return decorate
 
-_EPS = 0.0000001
 def cached_series(
     *,
     unix_from_arg: str | int = 1,
@@ -249,6 +252,10 @@ def cached_series(
             kwargs[unix_to_arg] = unix_to
     def decorate(func):
         def wrapper(*args, **kwargs):
+            if 'skip_cache' in kwargs:
+                skip_cache = kwargs['skip_cache']
+                del kwargs['skip_cache']
+                if skip_cache: return func(*args, **kwargs)
             args = list(args)
             unix_from, unix_to = get_unix_args(args, kwargs)
             include = [args[it] if isinstance(it, int) else kwargs[it] for it in include_args]

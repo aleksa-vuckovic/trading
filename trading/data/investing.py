@@ -19,7 +19,7 @@ carrier = "bc26ca13e9d438b569fcb3b5769c64e2/1738843815"
     include_args=[0],
     path_fn=lambda args: _CACHE/common.escape_filename(args[0])/'info'
 )
-@common.backup_timeout(behavior=common.BackupBehavior.RETHROW)
+@common.backup_timeout()
 def _get_info(ticker: str, exchange: str = 'NASDAQ') -> dict:
   url = f"https://tvc4.investing.com/{carrier}/1/1/8/symbols?symbol={exchange.upper()}%20%3A{ticker.upper()}"
   resp = httputils.get_as_browser(url)

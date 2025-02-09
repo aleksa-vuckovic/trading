@@ -55,11 +55,11 @@ def _fix_timestamps(timestamps: list[float], interval: Interval):
             if not it:
                 result.append(None)
             else:
-                data = dateutils.unix_to_datetime(it)
-                if data.hour == 15 and data.minute == 30:
-                    result.append(data + 1800)
+                date = dateutils.unix_to_datetime(it)
+                if date.hour == 15 and date.minute == 30:
+                    result.append(it + 1800)
                 else:
-                    result.append(data + 3600)
+                    result.append(it + 3600)
         return result
     raise Exception(f"Unknown interval {interval}")
 
@@ -146,13 +146,14 @@ def get_pricing(
     unix_from: float, #unix
     unix_to: float, #unix
     interval: Interval,
-    return_quotes = ['close', 'volume']
+    return_quotes = ['close', 'volume'],
+    **kwargs
 ) -> tuple:
     """
     Returns the pricing as two arrays - prices and volume.
     Zero volume entries are filtered out.
     """
-    data = _get_pricing(ticker.upper(), unix_from, unix_to, interval)['data']
+    data = _get_pricing(ticker.upper(), unix_from, unix_to, interval, **kwargs)['data']
     return tuple([it[quote[0]] for it in data] for quote in return_quotes)
 
 def get_splits(data: dict) -> dict:
