@@ -1,10 +1,10 @@
-from ..utils import httputils
 import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from ..utils import common
+from ..utils import common, httputils
 
+logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
 _CACHE: Path = common.CACHE / _MODULE
 
@@ -22,7 +22,7 @@ _CACHE: Path = common.CACHE / _MODULE
 @common.backup_timeout(behavior=common.BackupBehavior.RETHROW)
 def _get_news(ticker: str, unix_from: float, unix_to: float) -> list[dict]:
     ticker = ticker.lower()
-    url = f"https://seekingalpha.com/api/v3/symbols/{ticker}/news?filter[since]={int(unix_from)}&filter[until]={int(unix_to)}&id={ticker}&include=author&isMounting=true&page[size]=50&page[number]="
+    url = f"https://seekingalpha.com/api/v3/symbols/{ticker}/news?filter[since]={int(unix_from-1000)}&filter[until]={int(unix_to+1000)}&id={ticker}&include=author&isMounting=true&page[size]=50&page[number]="
     i = 1
     ret = []
     while True:

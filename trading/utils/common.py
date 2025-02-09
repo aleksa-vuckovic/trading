@@ -15,26 +15,30 @@ CACHE = Path(__file__).parent.parent / "data" / "cache"
 class Interval(Enum):
     """
     D1 interval covers the entire trading day, without pre/post data.
-    The timestamp corresponds to the start of the day, 9:30 ET on workdays.
+    The timestamp corresponds to the end of the day, 16:00 ET on workdays.
     """
     D1 = '1 day'
     """
-    H1 interval covers an hour of trading, starting at 9:30, and up to 16:30.
+    H1 interval covers an hour of trading, starting at 9:30, and up to 15:30.
     The last interval is an exception in that it only covers (the last) 30 minutes of trading.
-    The timestamp corresponds to the start of the hour, i.e. 9:30 for the period from 9:30 till 10:30.
+    The timestamp corresponds to the end of the hour, i.e. 10:30 for the period from 9:30, but 16:00 for the last hour.
     """
     H1 = '1 hour'
     """
     Methods that fetch interval based time series should follow these rules:
-        1. The timestamp is the start of the interval.
+        1. The timestamp is the end of the interval.
         2. The 'from' and 'to' timestamps from the request refer to the same timestamps as the series entries itself.
         3. The time range is closed at the start and open at the end.
     """
 
-def get_delay_for_interval(interval: Interval) -> float:
-    if interval == Interval.D1: return 7*3600.0
-    if interval == Interval.H1: return 3600.0
-    raise ValueError(f"Unknown interval {interval}.")
+    def refresh_time(self) -> float:
+        if self == Interval.D1: return 6*3600
+        if self == Interval.H1: return 1800
+        raise ValueError(f"Unknown interval {self}.")
+    def time(self) -> float:
+        if self == Interval.D1: return 24*3600
+        if self == Interval.H1: return 3600
+        raise ValueError(f"Unknown interval {self}.")
 
 reserved_windows_filenames = {
     "CON", "PRN", "AUX", "NUL",
@@ -171,6 +175,7 @@ def backup_timeout(
         return wrapper
     return decorate
 
+_EPS = 0.0000001
 def cached_series(
     *,
     unix_from_arg: str | int = 1,
@@ -259,7 +264,8 @@ def cached_series(
             path.mkdir(parents=True,exist_ok=True)
             time_step = int(time_step_fn(include) if callable(time_step_fn) else int(time_step_fn))
             
-            unix_now = time.time() - live_delay #last available time point
+            unix_now = time.time() - live_delay
+            # Take at most the last available time point. We don't want to rush and cache invalid or nonexistent data.
             unix_to = min(unix_to, unix_now)
             unix_from = min(unix_from, unix_to)
             start_id = int(unix_from) // time_step
@@ -271,11 +277,12 @@ def cached_series(
                 nonlocal last_data
                 last_data = data
                 series = get_series(data)
+                if not series: return
                 first = binary_search(series, get_timestamp, unix_from, BinarySearchEdge.HIGH)
                 last = binary_search(series, get_timestamp, unix_to, BinarySearchEdge.HIGH)
-                if first is None or last==0:
-                    return
-                result.extend(series[first:last])
+                if first is None: return
+                if last is None: result.extend(series[first:])
+                else: result.extend(series[first:last])
 
             for id in range(start_id, end_id+1):
                 if id == now_id:
