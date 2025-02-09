@@ -67,8 +67,8 @@ def _get_period_for_interval(interval: Interval) -> tuple[str, int]:
     if interval == Interval.H1: return 'Hour', 1
     raise Exception(f"Unknown interval {interval}")
 def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
-    result = []
     if interval == Interval.H1:
+        result = []
         for it in timestamps:
             if not it:
                 result.append(None)
@@ -78,10 +78,8 @@ def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
             if date.hour > 16 or date.hour < 9 or (date.minute != 0 and date.minute != 30):
                 logger.error(f"Unexpected timestamp {date} for period H1. Skipping entry.")
                 result.append(None)
-            elif date.minute == 0:
-                result.append(it - 30*60)
-            else:
-                result.append(it - 3600)
+            result.append(it)
+        return result
     elif interval == Interval.D1:
         return fix_daily_timestamps(timestamps)
     else:
@@ -92,7 +90,7 @@ def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
     unix_to_arg=2,
     include_args=[0,3],
     cache_root=_CACHE,
-    live_delay_fn=lambda args: common.get_delay_for_interval(args[1]),
+    live_delay_fn=15*60,
     return_series_only=False,
     series_field='data',
     time_step_fn=10000000,

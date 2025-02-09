@@ -5,9 +5,9 @@ import time
 import math
 from enum import Enum
 from pathlib import Path
-from ..utils import httputils, common
+from ..utils import httputils, common, dateutils
 from ..utils.common import Interval
-from .utils import combine_series
+from .utils import combine_series, fix_daily_timestamps
 
 """
 Hourly data from yahoo covers 1 hour periods starting from 9:30.
@@ -31,7 +31,7 @@ class Event(Enum):
     SPLIT = 'split'
     EARNINGS = 'earn'
 
-def _get_pricing(
+def _get_pricing_raw(
     ticker: str,
     start_time: float, #unix
     end_time: float, #unix
@@ -46,9 +46,22 @@ def _get_pricing(
     resp = httputils.get_as_browser(result)
     return json.loads(resp.text)
 
-"""
-
-"""
+def _fix_timestamps(timestamps: list[float], interval: Interval):
+    if interval == Interval.D1: return fix_daily_timestamps(timestamps)
+    if interval == Interval.H1:
+        #Move everything an hour later, except 15:30
+        result = []
+        for it in timestamps:
+            if not it:
+                result.append(None)
+            else:
+                data = dateutils.unix_to_datetime(it)
+                if data.hour == 15 and data.minute == 30:
+                    result.append(data + 1800)
+                else:
+                    result.append(data + 3600)
+        return result
+    raise Exception(f"Unknown interval {interval}")
 
 @common.cached_series(
     unix_from_arg=1,
@@ -58,8 +71,8 @@ def _get_pricing(
     time_step_fn= lambda args: 10000000 if args[1] == Interval.H1 else 50000000,
     series_field="data",
     timestamp_field="t",
-    live_delay_fn=lambda args: common.get_delay_for_interval(args[1]) + 200,
-    refresh_delay_fn=lambda args: common.get_delay_for_interval(args[1])/2,
+    live_delay_fn=5*60,
+    refresh_delay_fn=lambda args: args[1].refresh_time(),
     return_series_only=False
 )
 @common.backup_timeout()
@@ -71,13 +84,12 @@ def _get_pricing(
 ) -> dict:
     first_trade_time = get_first_trade_time(ticker)
     now = time.time()
-    if interval == Interval.H1:
-        unix_from = max(unix_from, now - 729*24*3600)
-    unix_from = max(unix_from, first_trade_time + _MIN_AFTER_FIRST_TRADE)
-    if unix_to <= unix_from:
+    query_from = max(unix_from - interval.time(), first_trade_time + _MIN_AFTER_FIRST_TRADE)
+    if interval == Interval.H1: query_from = max(query_from, now - 729*24*3600)
+    query_to = unix_to
+    if query_to <= query_from:
         return {"meta": {}, "events": [], "data": []}
-    #adding delay to unix_to to prevent partial interval data
-    data = _get_pricing(ticker, unix_from, min(unix_to+common.get_delay_for_interval(interval), now), interval)
+    data = _get_pricing_raw(ticker, query_from, query_to, interval)
     def get_meta(data):
         return data['chart']['result'][0]['meta']
     def get_events(data):
@@ -90,7 +102,7 @@ def _get_pricing(
         if 'timestamp' not in data or not data['timestamp']:
             return {'timestamp': [], 'open': [], 'close': [], 'low': [], 'high': [], 'volume': []}
         arrays = data['indicators']['quote'][0]
-        arrays['timestamp'] = data['timestamp']
+        arrays['timestamp'] = _fix_timestamps(data['timestamp'], interval)
         try:
             arrays['adjclose'] = data['indicators']['adjclose'][0]['adjclose']
         except:
@@ -98,14 +110,13 @@ def _get_pricing(
         return combine_series(arrays, timestamp_from=unix_from, timestamp_to=unix_to)
     def try_adjust(series):
         try:
-            d1data = _get_pricing(ticker, unix_to - _MIN_ADJUSTMENT_PERIOD, unix_to, Interval.D1)
+            d1data = _get_pricing_raw(ticker, unix_to - _MIN_ADJUSTMENT_PERIOD, unix_to, Interval.D1)
             d1arrays = get_series(d1data)
-            close = d1arrays[-1]['c']
-            time = d1arrays[-1]['t'] + 6*3600 #Move the start of the day to the start of the last hour
+            close = d1arrays[-2]['c']
+            time = d1arrays[-2]['t'] #Move the start of the day to the start of the last hour
             i = len(series) - 1
-            while i >= 0 and series[i]['t'] > time and series[i]['t']-time>=60:
-                i -= 1
-            if i >= 0 and abs(series[i]['t']-time) < 60:
+            while i >= 0 and series[i]['t'] > time: i -= 1
+            if i >= 0 and series[i]['t'] == time:
                 factor = close / series[i]['c']
                 for key in series[i].keys():
                     if key != 't':
@@ -156,7 +167,7 @@ def get_splits(data: dict) -> dict:
 def _get_info(ticker: str) -> dict:
     info = yfinance.Ticker(ticker).info
     mock_time = int(time.time() - 15*24*3600)
-    meta = _get_pricing(ticker, mock_time-100, mock_time, Interval.D1)['chart']['result'][0]['meta']
+    meta = _get_pricing_raw(ticker, mock_time-3*24*3600, mock_time, Interval.D1)['chart']['result'][0]['meta']
     return {**info, **meta}
 
 def get_info(ticker: str) -> dict:

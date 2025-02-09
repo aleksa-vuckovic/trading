@@ -53,5 +53,4 @@ def _get_pricing(ticker: str, unix_from: float, unix_to: float, interval: Interv
 Investing.com issue: What is the first path segment?
 tradingeconomics issue: No volumes
 polygon issue: on way to fetch intraday for current day.
-financial markets no issue
 """

@@ -49,12 +49,12 @@ def fix_daily_timestamps(timestamps: list[float|int|None]) -> list[float]:
         if not it:
             result.append(None)
             continue
-        # For some reason these are often returned as 00:00 in UTC
+        # Usually returned as 00:00 in UTC
         date = dateutils.unix_to_datetime(it + 12*3600, dateutils.ET)
         if date.hour > 12:
             logger.error(f"Unexpected timestamp {it} for period D1. Skipping entry.")
             result.append(None)
         else:
-            date = date.replace(hour = 9, minute=30, second=0, microsecond=0)
+            date = date.replace(hour = 16, minute=0, second=0, microsecond=0)
             result.append(date.timestamp())
     return result

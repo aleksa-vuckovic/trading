@@ -34,10 +34,10 @@ def generate_input(
     d1_start_time = (end_time-(D1_PRICES/5*7*1.2+5)*24*3600)
     h1_start_time = (end_time-(H1_PRICES/6/5*7*1.5+5)*24*3600)
 
-    d1_prices, d1_volumes = aggregate.get_pricing(ticker, d1_start_time, end_time - common.get_delay_for_interval(Interval.D1), Interval.D1, return_quotes=['close', 'volume'])
+    d1_prices, d1_volumes = aggregate.get_pricing(ticker, d1_start_time, end_time, Interval.D1, return_quotes=['close', 'volume'])
     if len(d1_prices) < D1_PRICES:
         raise Exception(f'Failed to fetch enough daily prices for {ticker.symbol}. Got {len(d1_prices)}')
-    h1_prices, h1_volumes = aggregate.get_pricing(ticker, h1_start_time, end_time - common.get_delay_for_interval(Interval.H1), Interval.H1, return_quotes=['close', 'volume'])
+    h1_prices, h1_volumes = aggregate.get_pricing(ticker, h1_start_time, end_time, Interval.H1, return_quotes=['close', 'volume'])
     if len(h1_prices) < H1_PRICES:
         raise Exception(f'Failed to fetch enough hourly prices for {ticker.symbol}. Got {len(h1_prices)}')
     
