@@ -13,11 +13,26 @@ logger = logging.getLogger(__name__)
 CACHE = Path(__file__).parent.parent / "data" / "cache"
 
 class Interval(Enum):
+    """
+    D1 interval covers the entire trading day, without pre/post data.
+    The timestamp corresponds to the start of the day, 9:30 ET on workdays.
+    """
     D1 = '1 day'
+    """
+    H1 interval covers an hour of trading, starting at 9:30, and up to 16:30.
+    The last interval is an exception in that it only covers (the last) 30 minutes of trading.
+    The timestamp corresponds to the start of the hour, i.e. 9:30 for the period from 9:30 till 10:30.
+    """
     H1 = '1 hour'
+    """
+    Methods that fetch interval based time series should follow these rules:
+        1. The timestamp is the start of the interval.
+        2. The 'from' and 'to' timestamps from the request refer to the same timestamps as the series entries itself.
+        3. The time range is closed at the start and open at the end.
+    """
 
 def get_delay_for_interval(interval: Interval) -> float:
-    if interval == Interval.D1: return 8*3600.0
+    if interval == Interval.D1: return 7*3600.0
     if interval == Interval.H1: return 3600.0
     raise ValueError(f"Unknown interval {interval}.")
 

@@ -12,3 +12,9 @@ def get_as_browser(url: str, cookies: dict = {}, params: dict = None, origin: st
     if check_reponse:
         common.check_response(url, response)
     return response
+
+def post_as_browser(url: str, body: object, check_response: bool = True) -> requests.Response:
+    response = requests.post(url, json=body, headers={**_CHROME_HEADERS})
+    if check_response:
+        common.check_response(url, response)
+    return response

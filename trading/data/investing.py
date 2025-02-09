@@ -48,3 +48,10 @@ def _get_pricing(ticker: str, unix_from: float, unix_to: float, interval: Interv
     return []
   if not 't' in data: return []
   return [[float(data[q][i]) for q in _quotes] for i in range(len(data['t'])) if data['t'][i] and data['v'][i]]
+
+"""
+Investing.com issue: What is the first path segment?
+tradingeconomics issue: No volumes
+polygon issue: on way to fetch intraday for current day.
+financial markets no issue
+"""

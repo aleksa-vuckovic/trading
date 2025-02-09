@@ -7,7 +7,13 @@ from enum import Enum
 from pathlib import Path
 from ..utils import httputils, common
 from ..utils.common import Interval
+from .utils import combine_series
 
+"""
+Hourly data from yahoo covers 1 hour periods starting from 9:30.
+The last nonprepost period is at 15:30 and covers only the last 30 minutes.
+The timestamps correspond to the START of the period (not the end!).
+"""
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
@@ -52,8 +58,8 @@ def _get_yahoo_pricing_raw(
     time_step_fn= lambda args: 10000000 if args[1] == Interval.H1 else 50000000,
     series_field="data",
     timestamp_field="t",
-    live_delay_fn=lambda args: common.get_delay_for_interval(args[1]),
-    refresh_delay_fn=None,
+    live_delay_fn=lambda args: common.get_delay_for_interval(args[1]) + 200,
+    refresh_delay_fn=lambda args: common.get_delay_for_interval(args[1])/2,
     return_series_only=False
 )
 @common.backup_timeout()
@@ -64,12 +70,14 @@ def _get_yahoo_pricing(
     interval: Interval
 ) -> dict:
     first_trade_time = get_first_trade_time(ticker)
+    now = time.time()
     if interval == Interval.H1:
-        unix_from = max(unix_from, time.time() - 729*24*3600)
+        unix_from = max(unix_from, now - 729*24*3600)
     unix_from = max(unix_from, first_trade_time + _MIN_AFTER_FIRST_TRADE)
     if unix_to <= unix_from:
         return {"meta": {}, "events": [], "data": []}
-    data = _get_yahoo_pricing_raw(ticker, unix_from, unix_to, interval)
+    #adding delay to unix_to to prevent partial interval data
+    data = _get_yahoo_pricing_raw(ticker, unix_from, min(unix_to+common.get_delay_for_interval(interval), now), interval)
     def get_meta(data):
         return data['chart']['result'][0]['meta']
     def get_events(data):
@@ -77,7 +85,7 @@ def _get_yahoo_pricing(
         if 'events' in data:
             return data['events']
         return {}
-    def get_arrays(data):
+    def get_series(data):
         data = data['chart']['result'][0]
         if 'timestamp' not in data or not data['timestamp']:
             return {'timestamp': [], 'open': [], 'close': [], 'low': [], 'high': [], 'volume': []}
@@ -87,47 +95,40 @@ def _get_yahoo_pricing(
             arrays['adjclose'] = data['indicators']['adjclose'][0]['adjclose']
         except:
             pass
-        vols = arrays['volume']
-        times = arrays['timestamp']
-        for key in arrays.keys():
-            arrays[key] = [it for index,it in enumerate(arrays[key]) if vols[index] and times[index] >= unix_from and times[index] < unix_to]
-        return arrays
-    def try_adjust(arrays):
+        return combine_series(arrays, timestamp_from=unix_from, timestamp_to=unix_to)
+    def try_adjust(series):
         try:
             d1data = _get_yahoo_pricing_raw(ticker, unix_to - _MIN_ADJUSTMENT_PERIOD, unix_to, Interval.D1)
-            d1arrays = get_arrays(d1data)
-            if not d1arrays['timestamp']:
-                return
-            close = d1arrays['close'][-1]
-            time = d1arrays['timestamp'][-1] + 6*3600 #Move the start of the day to the start of the last hour
-            times = arrays['timestamp']
-            i = len(times) - 1
-            while i >= 0 and times[i] > time and times[i]-time>=60:
+            d1arrays = get_series(d1data)
+            close = d1arrays[-1]['c']
+            time = d1arrays[-1]['t'] + 6*3600 #Move the start of the day to the start of the last hour
+            i = len(series) - 1
+            while i >= 0 and series[i]['t'] > time and series[i]['t']-time>=60:
                 i -= 1
-            if i >= 0 and abs(times[i]-time) < 60:
-                factor = close / arrays['close'][i]
-                for key in arrays.keys():
-                    if key != 'timestamp':
-                        for i in range(len(arrays[key])):
-                            arrays[key][i] *= factor if key != 'volume' else 1/factor
+            if i >= 0 and abs(series[i]['t']-time) < 60:
+                factor = close / series[i]['c']
+                for key in series[i].keys():
+                    if key != 't':
+                        for i in range(len(series)):
+                            series[i][key] *= factor if key != 'v' else 1/factor
                 return
             logger.error(f"Failed to adjust {ticker}. No suitable timestamp found.")
         except:
             logger.error(f"Failed to adjust {ticker}.", exc_info=True)
-    arrays = get_arrays(data)
+    series = get_series(data)
     meta = get_meta(data)
     events = get_events(data)
-    if interval == Interval.H1 and unix_to < time.time() - 15*24*3600:
-        try_adjust(arrays)
+    if interval == Interval.H1 and unix_to < now - 15*24*3600:
+        try_adjust(series)
     """
     Rearrange data to be comaptible with series caching by moving everything to one array.
     open - o, close - c, low - l, high - h, adjclose - a, volume - v, timestamp - t
     """
-    processed = {"meta": meta, "events": events, "data": []}
-    for i in range(len(arrays['timestamp'])):
-        if arrays['volume'][i]:
-            processed['data'].append({ it[0]: arrays[it][i] for it in arrays.keys() })
-    return processed
+    return {
+        "meta": meta,
+        "events": events,
+        "data": series
+    }
 
 def get_pricing(
     ticker: str,
@@ -135,7 +136,7 @@ def get_pricing(
     unix_to: float, #unix
     interval: Interval,
     return_quotes = ['close', 'volume']
-) -> tuple[list[float], list[float]]:
+) -> tuple:
     """
     Returns the pricing as two arrays - prices and volume.
     Zero volume entries are filtered out.
