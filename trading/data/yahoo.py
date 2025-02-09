@@ -31,7 +31,7 @@ class Event(Enum):
     SPLIT = 'split'
     EARNINGS = 'earn'
 
-def _get_yahoo_pricing_raw(
+def _get_pricing(
     ticker: str,
     start_time: float, #unix
     end_time: float, #unix
@@ -63,7 +63,7 @@ def _get_yahoo_pricing_raw(
     return_series_only=False
 )
 @common.backup_timeout()
-def _get_yahoo_pricing(
+def _get_pricing(
     ticker: str,
     unix_from: float, #unix
     unix_to: float, #unix
@@ -77,7 +77,7 @@ def _get_yahoo_pricing(
     if unix_to <= unix_from:
         return {"meta": {}, "events": [], "data": []}
     #adding delay to unix_to to prevent partial interval data
-    data = _get_yahoo_pricing_raw(ticker, unix_from, min(unix_to+common.get_delay_for_interval(interval), now), interval)
+    data = _get_pricing(ticker, unix_from, min(unix_to+common.get_delay_for_interval(interval), now), interval)
     def get_meta(data):
         return data['chart']['result'][0]['meta']
     def get_events(data):
@@ -98,7 +98,7 @@ def _get_yahoo_pricing(
         return combine_series(arrays, timestamp_from=unix_from, timestamp_to=unix_to)
     def try_adjust(series):
         try:
-            d1data = _get_yahoo_pricing_raw(ticker, unix_to - _MIN_ADJUSTMENT_PERIOD, unix_to, Interval.D1)
+            d1data = _get_pricing(ticker, unix_to - _MIN_ADJUSTMENT_PERIOD, unix_to, Interval.D1)
             d1arrays = get_series(d1data)
             close = d1arrays[-1]['c']
             time = d1arrays[-1]['t'] + 6*3600 #Move the start of the day to the start of the last hour
@@ -141,7 +141,7 @@ def get_pricing(
     Returns the pricing as two arrays - prices and volume.
     Zero volume entries are filtered out.
     """
-    data = _get_yahoo_pricing(ticker.upper(), unix_from, unix_to, interval)['data']
+    data = _get_pricing(ticker.upper(), unix_from, unix_to, interval)['data']
     return tuple([it[quote[0]] for it in data] for quote in return_quotes)
 
 def get_splits(data: dict) -> dict:
@@ -156,7 +156,7 @@ def get_splits(data: dict) -> dict:
 def _get_info(ticker: str) -> dict:
     info = yfinance.Ticker(ticker).info
     mock_time = int(time.time() - 15*24*3600)
-    meta = _get_yahoo_pricing_raw(ticker, mock_time-100, mock_time, Interval.D1)['chart']['result'][0]['meta']
+    meta = _get_pricing(ticker, mock_time-100, mock_time, Interval.D1)['chart']['result'][0]['meta']
     return {**info, **meta}
 
 def get_info(ticker: str) -> dict:
