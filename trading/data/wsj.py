@@ -1,19 +1,17 @@
 import json
 import logging
 from ..utils.common import Interval
-from ..utils import httputils, dateutils
-from .utils import combine_series, fix_daily_timestamps, filter_by_timestamp
+from ..utils import httputils, dateutils, common
+from .utils import combine_series, fix_daily_timestamps, filter_by_timestamp, separate_quotes
 
 logger = logging.getLogger(__name__)
 _TOKEN_KEY='Dylan2010.Entitlementtoken'
 _TOKEN_VALUE='57494d5ed7ad44af85bc59a51dd87c90'
 _CKEY='57494d5ed7'
+_MODULE: str = __name__.split(".")[-1]
+_CACHE = common.CACHE / _MODULE
 
 
-
-"""
-Since wsj provides round hour values, use 15 min and combine into 1hour!!
-"""
 def _get_pricing_raw(key: str, step: str, time_frame: str):
     url = "https://api.wsj.net/api/michelangelo/timeseries/history"
     request = {
@@ -94,11 +92,24 @@ def _fix_timestamps(timestamps: list[float|int|None], interval: Interval) -> lis
         return result
     else: raise Exception(f"Unknown interval {Interval}")
 
-def _get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interval, **kwargs) -> dict:
+@common.cached_series(
+    unix_from_arg=1,
+    unix_to_arg=2,
+    include_args=[0,3],
+    series_field='data',
+    timestamp_field='t',
+    cache_root=_CACHE,
+    live_delay_fn=5*60,
+    refresh_delay_fn=lambda args: args[1].refresh_time(),
+    return_series_only=False,
+    time_step_fn=10000000
+)
+@common.backup_timeout()
+def _get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interval) -> dict:
     if interval == Interval.H1: step = 'PT30M'
     elif interval == Interval.D1: step = 'P1D'
     else: raise ValueError(f"Unknown interval {interval}")
-    data = _get_pricing_raw(f"STOCK/US/XNAS/{symbol.upper()}", step, 'D5', **kwargs)
+    data = _get_pricing_raw(f"STOCK/US/XNAS/{symbol.upper()}", step, 'D5')
     def extract_data_points(series: dict) -> dict:
         return {key: [it[index] for it in series['DataPoints']] for index,key in enumerate(series['DesiredDataPoints'])}
     quotes = {'Timestamp': _fix_timestamps(data['TimeInfo']['Ticks'], interval)}
@@ -113,3 +124,7 @@ def _get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interv
     del result['DesiredDataPoints']
     result['data'] = filter_by_timestamp(quotes, unix_from=unix_from, unix_to=unix_to)
     return result
+
+def get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interval, return_quotes: list[str] = ['close', 'volume'], **kwargs) -> list[dict]:
+    data = _get_pricing(symbol.upper(), unix_from, unix_to, interval, **kwargs)['data']
+    return separate_quotes(data, return_quotes)

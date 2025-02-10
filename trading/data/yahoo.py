@@ -7,7 +7,7 @@ from enum import Enum
 from pathlib import Path
 from ..utils import httputils, common, dateutils
 from ..utils.common import Interval
-from .utils import combine_series, fix_daily_timestamps
+from .utils import combine_series, fix_daily_timestamps, separate_quotes
 
 """
 Hourly data from yahoo covers 1 hour periods starting from 9:30.
@@ -154,7 +154,7 @@ def get_pricing(
     Zero volume entries are filtered out.
     """
     data = _get_pricing(ticker.upper(), unix_from, unix_to, interval, **kwargs)['data']
-    return tuple([it[quote[0]] for it in data] for quote in return_quotes)
+    return separate_quotes(data, return_quotes)
 
 def get_splits(data: dict) -> dict:
     if 'splits' in data['events']:

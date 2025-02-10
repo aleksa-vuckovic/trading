@@ -5,7 +5,7 @@ import math
 from pathlib import Path
 from ..utils.common import Interval
 from ..utils import httputils, dateutils, common
-from .utils import combine_series, fix_daily_timestamps
+from .utils import combine_series, fix_daily_timestamps, separate_quotes
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
@@ -119,5 +119,5 @@ def _get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interv
     return result 
 
 def get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interval, return_quotes: list[str] = ['close', 'volume'], **kwargs) -> tuple:
-    data = _get_pricing(symbol, unix_from, unix_to, interval, **kwargs)['data']
-    return tuple([it[quote[0]] for it in data] for quote in return_quotes)
+    data = _get_pricing(symbol.upper(), unix_from, unix_to, interval, **kwargs)['data']
+    return separate_quotes(data, return_quotes)
