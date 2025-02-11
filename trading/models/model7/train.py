@@ -12,7 +12,7 @@ checkpoints_folder = Path(__file__).parent / 'checkpoints'
 initial_lr = 10e-6
 
 """
-This model is only different from model6 in that it's trained on data up to the period starting at 13:30.
+This model is only different from model6 in that it's trained on data up to 13:30.
 """
 def run_loop(max_epoch = 10000):
     plan = TrainingPlan(Model())
