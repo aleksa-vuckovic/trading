@@ -1,10 +1,10 @@
-from ..utils import httputils
 import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from ..utils import common
+from ..utils import common, httputils
 
+logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
 _CACHE: Path = common.CACHE / _MODULE
 
@@ -19,10 +19,10 @@ _CACHE: Path = common.CACHE / _MODULE
     live_delay_fn=3600,
     refresh_delay_fn=12*3600
 )
-@common.backup_timeout(behavior=common.BackupBehavior.RETHROW)
+@common.backup_timeout()
 def _get_news(ticker: str, unix_from: float, unix_to: float) -> list[dict]:
     ticker = ticker.lower()
-    url = f"https://seekingalpha.com/api/v3/symbols/{ticker}/news?filter[since]={int(unix_from)}&filter[until]={int(unix_to)}&id={ticker}&include=author&isMounting=true&page[size]=50&page[number]="
+    url = f"https://seekingalpha.com/api/v3/symbols/{ticker}/news?filter[since]={int(unix_from-1000)}&filter[until]={int(unix_to+1000)}&id={ticker}&include=author&isMounting=true&page[size]=50&page[number]="
     i = 1
     ret = []
     while True:
@@ -43,5 +43,5 @@ def _get_news(ticker: str, unix_from: float, unix_to: float) -> list[dict]:
         i += 1
     return sorted([it for it in ret if it['unix_time'] >= unix_from and it['unix_time'] < unix_to], key = lambda it: it['unix_time'])
     
-def get_news(ticker: str, unix_from: float, unix_to: float) -> list[str]:
-    return [it['title'] for it in _get_news(ticker.upper(), unix_from, unix_to)]
+def get_news(ticker: str, unix_from: float, unix_to: float, **kwargs) -> list[str]:
+    return [it['title'] for it in _get_news(ticker.upper(), unix_from, unix_to, **kwargs)]

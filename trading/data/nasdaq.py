@@ -6,7 +6,6 @@ from ..utils import httputils, common
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
-_URL = "https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt"
 _MODULE: str = __name__.split(".")[-1]
 _CACHE = common.CACHE / _MODULE
 
@@ -114,24 +113,24 @@ class NasdaqListedEntry:
     def __repr__(self):
         return self._line
 
+@common.cached_scalar(
+    cache_root=_CACHE/"entries" 
+)
+def _get_all_entries() -> list[str]:
+    response = httputils.get_as_browser("https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt")
+    return response.text.splitlines(False)
+
 _entries = None
 def get_all_entries() -> list[NasdaqListedEntry]:
     global _entries
-    if _entries:
-        return _entries
-    path = _CACHE / "data"
-    if path.exists():
-        data = path.read_text()
-    else:
-        data = httputils.get_as_browser(_URL).text
-    result = []
-    for row in data.splitlines(False):
-        try:
-            result.append(NasdaqListedEntry.from_line(row))
-        except:
-            logger.error(f'Failed to parse line:\n{row}', exc_info=True)
-    _entries = result
-    return result
+    if _entries is None:
+        _entries = []
+        for row in _get_all_entries():
+            try:
+                _entries.append(NasdaqListedEntry.from_line(row))
+            except:
+                logger.error(f'Failed to parse line:\n{row}', exc_info=True)
+    return _entries
 
 def get_filtered_entries() -> list[NasdaqListedEntry]:
     return [it for it in get_all_entries() if it.is_tradable() and len(it.symbol) <= 4]

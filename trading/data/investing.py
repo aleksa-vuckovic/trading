@@ -19,7 +19,7 @@ carrier = "bc26ca13e9d438b569fcb3b5769c64e2/1738843815"
     include_args=[0],
     path_fn=lambda args: _CACHE/common.escape_filename(args[0])/'info'
 )
-@common.backup_timeout(behavior=common.BackupBehavior.RETHROW)
+@common.backup_timeout()
 def _get_info(ticker: str, exchange: str = 'NASDAQ') -> dict:
   url = f"https://tvc4.investing.com/{carrier}/1/1/8/symbols?symbol={exchange.upper()}%20%3A{ticker.upper()}"
   resp = httputils.get_as_browser(url)
@@ -48,3 +48,9 @@ def _get_pricing(ticker: str, unix_from: float, unix_to: float, interval: Interv
     return []
   if not 't' in data: return []
   return [[float(data[q][i]) for q in _quotes] for i in range(len(data['t'])) if data['t'][i] and data['v'][i]]
+
+"""
+Investing.com issue: What is the first path segment?
+tradingeconomics issue: No volumes
+polygon issue: on way to fetch intraday for current day.
+"""

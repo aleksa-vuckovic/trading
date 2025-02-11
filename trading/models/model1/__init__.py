@@ -1,2 +1,1 @@
-from . import example
-from . import train
+from . import generator, train

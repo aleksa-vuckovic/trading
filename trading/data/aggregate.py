@@ -12,7 +12,7 @@ def get_shares_outstanding_at(ticker: nasdaq.NasdaqListedEntry, unix_time: float
     try:
         return macrotrends.get_shares_outstanding_at(ticker, unix_time)
     except:
-        pass#logger.error("Failed to get shares outstanding from macrotrends. Fallback to yahoo.", exc_info=True)
+        pass
     return float(yahoo.get_shares(ticker.symbol))
 def get_first_trade_time(ticker: nasdaq.NasdaqListedEntry) -> float:
     return yahoo.get_first_trade_time(ticker.symbol)
@@ -38,15 +38,15 @@ def get_sorted_tickers() -> list[dict]:
     return sorted(tickers, key=lambda it: it["unix_time"])
 
 def get_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, interval: Interval, return_quotes=['close','volume']) -> tuple:
-    return yahoo.get_pricing(ticker.symbol, unix_from, unix_to, interval, return_quotes=return_quotes)
+    return yahoo.get_pricing(ticker.symbol, unix_from, unix_to, interval, return_quotes=return_quotes, backup_behavior=common.BackupBehavior.RETHROW|common.BackupBehavior.SLEEP)
 
 def get_market_summary(unix_time: float) -> str:
-    return zacks.get_summary(unix_time)
+    return zacks.get_summary(unix_time, backup_behavior=common.BackupBehavior.RETHROW|common.BackupBehavior.SLEEP)
 def get_company_summary(ticker: nasdaq.NasdaqListedEntry) -> str:
     return yahoo.get_summary(ticker.symbol)
 def get_company_news(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float) -> str:
     try:
         news = seekingalpha.get_news(ticker.symbol, unix_from, unix_to)
     except:
-        news = globenewswire.get_news(ticker, unix_from, unix_to)
+        news = globenewswire.get_news(ticker, unix_from, unix_to, backup_behavior=common.BackupBehavior.RETHROW|common.BackupBehavior.SLEEP)
     return ". ".join(news[-7:])

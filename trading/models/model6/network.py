@@ -1,34 +1,35 @@
 import torch
 import torchinfo
-from torch import Tensor
 import config
-from ..model2.network import RecursiveLayer, ConvolutionalLayer
+from torch import Tensor
+from ..model5.network import RecursiveLayer, ConvolutionalLayer
 
 TOTAL_POINTS = 100
 INPUT_FEATURES = 6
 
 class Model(torch.nn.Module):
     """64 layers"""
-    def __init__(self):
+    def __init__(self, input_features: int = INPUT_FEATURES):
         super().__init__()
+        self.input_features = input_features
         self.daily_conv = torch.nn.Sequential(
-            ConvolutionalLayer(input_features=INPUT_FEATURES, output_features=2*INPUT_FEATURES),
-            torch.nn.BatchNorm1d(num_features=2*INPUT_FEATURES),
-            RecursiveLayer(in_features=2*INPUT_FEATURES, out_features=4*INPUT_FEATURES)
+            ConvolutionalLayer(input_features=input_features, output_features=2*input_features),
+            torch.nn.BatchNorm1d(num_features=2*input_features),
+            RecursiveLayer(in_features=2*input_features, out_features=4*input_features)
         )
         self.hourly_conv = torch.nn.Sequential(
-            ConvolutionalLayer(input_features=INPUT_FEATURES, output_features=2*INPUT_FEATURES),
-            torch.nn.BatchNorm1d(num_features=2*INPUT_FEATURES),
-            RecursiveLayer(in_features=2*INPUT_FEATURES, out_features=4*INPUT_FEATURES)
+            ConvolutionalLayer(input_features=input_features, output_features=2*input_features),
+            torch.nn.BatchNorm1d(num_features=2*input_features),
+            RecursiveLayer(in_features=2*input_features, out_features=4*input_features)
         )
-        self.daily = RecursiveLayer(in_features=INPUT_FEATURES, out_features=2*INPUT_FEATURES)
-        self.hourly = RecursiveLayer(in_features=INPUT_FEATURES, out_features=2*INPUT_FEATURES)
+        self.daily = RecursiveLayer(in_features=input_features, out_features=2*input_features)
+        self.hourly = RecursiveLayer(in_features=input_features, out_features=2*input_features)
 
         self.dense = torch.nn.Sequential(
-            torch.nn.BatchNorm1d(num_features=12*INPUT_FEATURES),
-            torch.nn.Linear(in_features=12*INPUT_FEATURES, out_features=5*INPUT_FEATURES),
+            torch.nn.BatchNorm1d(num_features=12*input_features),
+            torch.nn.Linear(in_features=12*input_features, out_features=5*input_features),
             torch.nn.Sigmoid(),
-            torch.nn.Linear(in_features=5*INPUT_FEATURES, out_features=10),
+            torch.nn.Linear(in_features=5*input_features, out_features=10),
             torch.nn.Sigmoid(),
             torch.nn.BatchNorm1d(num_features=10, momentum=0.5),
             torch.nn.Linear(in_features=10, out_features=1),
@@ -44,9 +45,7 @@ class Model(torch.nn.Module):
         ], dim=1)
         return self.dense(output)
     
-    @staticmethod
-    def print_summary():
-        model = Model()
-        input = [(config.batch_size*10, INPUT_FEATURES, TOTAL_POINTS)]*2
-        torchinfo.summary(model, input_size=input)
+    def print_summary(self):
+        input = [(config.batch_size*10, self.input_features, TOTAL_POINTS)]*2
+        torchinfo.summary(self, input_size=input)
 

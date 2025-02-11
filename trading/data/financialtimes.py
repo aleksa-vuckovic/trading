@@ -1,0 +1,123 @@
+import json
+import logging
+import time
+import math
+from pathlib import Path
+from ..utils.common import Interval
+from ..utils import httputils, dateutils, common
+from .utils import combine_series, fix_daily_timestamps, separate_quotes
+
+logger = logging.getLogger(__name__)
+_MODULE: str = __name__.split(".")[-1]
+_CACHE: Path = common.CACHE / _MODULE
+
+@common.cached_scalar(
+    include_args=[0],
+    path_fn=lambda args: _CACHE/args[0]/'info'
+)
+def _get_info(symbol: str, exchanges: str = ['NAQ', 'NSQ', 'NMQ']) -> dict:
+    terms = [f"{symbol.upper()}:{exchange.upper()}" for exchange in exchanges]
+    url = f"https://markets.ft.com/data/searchapi/searchsecurities"
+    resp = httputils.get_as_browser(url, params={'query': symbol.upper()})
+    data = json.loads(resp.text)
+    data = [it for it in data['data']['security'] if 'symbol' in it and it['symbol'] in terms]
+    if not data: return {}
+    return data[0]
+
+def _get_pricing_raw(symbol: str, days: int, data_period: str, data_interval: int, realtime: bool):
+    info = _get_info(symbol)
+    if 'xid' not in info:
+        logger.warning(f"No xid for '{symbol}'. Returning empty prices.")
+        return {}
+    url = "https://markets.ft.com/data/chartapi/series"
+    request = {
+        "days": days,
+        "dataNormalized":False,
+        "dataPeriod": data_period,
+        "dataInterval":data_interval,
+        "realtime":realtime,
+        "yFormat":"0.###",
+        "timeServiceFormat":"JSON",
+        "returnDateType":"Unix",
+        "elements": [
+            {
+                "Label":"266a0ba8",
+                "Type":"price",
+                "Symbol":"9023539",
+                "OverlayIndicators":[],
+                "Params":{}
+            }
+            ,
+            {
+                "Label":"b2b89a77",
+                "Type":"volume",
+                "Symbol":"9023539",
+                "OverlayIndicators":[],
+                "Params":{}
+            }
+        ]
+    }
+    resp = httputils.post_as_browser(url, request)
+    return json.loads(resp.text)
+
+    
+def _get_period_for_interval(interval: Interval) -> tuple[str, int]:
+    if interval == Interval.D1: return 'Day', 1
+    if interval == Interval.H1: return 'Hour', 1
+    raise Exception(f"Unknown interval {interval}")
+def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
+    if interval == Interval.H1:
+        result = []
+        for it in timestamps:
+            if not it:
+                result.append(None)
+                continue
+            it = round(it)
+            date = dateutils.unix_to_datetime(it, tz=dateutils.ET)
+            if date.hour > 16 or date.hour < 9 or (date.minute != 0 and date.minute != 30):
+                logger.error(f"Unexpected timestamp {date} for period H1. Skipping entry.")
+                result.append(None)
+            result.append(it)
+        return result
+    elif interval == Interval.D1:
+        return fix_daily_timestamps(timestamps)
+    else:
+        raise Exception(f"Unknown interval {interval}")
+
+@common.cached_series(
+    unix_from_arg=1,
+    unix_to_arg=2,
+    include_args=[0,3],
+    cache_root=_CACHE,
+    live_delay_fn=15*60,
+    return_series_only=False,
+    series_field='data',
+    time_step_fn=10000000,
+    timestamp_field='t'
+)
+@common.backup_timeout()
+def _get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interval) -> dict:
+    days = math.ceil((time.time() - unix_from)/(24*3600)) + 1
+    if days <= 3: days = 4
+    if days > 15: days = 15
+    data = _get_pricing_raw(symbol, days, *_get_period_for_interval(interval), realtime=True)
+    timestamps = _fix_timestamps(data['Dates'], interval)
+    elements = data['Elements']
+    if len(elements) < 2:
+        raise Exception(f"Expected 2 objects in the Elements array (prices and volumes) but got less. Data:\n{data}")
+    prices = [it for it in elements if it['Type'] == 'price'][0]
+    volumes = [it for it in elements if it['Type'] == 'volume'][0]
+    def extract_component_series_values(element):
+        return {it['Type']:it['Values'] for it in element['ComponentSeries']}
+    data = {**extract_component_series_values(prices), **extract_component_series_values(volumes)}
+    data['Timestamp'] = timestamps
+    result = prices
+    del result['ComponentSeries']
+    del result['Label']
+    del result['Type']
+    result['data'] = combine_series(data, timestamp_from=unix_from, timestamp_to=unix_to)
+    return result 
+
+def get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interval, return_quotes: list[str] = ['close', 'volume'], **kwargs) -> tuple:
+    data = _get_pricing(symbol.upper(), unix_from, unix_to, interval, **kwargs)['data']
+    return separate_quotes(data, return_quotes)

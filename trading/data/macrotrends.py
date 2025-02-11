@@ -16,7 +16,7 @@ _CACHE = common.CACHE / _MODULE
     include_args=[0],
     cache_root=_CACHE
 )
-@common.backup_timeout(behavior=common.BackupBehavior.RETHROW)
+@common.backup_timeout()
 def _get_shares_outstanding(ticker: str, short_name: str) -> dict[str, str]:
     url = f"https://www.macrotrends.net/stocks/charts/{ticker}/{short_name}/shares-outstanding"
     resp = httputils.get_as_browser(url)

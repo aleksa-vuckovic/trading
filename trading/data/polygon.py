@@ -27,7 +27,7 @@ def _interval_to_str(interval: Interval) -> str:
     refresh_delay_fn=None,
     return_series_only=True
 )
-@common.backup_timeout(behavior=common.BackupBehavior.RETHROW)
+@common.backup_timeout()
 def _get_polygon_pricing(
     ticker: str,
     unix_from: float,

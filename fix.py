@@ -3,12 +3,65 @@ import torch
 import logging
 import json
 from pathlib import Path
-from trading.models.utils import normalize_in_place
+from trading.models.utils import get_batch_files
 from trading.models import model1, model5
+from trading.utils import dateutils
 
-examples_bin_folder = Path(__file__).parent / 'examples_bin'
-examples_folder = Path(__file__).parent / 'examples'
 logger = logging.getLogger(__name__)
+
+def fix_model1_examples():
+    root = Path(__file__).parent / 'trading' / 'models' / 'model1' / 'examples'
+    for file in get_batch_files(root):
+        path = file['path']
+        tensor = torch.load(path, weights_only=True)
+        torch.save({'data': tensor}, path)
+        print(path)
+
+
+def fix_timestamps():
+    root = Path(__file__).parent / 'trading' / 'data' / 'cache' / 'yahoo'
+    for folder in os.listdir(root):
+        d1_path = root / folder / 'D1'
+        h1_path = root / folder / 'H1'
+        #Move h1 prices an hour forward
+        for file in os.listdir(h1_path) if h1_path.exists() else []:
+            path = h1_path / file
+            if file != 'meta':
+                data = json.loads(path.read_text())
+                for entry in data['data']:
+                    date = dateutils.unix_to_datetime(entry['t'])
+                    if date.hour == 15 and date.minute == 30: entry['t'] += 1800
+                    else: entry['t'] += 3600
+                    if date.hour < 9 or date.hour > 16 or entry['t']%1800: logger.warning(f"Found bad 1h timestamp for {folder} - {entry['t']}")
+                path.write_text(json.dumps(data))
+            else:
+                data = json.loads(path.read_text())
+                fetch = data['live']['fetch'] + 3600
+                if fetch%1:
+                    logger.info("Nonfake fetch")
+                    data['live']['fetch'] = fetch
+                else: data['live']['fetch'] = fetch + 1
+                path.write_text(json.dumps(data))
+        for file in os.listdir(d1_path) if d1_path.exists() else []:
+            path = d1_path / file
+            if file != 'meta':
+                data = json.loads(path.read_text())
+                for entry in data['data']:
+                    date = dateutils.unix_to_datetime(entry['t'])
+                    entry['t'] += 6.5*3600
+                    if date.hour != 9 or date.minute != 30:
+                        logger.warning(f"Found bad 1d timestamp for {folder} - {entry['t']}")
+                path.write_text(json.dumps(data))
+            else:
+                data = json.loads(path.read_text())
+                fetch = data['live']['fetch'] + 13*1800
+                if fetch%1:
+                    logger.info('Nonfake fetch')
+                    data['live']['fetch'] = fetch
+                else: data['live']['fetch'] = fetch + 1
+                path.write_text(json.dumps(data))
+        logger.info(f"Successfully finished: {folder}")
+
 
 
 def fix_model5_examples():
@@ -61,39 +114,3 @@ def fix_live_series():
                 print(f'unlink d1 for {file}')
                 meta_path.unlink()
                 live_path.unlink()
-
-def fix_nan_inf():
-    files = os.listdir(examples_bin_folder)
-    for file in files:
-        batch: torch.Tensor = torch.load(examples_bin_folder / file, weights_only=True)
-        indices = torch.logical_or(batch.isnan(), batch.isinf())
-        indices = torch.sum(indices, dim=1) > 0
-        bad_count = indices.sum().item()
-        market_cap = batch[indices][:,model1.example.MARKET_CAP_I].mean()
-        indices = torch.logical_not(indices)
-        good_count = indices.sum().item()
-        good_batches = batch[indices]
-        target_prices = good_batches[:, model1.example.D1_TARGET_I:] + 1
-        last_prices = good_batches[:, model1.example.H1_VOLUMES_I-1].unsqueeze(dim = 1)
-        good_batches[:, model1.example.D1_TARGET_I:] = target_prices / last_prices - 1
-        normalize_in_place(good_batches, start_index=model1.example.D1_PRICES_I, count=model1.example.D1_PRICES, dim=1)
-        normalize_in_place(good_batches, start_index=model1.example.D1_VOLUMES_I, count=model1.example.D1_PRICES, dim=1)
-        normalize_in_place(good_batches, start_index=model1.example.H1_PRICES_I, count=model1.example.H1_PRICES, dim=1)
-        normalize_in_place(good_batches, start_index=model1.example.H1_VOLUMES_I, count=model1.example.H1_PRICES, dim=1)
-        torch.save(good_batches, examples_folder / file)
-        logger.info(f'Batch {file}.\t Discard {bad_count}.\t Keep {good_count}.\t Avg mcap: {market_cap}')
-
-def fix_nan_inf_check():
-    files = os.listdir(examples_bin_folder)
-    total = 0
-    for file in files:
-        batch: torch.Tensor = torch.load(examples_folder / file, weights_only=True)
-        cnt = torch.logical_or(batch.isnan(), batch.isinf()).sum().item()
-        if cnt > 0:
-            print(f'Bad batch: {file}. Cnt = {cnt}. Examples = {batch.shape[0]}')
-            total += 1
-        else:
-            print(f'Good batch, examples {batch.shape[0]}')
-    if total == 0:
-        print('All ok')
-
