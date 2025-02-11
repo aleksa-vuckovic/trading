@@ -2,8 +2,9 @@ import torch
 import math
 import torchinfo
 import config
-from ..utils import PriceTarget
-from . import example
+from torch import Tensor
+from ..utils import PriceTarget, check_tensors
+from ..abstract import TensorExtractor
 from . import generator
 
 class IndividualTextLayer(torch.nn.Module):
@@ -14,7 +15,7 @@ class IndividualTextLayer(torch.nn.Module):
     """
     def __init__(self, out_features = 40):
         super().__init__()
-        self.dense1 = torch.nn.Linear(in_features = example.TEXT_EMBEDDING_SIZE, out_features=2*out_features) #80*768=61040
+        self.dense1 = torch.nn.Linear(in_features = generator.TEXT_EMBEDDING_SIZE, out_features=2*out_features) #80*768=61040
         self.gelu1 = torch.nn.GELU()
         self.dense2 = torch.nn.Linear(in_features=2*out_features, out_features=out_features) #80*40=3200
         self.gelu2 = torch.nn.GELU()
@@ -158,7 +159,7 @@ class SeriesLayer(torch.nn.Module):
     def __init__(self, output_features: int = 100):
         super().__init__()
         self.individual_layers = torch.nn.ModuleList([
-            IndividualSeriesLayer(input_length=example.D1_PRICES if i < 2 else example.H1_PRICES, output_features=output_features)
+            IndividualSeriesLayer(input_length=generator.D1_PRICES if i < 2 else generator.H1_PRICES, output_features=output_features)
             for i in range(4)
         ])
     
@@ -199,26 +200,27 @@ class Model(torch.nn.Module):
     @staticmethod
     def print_summary():
         model = Model()
-        input = [(config.batch_size, example.D1_PRICES)]*2
-        input += [(config.batch_size, example.H1_PRICES)]*2
-        input += [(config.batch_size, example.TEXT_EMBEDDING_SIZE)]*3
+        input = [(config.batch_size, generator.D1_PRICES)]*2
+        input += [(config.batch_size, generator.H1_PRICES)]*2
+        input += [(config.batch_size, generator.TEXT_EMBEDDING_SIZE)]*3
         torchinfo.summary(model, input_size=input)
 
-def extract_tensors(batch: torch.Tensor) -> torch.Tensor:
-    series1 = batch[:,example.D1_PRICES_I:example.D1_PRICES_I+example.D1_PRICES]
-    series2 = batch[:,example.D1_VOLUMES_I:example.D1_VOLUMES_I+example.D1_PRICES]
-    series3 = batch[:,example.H1_PRICES_I:example.H1_PRICES_I+example.H1_PRICES]
-    series4 = batch[:,example.H1_VOLUMES_I:example.H1_VOLUMES_I+example.H1_PRICES]
-    text1 = batch[:,example.TEXT1_I:example.TEXT1_I+example.TEXT_EMBEDDING_SIZE]
-    text2 = batch[:,example.TEXT2_I:example.TEXT2_I+example.TEXT_EMBEDDING_SIZE]
-    text3 = batch[:,example.TEXT3_I:example.TEXT3_I+example.TEXT_EMBEDDING_SIZE]
-    expect = batch[:,example.D1_TARGET_I]
-    expect = PriceTarget.TANH_10_10.get_price(expect)
-    return series1, series2, series3, series4, text1, text2, text3, expect
-    
-"""64 layers * 100 features * 8 bytes ~ 50kB
-    50kB * 5000 examples = 250MB
-
-    Let's keep it 1000 examples per batch
-
-"""
+class Extractor(TensorExtractor):
+    def extract_tensors(self, example: dict[str, Tensor]):
+        batch = example[generator.DATA]
+        if len(batch.shape) < 2: batch = batch.unsqueeze(dim = 0)
+        series1 = batch[:,generator.D1_PRICES_I:generator.D1_PRICES_I+generator.D1_PRICES]
+        series2 = batch[:,generator.D1_VOLUMES_I:generator.D1_VOLUMES_I+generator.D1_PRICES]
+        series3 = batch[:,generator.H1_PRICES_I:generator.H1_PRICES_I+generator.H1_PRICES]
+        series4 = batch[:,generator.H1_VOLUMES_I:generator.H1_VOLUMES_I+generator.H1_PRICES]
+        text1 = batch[:,generator.TEXT1_I:generator.TEXT1_I+generator.TEXT_EMBEDDING_SIZE]
+        text2 = batch[:,generator.TEXT2_I:generator.TEXT2_I+generator.TEXT_EMBEDDING_SIZE]
+        text3 = batch[:,generator.TEXT3_I:generator.TEXT3_I+generator.TEXT_EMBEDDING_SIZE]
+        
+        result = (series1, series2, series3, series4, text1, text2, text3)
+        if batch.shape[1] >= generator.D1_TARGET_I:
+            expect = batch[:,generator.D1_TARGET_I]
+            expect = PriceTarget.TANH_10_10.get_price(expect)
+            result += (expect,)
+        check_tensors(result)
+        return result

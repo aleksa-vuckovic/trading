@@ -1,5 +1,11 @@
 from pathlib import Path
-from ..model5 import generator
+from .. import model5
 
-def run_ordered_loop():
-    generator.run_ordered_loop(hour=14, folder=Path(__file__).parent)
+FOLDER = Path(__file__).parent / 'examples'
+
+class Generator(model5.generator.Generator):
+    def run(self):
+        self.run_loop(
+            folder = FOLDER,
+            hour=14
+        )
