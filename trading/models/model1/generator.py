@@ -39,6 +39,7 @@ class Generator(ExampleGenerator):
         )
 
     def generate_example(
+        self,
         ticker: nasdaq.NasdaqListedEntry,
         end_time: float,
         with_output: bool = True

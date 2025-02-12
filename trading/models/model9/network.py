@@ -1,7 +1,6 @@
 import torch
 from torch import Tensor
 from .. import model6
-from .. import model5
 from ..abstract import TensorExtractor
 from ..utils import PriceTarget, get_moving_average, get_time_relativized, check_tensors
 
@@ -14,13 +13,13 @@ class Model(model6.network.Model):
 
 class Extractor(TensorExtractor):
     def extract_tensors(self, example):
-        daily = example[model5.generator.D1_DATA]
-        hourly = example[model5.generator.H1_DATA]
+        daily = example[model6.generator.D1_DATA]
+        hourly = example[model6.generator.H1_DATA]
 
         def process(tensor: Tensor):
             tensor = tensor[:,-TOTAL_POINTS-MOVING_AVG:,:]
             #1 Get high-low relative to low (relative span)
-            tensor[:,:,model5.generator.OPEN_I] = (tensor[:,:,model5.generator.HIGH_I] - tensor[:,:,model5.generator.LOW_I]) / tensor[:,:,model5.generator.LOW_I]
+            tensor[:,:,model6.generator.OPEN_I] = (tensor[:,:,model6.generator.HIGH_I] - tensor[:,:,model6.generator.LOW_I]) / tensor[:,:,model6.generator.LOW_I]
             #2 Get moving averages for everything
             mvg = get_moving_average(tensor, dim=1, window=MOVING_AVG)
             #3 Concat everything
@@ -32,9 +31,9 @@ class Extractor(TensorExtractor):
         hourly = process(hourly)
         result = (daily, hourly)
 
-        if model5.generator.AFTER_DATA in example:
-            after = example[model5.generator.AFTER_DATA]
-            after = (after[:,model5.generator.D1_AFTER_I] - daily[:,-1,model5.generator.CLOSE_I]) / daily[:,-1,model5.generator.CLOSE_I]
+        if model6.generator.AFTER_DATA in example:
+            after = example[model6.generator.AFTER_DATA]
+            after = (after[:,model6.generator.D1_AFTER_I] - daily[:,-1,model6.generator.CLOSE_I]) / daily[:,-1,model6.generator.CLOSE_I]
             after = PriceTarget.TANH_10_10.get_price(after)
             result += (after,)
 

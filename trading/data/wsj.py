@@ -125,6 +125,6 @@ def _get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interv
     result['data'] = filter_by_timestamp(quotes, unix_from=unix_from, unix_to=unix_to)
     return result
 
-def get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interval, return_quotes: list[str] = ['close', 'volume'], **kwargs) -> list[dict]:
+def get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interval, return_quotes: list[str] = ['close', 'volume'], **kwargs) -> tuple[list[float], ...]:
     data = _get_pricing(symbol.upper(), unix_from, unix_to, interval, **kwargs)['data']
     return separate_quotes(data, return_quotes)

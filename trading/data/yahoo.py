@@ -148,7 +148,7 @@ def get_pricing(
     interval: Interval,
     return_quotes = ['close', 'volume'],
     **kwargs
-) -> tuple:
+) -> tuple[list[float], ...]:
     """
     Returns the pricing as two arrays - prices and volume.
     Zero volume entries are filtered out.
@@ -189,4 +189,8 @@ def get_first_trade_time(ticker: str) -> float:
     if key in info and info[key]:
         return float(info[key])
     key = 'firstTradeDate'
+    return float(info[key])
+def get_market_cap(symbol: str) -> float:
+    key = 'marketCap'
+    info = get_info(symbol)
     return float(info[key])

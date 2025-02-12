@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 class ExampleGenerator:
     STATE_FILE = 'loop_state.json'
     def generate_example(
+        self,
         ticker: nasdaq.NasdaqListedEntry,
         end_time: float,
         with_output: bool = True

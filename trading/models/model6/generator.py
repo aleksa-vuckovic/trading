@@ -31,7 +31,12 @@ class Generator(ExampleGenerator):
             folder = FOLDER,
             hour = 16
         )
-    def generate_example(ticker, end_time, with_output = True) -> dict[str, Tensor]:
+    def generate_example(
+        self,
+        ticker: nasdaq.NasdaqListedEntry,
+        end_time: float,
+        with_output: bool = True
+    ) -> dict[str, Tensor]:
         #1. Get the prices
         d1_start_time = (end_time-(DATA_POINTS/5*7*1.5+5)*24*3600)
         h1_start_time = (end_time-(DATA_POINTS/6/5*7*1.5+5)*24*3600)

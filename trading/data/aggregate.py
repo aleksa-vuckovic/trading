@@ -1,11 +1,10 @@
-from . import nasdaq, macrotrends, yahoo, zacks, seekingalpha, globenewswire
+import logging
+import time
 from ..utils import common
 from ..utils.common import Interval
-import logging
+from . import nasdaq, macrotrends, yahoo, zacks, seekingalpha, globenewswire, wsj, financialtimes
 
 logger = logging.getLogger(__name__)
-_MODULE = __name__.split(".")[-1]
-_CACHE = common.CACHE / _MODULE
 
 # Aggregating methods
 def get_shares_outstanding_at(ticker: nasdaq.NasdaqListedEntry, unix_time: float) -> float:
@@ -16,6 +15,8 @@ def get_shares_outstanding_at(ticker: nasdaq.NasdaqListedEntry, unix_time: float
     return float(yahoo.get_shares(ticker.symbol))
 def get_first_trade_time(ticker: nasdaq.NasdaqListedEntry) -> float:
     return yahoo.get_first_trade_time(ticker.symbol)
+def get_market_cap(ticker: nasdaq.NasdaqListedEntry) -> float:
+    return yahoo.get_market_cap(ticker.symbol)
 def get_sorted_tickers() -> list[dict]:
     tickers = []
     for it in nasdaq.get_filtered_entries():
@@ -37,8 +38,46 @@ def get_sorted_tickers() -> list[dict]:
         tickers.append({"ticker": it, "unix_time": first_trade})
     return sorted(tickers, key=lambda it: it["unix_time"])
 
-def get_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, interval: Interval, return_quotes=['close','volume']) -> tuple:
-    return yahoo.get_pricing(ticker.symbol, unix_from, unix_to, interval, return_quotes=return_quotes, backup_behavior=common.BackupBehavior.RETHROW|common.BackupBehavior.SLEEP)
+def get_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, interval: Interval, return_quotes=['close','volume']) -> tuple[list[float], ...]:
+    now = time.time()
+    if now-unix_to < 2*24*3600:
+        #Live. Use alternatives for recent prices.
+        sep = max(now - 3*24*3600, unix_from)
+        if unix_from < sep:
+            old = yahoo.get_pricing(ticker.symbol, unix_from, sep, interval, return_quotes=return_quotes, backup_behavior=common.BackupBehavior.RETHROW|common.BackupBehavior.SLEEP)
+        else:
+            old = None
+        try:
+            recent = yahoo.get_pricing(ticker.symbol, sep, unix_to, interval, return_quotes=return_quotes)
+        except:
+            logger.warning(f"Failed live yahoo for {ticker.symbol}.")
+            pass
+        try:
+            recent = wsj.get_pricing(ticker.symbol, sep, unix_to, interval, return_quotes=return_quotes)
+        except:
+            logger.warning(f"Failed wsj for {ticker.symbol}.")
+            pass
+        recent = financialtimes.get_pricing(ticker.symbol, sep, unix_to, interval, return_quotes=return_quotes, backup_behavior=common.BackupBehavior.RETHROW|common.BackupBehavior.SLEEP)
+        if old:
+            for i in range(len(recent)):
+                old[i].extend(recent[i])
+            return old
+        else:
+            return recent
+    else:
+        return yahoo.get_pricing(ticker.symbol, unix_from, unix_to, interval, return_quotes=return_quotes, backup_behavior=common.BackupBehavior.RETHROW|common.BackupBehavior.SLEEP)
+def get_pricing_live(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, interval: Interval, return_quotes=['close', 'volume']) -> tuple:
+    try:
+        return yahoo.get_pricing(ticker.symbol, unix_from, unix_to, interval, return_quotes=return_quotes)
+    except:
+        logger.warning(f"Failed live yahoo for {ticker.symbol}.")
+        pass
+    try:
+        return wsj.get_pricing(ticker.symbol, unix_from, unix_to, interval, return_quotes=return_quotes)
+    except:
+        logger.warning(f"Failed wsj for {ticker.symbol}.")
+        pass
+    return financialtimes.get_pricing(ticker.symbol, unix_from, unix_to, interval, return_quotes=return_quotes)
 
 def get_market_summary(unix_time: float) -> str:
     return zacks.get_summary(unix_time, backup_behavior=common.BackupBehavior.RETHROW|common.BackupBehavior.SLEEP)

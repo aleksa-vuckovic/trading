@@ -40,7 +40,7 @@ def combine_series(
     if as_list: return [[data[key][i] for key in must_be_there] for i in range(length) if is_ok(i)]
     else: return [{key: data[key][i] for key in keys} for i in range(length) if is_ok(i)]
 
-def separate_quotes(data: list[dict], quotes: list[str]) -> tuple:
+def separate_quotes(data: list[dict], quotes: list[str]) -> tuple[list[float], ...]:
     return tuple([it[quote[0]] for it in data] for quote in quotes)
 def filter_by_timestamp(data: list[dict|list], unix_from: float, unix_to: float, timestamp_field: str | int = 't') -> list[dict]:
     return [it for it in data if it[timestamp_field] >= unix_from and it[timestamp_field] < unix_to]
