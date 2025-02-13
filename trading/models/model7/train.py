@@ -13,10 +13,14 @@ initial_lr = 10e-6
 """
 This model is only different from model6 in that it's trained on data up to 13:30
 """
-def run_loop(max_epoch = 10000):
+def run_loop(max_epoch = 10000) -> TrainingPlan:
     plan = TrainingPlan(model6.train.Model())
     plan.with_optimizer(torch.optim.Adam(plan.model.parameters()))
     add_stats(plan)
     add_batches(plan, examples_folder=generator.FOLDER, extractor=model6.network.Extractor(), merge=10)
     add_triggers(plan, checkpoints_folder=checkpoints_folder, initial_lr=initial_lr)
     plan.run(max_epoch=max_epoch)
+    return plan
+
+def load() -> model6.train.Model:
+    return run_loop(max_epoch=-1).model

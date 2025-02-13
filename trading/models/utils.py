@@ -17,7 +17,7 @@ def get_batch_files(path: Path) -> list[dict]:
     pattern = re.compile(r"([^_]+)_batch(\d+)-(\d+).pt")
     files = [ pattern.fullmatch(it) for it in os.listdir(path)]
     files = [ {'path': path / it.group(0), 'source': it.group(1), 'batch': int(it.group(2)), 'hour': int(it.group(3))} for it in files if it ]
-    return sorted(files, key=lambda it: (it['source'], it['hour'], it['batch']))
+    return sorted(files, key=lambda it: (it['batch'], it['hour'], it['source']))
 
 def check_tensors(tensors: list[Tensor] | tuple[Tensor] | dict[object, Tensor], allow_zeros=True):
     if isinstance(tensors, (list, tuple)):

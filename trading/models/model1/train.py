@@ -58,16 +58,20 @@ class CustomLoss(StatCollector):
 def add_stats(plan: TrainingPlan):
     return plan.with_stats(
         StatContainer(CustomLoss(), Accuracy(), Precision(), Miss(), name='train'),
-        StatContainer(CustomLoss(), Accuracy(), Precision(), Miss(), name='val')
+        StatContainer(CustomLoss(), Accuracy(), Precision(), Miss(), name='val'),
+        StatContainer(CustomLoss(), Accuracy(), Precision(), Miss(), name='test'),
     )
 
 def add_batches(plan: TrainingPlan, examples_folder: Path, extractor: TensorExtractor, merge:int=1):
     all_files = get_batch_files(examples_folder)
-    training_files = [it['path'] for it in all_files if it['batch'] % 6]
-    validation_files = [it['path'] for it in all_files if it['batch']%6 == 0]
+    test_i = int(len(all_files)*0.95)
+    test_files = all_files[-test_i:]
+    training_files = [it['path'] for it in all_files[:-test_i] if it['batch'] % 6]
+    validation_files = [it['path'] for it in all_files[:-test_i] if it['batch']%6 == 0]
     return plan.with_batches(
         Batches(training_files, extractor=extractor, merge=merge),
-        Batches(validation_files, extractor=extractor, merge=merge)
+        Batches(validation_files, extractor=extractor, merge=merge),
+        Batches(test_files, extractor=extractor, merge=merge)
     )
 
 def add_triggers(plan: TrainingPlan, checkpoints_folder: Path, initial_lr: float) -> TrainingPlan:
@@ -89,10 +93,14 @@ def add_triggers(plan: TrainingPlan, checkpoints_folder: Path, initial_lr: float
     return plan
     
 
-def run_loop(max_epoch = 100000000):
+def run_loop(max_epoch = 100000000) -> TrainingPlan:
     plan = TrainingPlan(Model())
     plan.with_optimizer(torch.optim.Adam(plan.model.parameters()))
     add_stats(plan)
     add_batches(plan, examples_folder=generator.FOLDER, extractor=Extractor(), merge=1)
     add_triggers(plan, checkpoints_folder=checkpoints_folder, initial_lr=initial_lr)
     plan.run(max_epoch=max_epoch)
+    return plan
+
+def load() -> Model:
+    return run_loop(max_epoch=-1).model

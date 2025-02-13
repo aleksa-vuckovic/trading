@@ -125,7 +125,13 @@ class TrainingPlan:
         def execute(self, plan: TrainingPlan):
             if STAT_HISTORY not in plan.data:
                 plan.data[STAT_HISTORY] = []
-            plan.data[STAT_HISTORY].append({'train': plan.train_stats.to_dict(), 'val': plan.val_stats.to_dict(), 'epoch': plan.epoch})
+            entry = {
+                'train': plan.train_stats.to_dict(),
+                'val': plan.val_stats.to_dict(),
+                'epoch': plan.epoch
+            }
+            if plan.test_stats and plan.test_batches: entry['test'] = plan.test_stats.to_dict()
+            plan.data[STAT_HISTORY].append(entry)
     
     class CheckpointAction(Action):
         def __init__(self, path: Path, primary: bool = False):
@@ -208,14 +214,16 @@ class TrainingPlan:
         self.optimizer = optimizer
         return self
     
-    def with_stats(self, train_stats: StatContainer, val_stats: StatContainer) -> TrainingPlan:
+    def with_stats(self, train_stats: StatContainer, val_stats: StatContainer, test_stats: StatContainer|None = None) -> TrainingPlan:
         self.train_stats = train_stats
         self.val_stats = val_stats
+        self.test_stats = test_stats
         return self
     
-    def with_batches(self, train_batches: Batches, val_batches: Batches) -> TrainingPlan:
+    def with_batches(self, train_batches: Batches, val_batches: Batches, test_batches: Batches|None = None) -> TrainingPlan:
         self.train_batches = train_batches.to(device = self.device, dtype = self.dtype)
         self.val_batches = val_batches.to(device = self.device, dtype = self.dtype)
+        self.test_batches = test_batches and test_batches.to(device = self.device, dtype = self.dtype)
         return self
 
     def run(self, max_epoch = 10000):
@@ -246,11 +254,19 @@ class TrainingPlan:
                             expect = batch[-1]
                             output = self.model(*input).squeeze()
                             self.val_stats.update(expect, output)
-                            
-                print(f"Validation: {self.val_stats}")
+                    print(f"Validation: {self.val_stats}")
+                    if self.test_batches and self.test_stats:
+                        with tqdm(self.test_batches, desc = 'Testing...', leave=False) as bar:
+                            for batch in bar:
+                                input = batch[:-1]
+                                expect = batch[-1]
+                                output = self.model(*input).squeeze()
+                                self.test_stats.update(expect, output)
+                        print(f"Testing: {self.test_stats}")
                 for rule in self.rules: rule.execute(self)
                 self.train_stats.clear()
                 self.val_stats.clear()
+                if self.test_stats: self.test_stats.clear()
                 self.epoch += 1
 
             logger.info(f"Stopped at epoch {self.epoch}")
