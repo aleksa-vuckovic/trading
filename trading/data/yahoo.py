@@ -50,16 +50,22 @@ def _fix_timestamps(timestamps: list[float], interval: Interval):
     if interval == Interval.D1: return fix_daily_timestamps(timestamps)
     if interval == Interval.H1:
         #Move everything an hour later, except 15:30
+        lower_bound = 9*3600+30*60
+        upper_bound = 15*3600+30*60
         result = []
         for it in timestamps:
             if not it:
                 result.append(None)
+                continue
+            date = dateutils.unix_to_datetime(it, tz=dateutils.ET)
+            daysecs = dateutils.datetime_to_daysecs(date)
+            if daysecs < lower_bound or daysecs > upper_bound or it%1800:
+                logger.warning(f"Unexpected timestamp {date}. Skipping entry.")
+                result.append(None)
+            elif date.hour == 15 and date.minute == 30:
+                result.append(it + 1800)
             else:
-                date = dateutils.unix_to_datetime(it)
-                if date.hour == 15 and date.minute == 30:
-                    result.append(it + 1800)
-                else:
-                    result.append(it + 3600)
+                result.append(it + 3600)
         return result
     raise Exception(f"Unknown interval {interval}")
 

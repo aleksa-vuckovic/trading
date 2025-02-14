@@ -9,15 +9,6 @@ from trading.utils import dateutils
 
 logger = logging.getLogger(__name__)
 
-def fix_model1_examples():
-    root = Path(__file__).parent / 'trading' / 'models' / 'model1' / 'examples'
-    for file in get_batch_files(root):
-        path = file['path']
-        tensor = torch.load(path, weights_only=True)
-        torch.save({'data': tensor}, path)
-        print(path)
-
-
 def fix_timestamps():
     root = Path(__file__).parent / 'trading' / 'data' / 'cache' / 'yahoo'
     for folder in os.listdir(root):
@@ -48,9 +39,9 @@ def fix_timestamps():
                 data = json.loads(path.read_text())
                 for entry in data['data']:
                     date = dateutils.unix_to_datetime(entry['t'])
-                    entry['t'] += 6.5*3600
-                    if date.hour != 9 or date.minute != 30:
-                        logger.warning(f"Found bad 1d timestamp for {folder} - {entry['t']}")
+                    if date.hour == 9 and date.hour == 30: entry['t'] += 6.5*3600
+                    elif date.hour == 16 and date.minute == 0: entry['t'] += 0
+                    else: logger.warning(f"Found bad 1d timestamp for {folder} - {entry['t']}")
                 #path.write_text(json.dumps(data))
             else:
                 data = json.loads(path.read_text())
@@ -61,56 +52,3 @@ def fix_timestamps():
                 else: data['live']['fetch'] = fetch + 1
                 #path.write_text(json.dumps(data))
         logger.info(f"Successfully finished: {folder}")
-
-
-
-def fix_model5_examples():
-    root = Path(__file__).parent / 'trading' / 'models' / 'model5' / 'examples'
-    for file in os.listdir(root):
-        path = root / file
-        data = torch.load(path, weights_only=True)
-        d1data = data[model5.example.D1_DATA]
-        d1data[:,1:,:] = d1data[:,:-1,:].clone()
-        data[model5.example.D1_DATA] = d1data
-        torch.save(d1data, path)
-        if file.endswith("15.pt"):
-            newfile = f"{file[:-5]}16.pt"
-            path.rename(root/newfile)
-        print(f"Fixed {newfile}")
-
-
-def fix_live_series():
-    root = Path(__file__).parent / 'trading' / 'data' / 'cache' / 'yahoo'
-    for file in sorted(os.listdir(root)):
-        #Delete last 150 h1 prices
-        path = root / file / 'H1'
-        live_path = path / 'live'
-        meta_path = path / 'meta'
-        if live_path.exists():
-            live = json.loads(live_path.read_text())
-            meta = json.loads(meta_path.read_text())
-            live['data'] = live['data'][:-140]
-            if live['data']:
-                meta['live']['fetch'] = live['data'][-1]['t']
-                live_path.write_text(json.dumps(live))
-                meta_path.write_text(json.dumps(meta))
-            else:
-                print(f'unlink h1 for {file}')
-                meta_path.unlink()
-                live_path.unlink()
-        #Delete last 20 d1 prices
-        path = root / file / 'D1'
-        live_path = path / 'live'
-        meta_path = path / 'meta'
-        if live_path.exists():
-            live = json.loads(live_path.read_text())
-            meta = json.loads(meta_path.read_text())
-            live['data'] = live['data'][:-20]
-            if live['data']:
-                meta['live']['fetch'] = live['data'][-1]['t']
-                live_path.write_text(json.dumps(live))
-                meta_path.write_text(json.dumps(meta))
-            else:
-                print(f'unlink d1 for {file}')
-                meta_path.unlink()
-                live_path.unlink()

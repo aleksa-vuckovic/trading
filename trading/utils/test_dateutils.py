@@ -54,3 +54,16 @@ class TestDates(unittest.TestCase):
         input = dateutils.str_to_unix('2025-01-24 11:00:00', tz=dateutils.ET)
         expect = dateutils.str_to_unix('2025-01-27 11:00:00', tz=dateutils.ET)
         self.assertEqual(expect, dateutils.get_next_working_time(input, hour=11))
+
+    def test_datetime_to_daysecs(self):
+        date = dateutils.str_to_datetime('2020-05-05 10:12:13')
+        result = dateutils.datetime_to_daysecs(date)
+        expect = 10*3600 + 12*60 + 13
+        self.assertEqual(expect, result)
+
+        result = dateutils.str_to_daysecs('2020-05-05 00:00:00')
+        self.assertEqual(0, result)
+
+        result = dateutils.unix_to_daysecs(dateutils.str_to_unix('2020-05-01 23:59:59', tz=dateutils.ET), dateutils.ET)
+        expect = 23*3600 + 59*60 + 59
+        self.assertEqual(expect, result)
