@@ -24,11 +24,16 @@ def _get_info(symbol: str, exchanges: str = ['NAQ', 'NSQ', 'NMQ']) -> dict:
     if not data: return {}
     return data[0]
 
+"""
+FT timestamps represent the start of the relevant interval BUT
+they are often a few milliseconds off!
+"""
 def _get_pricing_raw(symbol: str, days: int, data_period: str, data_interval: int, realtime: bool):
     info = _get_info(symbol)
     if 'xid' not in info:
         logger.warning(f"No xid for '{symbol}'. Returning empty prices.")
         return {}
+    xid = info['xid']
     url = "https://markets.ft.com/data/chartapi/series"
     request = {
         "days": days,
@@ -43,7 +48,7 @@ def _get_pricing_raw(symbol: str, days: int, data_period: str, data_interval: in
             {
                 "Label":"266a0ba8",
                 "Type":"price",
-                "Symbol":"9023539",
+                "Symbol":xid,
                 "OverlayIndicators":[],
                 "Params":{}
             }
@@ -51,7 +56,7 @@ def _get_pricing_raw(symbol: str, days: int, data_period: str, data_interval: in
             {
                 "Label":"b2b89a77",
                 "Type":"volume",
-                "Symbol":"9023539",
+                "Symbol":xid,
                 "OverlayIndicators":[],
                 "Params":{}
             }
@@ -67,14 +72,17 @@ def _get_period_for_interval(interval: Interval) -> tuple[str, int]:
     raise Exception(f"Unknown interval {interval}")
 def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
     if interval == Interval.H1:
+        lower_bound = 10*3600+30*60
+        upper_bound = 16*3600
         result = []
         for it in timestamps:
             if not it:
                 result.append(None)
                 continue
-            it = round(it)
+            it = round(it/10)*10
             date = dateutils.unix_to_datetime(it, tz=dateutils.ET)
-            if date.hour > 16 or date.hour < 9 or (date.minute != 0 and date.minute != 30):
+            daysecs = dateutils.datetime_to_daysecs(date)
+            if daysecs < lower_bound or daysecs > upper_bound or it % 1800:
                 logger.error(f"Unexpected timestamp {date} for period H1. Skipping entry.")
                 result.append(None)
             result.append(it)

@@ -92,3 +92,11 @@ def get_prev_working_time(unix_time: float, hour: int | None = None) -> float:
     else:
         time = time.replace(hour = time.hour - 1)
     return time.timestamp()
+
+def datetime_to_daysecs(date: datetime) -> float:
+    return date.hour*3600 + date.minute*60 + date.second + date.microsecond/1_000_000
+def str_to_daysecs(date: str) -> float:
+    return datetime_to_daysecs(str_to_datetime(date))
+def unix_to_daysecs(unix_time: float, tz=ET) -> float:
+    date = unix_to_datetime(unix_time, tz=tz)
+    return datetime_to_daysecs(date)

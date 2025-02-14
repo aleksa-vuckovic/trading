@@ -12,6 +12,9 @@ _MODULE: str = __name__.split(".")[-1]
 _CACHE = common.CACHE / _MODULE
 
 
+"""
+WSJ timestamps represent the end of the relevant interval!
+"""
 def _get_pricing_raw(key: str, step: str, time_frame: str):
     url = "https://api.wsj.net/api/michelangelo/timeseries/history"
     request = {
@@ -48,14 +51,9 @@ def _get_pricing_raw(key: str, step: str, time_frame: str):
 def _merge_data_1h(data):
     result = []
     dates = [dateutils.unix_to_datetime(it['t']) for it in data]
-    lower_bound = 10*3600
-    upper_bound = 16*3600
     i = 0
     while i < len(data):
-        daysecs = (dates[i].hour*60 + dates[i].minute)*60 + dates[i].second
-        if daysecs < lower_bound or daysecs > upper_bound:
-            logger.warning(f"Unexpected timestamp {dates[i]}. Skipping entry.")
-        elif dates[i].minute == 0:
+        if dates[i].minute == 0:
             if dates[i].hour == 16 or i == len(data)-1:
                 result.append(data[i])
             elif dates[i+1].hour == dates[i].hour and dates[i+1].minute == 30:
@@ -80,15 +78,20 @@ def _fix_timestamps(timestamps: list[float|int|None], interval: Interval) -> lis
     timestamps = [it//1000 if it else None for it in timestamps]
     if interval == Interval.D1: return fix_daily_timestamps(timestamps)
     if interval == Interval.H1:
+        lower_bound = 9*3600+30*60
+        upper_bound = 15*3600+30*60
         result = []
         for it in timestamps:
             if not it:
                 result.append(None)
-            elif it%1800:
-                logger.warning(f"Unexpected timestamp {it}. Expecting clean 30min intervals. Skipping.")
+                continue
+            date = dateutils.unix_to_datetime(it, tz=dateutils.ET)
+            daysecs = dateutils.datetime_to_daysecs(date)
+            if daysecs < lower_bound or daysecs > upper_bound or it %1800:
+                logger.warning(f"Unexpected timestamp {date}. Skipping entry.")
                 result.append(None)
             else:
-                result.append(it+1800)
+                result.append(it)
         return result
     else: raise Exception(f"Unknown interval {Interval}")
 

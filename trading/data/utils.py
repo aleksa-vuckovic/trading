@@ -54,11 +54,9 @@ def fix_daily_timestamps(timestamps: list[float|int|None]) -> list[float]:
         # Usually returned as 00:00 in UTC
         date = dateutils.unix_to_datetime(it + 7.5*3600, dateutils.ET)
         # For timestamps returned as 00:00 UTC this will cross into the proper ET date.
-        # For timestamps returnin the opening or closing in ET it will remain in the same day.
-        if date.hour > 22:
-            logger.error(f"Unexpected timestamp {date} for period D1. Skipping entry.")
-            result.append(None)
-        else:
-            date = date.replace(hour = 16, minute=0, second=0, microsecond=0)
-            result.append(date.timestamp())
+        # For timestamps at the opening or closing in ET it will remain in the same day.
+        if date.hour != 2 and date.hour != 3 and date.hour != 17 and date.hour != 23:
+            logger.warning(f"Unexpected daily timestamp {date}")
+        date = date.replace(hour = 16, minute=0, second=0, microsecond=0)
+        result.append(date.timestamp())
     return result
