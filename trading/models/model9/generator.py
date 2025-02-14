@@ -7,5 +7,5 @@ class Generator(model6.generator.Generator):
     def run(self):
         self.run_loop(
             folder = FOLDER,
-            hour=15
+            hour=14
         )

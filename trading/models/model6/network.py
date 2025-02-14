@@ -81,7 +81,7 @@ class Extractor(TensorExtractor):
     def extract_tensors(self, example: dict[str, Tensor]) -> tuple[Tensor, ...]:
         daily = example[generator.D1_DATA]
         hourly = example[generator.H1_DATA]
-        if len(daily.shape < 3):
+        if len(daily.shape) < 3:
             example = {key: example[key].unsqueeze(dim=0) for key in example}
 
         def process(tensor: Tensor):

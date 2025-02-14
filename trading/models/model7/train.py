@@ -12,6 +12,7 @@ initial_lr = 10e-6
 
 """
 This model is only different from model6 in that it's trained on data up to 13:30
+Edit: seems to have been traned up to 15 after all.
 """
 def run_loop(max_epoch = 10000) -> TrainingPlan:
     plan = TrainingPlan(model6.train.Model())

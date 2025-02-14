@@ -15,6 +15,8 @@ class Extractor(TensorExtractor):
     def extract_tensors(self, example):
         daily = example[model6.generator.D1_DATA]
         hourly = example[model6.generator.H1_DATA]
+        if len(daily.shape) < 3:
+            example = {key: example[key].unsqueeze(dim=0) for key in example}
 
         def process(tensor: Tensor):
             tensor = tensor[:,-TOTAL_POINTS-MOVING_AVG:,:]

@@ -64,7 +64,7 @@ def add_stats(plan: TrainingPlan):
 
 def add_batches(plan: TrainingPlan, examples_folder: Path, extractor: TensorExtractor, merge:int=1):
     all_files = get_batch_files(examples_folder)
-    test_i = int(len(all_files)*0.95)
+    test_i = int(len(all_files)*0.05)
     test_files = all_files[-test_i:]
     training_files = [it['path'] for it in all_files[:-test_i] if it['batch'] % 6]
     validation_files = [it['path'] for it in all_files[:-test_i] if it['batch']%6 == 0]

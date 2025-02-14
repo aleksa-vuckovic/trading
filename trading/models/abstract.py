@@ -34,7 +34,6 @@ class ExampleGenerator:
         batch_size: int = config.batch_size,
         batch_prefix: str = config.batch_prefix
     ):
-        folder = folder / 'examples'
         if not folder.exists(): folder.mkdir(parents=True, exist_ok=True)
         state_path = folder / ExampleGenerator.STATE_FILE
         if not state_path.exists(): state_path.write_text('{}')
