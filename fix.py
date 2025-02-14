@@ -4,7 +4,7 @@ import logging
 import json
 from pathlib import Path
 from trading.models.utils import get_batch_files
-from trading.models import model1, model5
+from trading.models import model1
 from trading.utils import dateutils
 
 logger = logging.getLogger(__name__)
@@ -48,9 +48,9 @@ def fix_timestamps():
                 data = json.loads(path.read_text())
                 for entry in data['data']:
                     date = dateutils.unix_to_datetime(entry['t'])
-                    entry['t'] += 6.5*3600
-                    if date.hour != 9 or date.minute != 30:
-                        logger.warning(f"Found bad 1d timestamp for {folder} - {entry['t']}")
+                    if date.hour == 9 and date.hour == 30: entry['t'] += 6.5*3600
+                    elif date.hour == 16 and date.minute == 0: entry['t'] += 0
+                    else: logger.warning(f"Found bad 1d timestamp for {folder} - {entry['t']}")
                 path.write_text(json.dumps(data))
             else:
                 data = json.loads(path.read_text())
