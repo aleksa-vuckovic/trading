@@ -4,7 +4,7 @@ import logging
 import json
 from pathlib import Path
 from trading.models.utils import get_batch_files
-from trading.models import model1, model5
+from trading.models import model1
 from trading.utils import dateutils
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ def fix_timestamps():
                     if date.hour == 15 and date.minute == 30: entry['t'] += 1800
                     else: entry['t'] += 3600
                     if date.hour < 9 or date.hour > 16 or entry['t']%1800: logger.warning(f"Found bad 1h timestamp for {folder} - {entry['t']}")
-                path.write_text(json.dumps(data))
+                #path.write_text(json.dumps(data))
             else:
                 data = json.loads(path.read_text())
                 fetch = data['live']['fetch'] + 3600
@@ -41,7 +41,7 @@ def fix_timestamps():
                     logger.info("Nonfake fetch")
                     data['live']['fetch'] = fetch
                 else: data['live']['fetch'] = fetch + 1
-                path.write_text(json.dumps(data))
+                #path.write_text(json.dumps(data))
         for file in os.listdir(d1_path) if d1_path.exists() else []:
             path = d1_path / file
             if file != 'meta':
@@ -51,7 +51,7 @@ def fix_timestamps():
                     entry['t'] += 6.5*3600
                     if date.hour != 9 or date.minute != 30:
                         logger.warning(f"Found bad 1d timestamp for {folder} - {entry['t']}")
-                path.write_text(json.dumps(data))
+                #path.write_text(json.dumps(data))
             else:
                 data = json.loads(path.read_text())
                 fetch = data['live']['fetch'] + 13*1800
@@ -59,7 +59,7 @@ def fix_timestamps():
                     logger.info('Nonfake fetch')
                     data['live']['fetch'] = fetch
                 else: data['live']['fetch'] = fetch + 1
-                path.write_text(json.dumps(data))
+                #path.write_text(json.dumps(data))
         logger.info(f"Successfully finished: {folder}")
 
 
