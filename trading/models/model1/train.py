@@ -66,7 +66,7 @@ def add_batches(builder: TrainingPlan.Builder, examples_folder: Path, extractor:
     test_files = [it['path'] for it in all_files[-test_i:]]
     return builder.with_batches(name='train', batches=Batches(train_files, extractor=extractor, merge=merge), stats=make_stats('train'), backward=True)\
         .with_batches(name='val', batches=Batches(val_files, extractor=extractor, merge=merge), stats=make_stats('val'), backward=False)\
-        .with_batches(name='test', batche=Batches(test_files, extractor=extractor, merge=merge), stats=make_stats('train'), backward=False)
+        .with_batches(name='test', batches=Batches(test_files, extractor=extractor, merge=merge), stats=make_stats('train'), backward=False)
 
 def add_triggers(builder: TrainingPlan.Builder, checkpoints_folder: Path, initial_lr: float) -> TrainingPlan.Builder:
     builder.when(TrainingPlan.AlwaysTrigger())\

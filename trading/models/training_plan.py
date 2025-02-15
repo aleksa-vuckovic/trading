@@ -164,11 +164,11 @@ class TrainingPlan:
                 'model_state_dict': plan.model.state_dict(),
                 'optimizer_state_dict': plan.optimizer.state_dict(),
                 'epoch': plan.epoch,
-                'data': plan.data
+                'data': plan.data,
+                'stop': plan.stop
             }
             torch.save(save_dict, self.path)
         def restore(self, plan: TrainingPlan):
-            if not self.primary: return
             if not self.path.exists():
                 logger.info(f"No prior state, starting from scratch.")
                 return
@@ -177,6 +177,7 @@ class TrainingPlan:
             plan.optimizer.load_state_dict(save_dict['optimizer_state_dict'])
             plan.epoch = save_dict['epoch'] + 1
             plan.data = {**plan.data, **save_dict['data']}
+            if 'stop' in save_dict: plan.stop = save_dict['stop']
             logger.info(f"Loaded state from epoch {save_dict['epoch']}.")
     
     class LearningRateAction(Action):
