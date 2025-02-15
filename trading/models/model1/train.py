@@ -84,6 +84,13 @@ def add_triggers(plan: TrainingPlan, checkpoints_folder: Path, initial_lr: float
         plan.when(TrainingPlan.StatTrigger('accuracy', lower_bound=accuracy/100, trigger_once=True))\
             .then(TrainingPlan.CheckpointAction(checkpoints_folder / f"accuracy_{accuracy}_checkpoint.pth"))
         
+    def loss_plateau(values: list[float]) -> bool:
+        high = max(values)
+        last = values[-1]
+        return last>=high or (high-last)/high < 0.001
+    plan.when(TrainingPlan.StatHistoryTrigger('loss', group='val', count=10, criteria=loss_plateau) | TrainingPlan.EpochTrigger(threshold=100))\
+        .then(TrainingPlan.StopAction())
+        
     return plan.with_primary_checkpoint(TrainingPlan.CheckpointAction(checkpoints_folder / 'primary_checkpoint.pth'))
     
 

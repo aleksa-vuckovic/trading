@@ -49,7 +49,9 @@ class TrainingPlan:
             trigger_once: bool = False
         ):
             self.key = key
-            self.kind = group
+            self.group = group
+            self.lower_bound = lower_bound
+            self.upper_bound = upper_bound
             self.trigger_once = trigger_once
             self.triggered = False
             self.prev_in_bounds = None
@@ -70,12 +72,12 @@ class TrainingPlan:
 
         def check(self, plan) -> bool:
             if self.trigger_once and self.triggered: return False
-            stats = [it.stats for it in plan.batch_groups if it.name == self.kind][0]
+            stats = [it.stats for it in plan.batch_groups if it.name == self.group][0]
             prev = self.prev_in_bounds
             cur = self.in_bounds(stats[self.key])
             self.prev_in_bounds = cur
             if self.is_trigger(prev, cur):
-                logger.info(f"Triggered stat trigger for '{self.kind}.{self.key}', with value {stats[self.key]}.")
+                logger.info(f"Triggered stat trigger for '{self.group}.{self.key}', with value {stats[self.key]}. (lower bound {self.lower_bound}, upper bound {self.upper_bound})")
                 self.triggered = True
                 return True
             else: return False
@@ -83,24 +85,27 @@ class TrainingPlan:
     class StatHistoryTrigger(Trigger):
         def __init__(self,
             key: str,
-            kind: str = 'val',
+            group: str = 'val',
             count: int = 10,
             criteria: Callable[[list[object]], bool] = lambda values: True,
-            trigger_once: bool = True
+            trigger_once: bool = True,
+            desc: str|None = None
         ):
             self.key = key
-            self.kind = kind
+            self.group = group
             self.count = count
             self.criteria = criteria
             self.trigger_once = trigger_once
             self.triggered = False
+            self.desc = desc
         def check(self, plan) -> bool:
             if self.triggered and self.trigger_once: return False
             if STAT_HISTORY not in plan.data: return False
             history = plan.data[STAT_HISTORY]
             if len(history) < self.count: return False
-            values = [it[self.kind][self.key] for it in history[-self.count:]]
+            values = [it[self.group][self.key] for it in history[-self.count:]]
             if self.criteria(values):
+                logger.info(f"Triggered stat history trigger ({self.desc or 'no description'}) with values {values}.")
                 self.triggered = True
                 return True
             return False
@@ -248,6 +253,7 @@ class TrainingPlan:
             logger.info(f"Optimizer {type(self.optimizer)}.")
             if self.primary_checkpoint: self.primary_checkpoint.restore(self)
             while not self.stop and self.epoch < max_epoch:
+                logger.info(f"Running epoch {self.epoch}")
                 for batch_group in self.batch_groups:
                     if batch_group.backward:
                         self.model.train()
