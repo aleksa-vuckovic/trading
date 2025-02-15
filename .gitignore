@@ -15,4 +15,5 @@ examples_bin/
 config.py
 checkpoint.pth
 checkpoints/
+checkpoints_*/
 /main.py
