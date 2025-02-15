@@ -1,9 +1,12 @@
 from __future__ import annotations
 import torch
 import logging
+import math
 from tqdm import tqdm
 from pathlib import Path
 from typing import Callable, NamedTuple
+from matplotlib import pyplot as plt
+from ..utils import plotutils
 from .stats import StatContainer
 from .utils import Batches
 
@@ -304,3 +307,23 @@ class TrainingPlan:
             logger.info(f"Stopped at epoch {self.epoch}")
         except:
             logger.error(f"Error running loop.", exc_info=True)
+
+    def plot_history(self):
+        if not STAT_HISTORY in self.data or not self.data[STAT_HISTORY]:
+            raise Exception('No history to plot')
+        history = self.data[STAT_HISTORY]
+        epochs = [it['epoch'] for it in history]
+        groups = [it.name for it in self.batch_groups]
+
+        metrics = set(key for group in groups for key in history[0][group].keys())
+        for metric in metrics:
+            values = {group:[it[group][metric] for it in history] for group in groups if metric in history[0][group]}
+            #rows = 1 if len(values) <= 2 else 2 if len(values) <= 6 else 3
+            #cols = math.ceil(len(values)/rows)
+            fig, axes = plt.subplots(1,1)
+            fig.suptitle(f"Metric: {metric}")
+            for group, color in zip(values.keys(), plotutils.COLORS):
+                axes.plot(epochs, values[group], color=color, label=group)
+            axes.legend()
+        plt.show()
+            
