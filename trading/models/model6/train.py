@@ -16,13 +16,10 @@ initial_lr = 10e-6
     -Relative span
     -Close relative to open (useless?)
 """
-def run_loop(max_epoch = 10000) -> TrainingPlan:
-    plan = TrainingPlan(Model())
-    plan.with_optimizer(torch.optim.Adam(plan.model.parameters()))
-    add_batches(plan, examples_folder=generator.FOLDER, extractor=Extractor(), merge=10)
-    add_triggers(plan, checkpoints_folder=checkpoints_folder, initial_lr=initial_lr)
-    plan.run(max_epoch=max_epoch)
-    return plan
-
-def load() -> Model:
-    return run_loop(max_epoch=-1).model
+def get_plan() -> TrainingPlan:
+    model = Model()
+    builder = TrainingPlan.Builder(model)
+    builder.with_optimizer(torch.optim.Adam(model.parameters()))
+    add_batches(builder, examples_folder=generator.FOLDER, extractor=Extractor(), merge=10)
+    add_triggers(builder, checkpoints_folder=checkpoints_folder, initial_lr=initial_lr)
+    return builder.build()

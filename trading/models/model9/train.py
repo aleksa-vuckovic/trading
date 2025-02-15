@@ -14,12 +14,10 @@ initial_lr = 10e-6
 Different from models 6-8 in that it has 10 features, with moving averages.
 Data up to 13:30
 """
-def run_loop(max_epoch = 10000) -> TrainingPlan:
-    plan = TrainingPlan(Model())
-    plan.with_optimizer(torch.optim.Adam(plan.model.parameters()))
+def get_plan() -> TrainingPlan:
+    model = Model()
+    plan = TrainingPlan.Builder(model)
+    plan.with_optimizer(torch.optim.Adam(model.parameters()))
     add_batches(plan, examples_folder=model7.generator.FOLDER, extractor=Extractor(), merge=10)
     add_triggers(plan, checkpoints_folder=checkpoints_folder, initial_lr=initial_lr)
-    plan.run(max_epoch=max_epoch)
-
-def load() -> Model:
-    return run_loop(max_epoch=-1).model
+    return plan.build()

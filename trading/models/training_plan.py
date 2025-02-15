@@ -197,51 +197,67 @@ class TrainingPlan:
             if self.criteria.check(plan):
                 for action in self.actions:
                     action.execute(plan)
-
-    class _ActionBuilder:
-        def __init__(self, plan: TrainingPlan, rule: TrainingPlan._Rule):
-            self.plan = plan
-            self.rule = rule
-        def then(self, action: TrainingPlan.Action) -> TrainingPlan._ActionBuilder:
-            self.rule.actions.append(action)
-            return self
-        
-    def when(self, trigger: TrainingPlan.Trigger):
-        rule = TrainingPlan._Rule(trigger)
-        self.rules.append(rule)
-        return TrainingPlan._ActionBuilder(self, rule)
     #endregion
 
-    rules: list[_Rule]
     class _BatchGroup(NamedTuple):
         name: str
         batches: Batches
         stats: StatContainer
         backward: bool = False
-    batch_groups: list[_BatchGroup]
-    primary_checkpoint: CheckpointAction
-    def __init__(self, model: torch.nn.Module):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.dtype = torch.float32
-        self.epoch = 1
-        self.model = model.to(device=self.device, dtype=self.dtype)
-        self.data = {}
-        self.batch_groups = []
-        self.rules = []
-        self.stop = False
-        self.primary_checkpoint = None
 
-    def with_optimizer(self, optimizer: torch.optim.Optimizer) -> TrainingPlan:
-        self.optimizer = optimizer
-        return self
+    device: str
+    dtype: str
+    model: torch.nn.Module
+    optimizer: torch.optim.Optimizer
+    batch_groups: list[_BatchGroup]
+    rules: list[_Rule]
+    primary_checkpoint: CheckpointAction
+    epoch: int
+    data: dict
+    stop: bool
+
+    class _ActionBuilder:
+        def __init__(self, rule: TrainingPlan._Rule):
+            self.rule = rule
+        def then(self, action: TrainingPlan.Action) -> TrainingPlan._ActionBuilder:
+            self.rule.actions.append(action)
+            return self
+
+    class Builder:
+        def __init__(self, model: torch.nn.Module):
+            self.plan = TrainingPlan()
+            self.plan.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.plan.dtype = torch.float32
+            self.plan.model = model.to(device = self.plan.device, dtype = self.plan.dtype)
+            self.plan.batch_groups = []
+            self.plan.rules = []
+            self.plan.primary_checkpoint = None
+            self.plan.epoch = 1
+            self.plan.data = {}
+            self.plan.stop = False
+        
+        def with_optimizer(self, optimizer: torch.optim.Optimizer) -> TrainingPlan.Builder:
+            self.plan.optimizer = optimizer
+            return self
+        
+        def with_batches(self, name: str, batches: Batches, stats: StatContainer, backward: bool = False) -> TrainingPlan.Builder:
+            self.plan.batch_groups.append(TrainingPlan._BatchGroup(name, batches.to(device = self.plan.device, dtype = self.plan.dtype), stats, backward=backward))
+            return self
     
-    def with_batches(self, name: str, batches: Batches, stats: StatContainer, backward: bool = False) -> TrainingPlan:
-        self.batch_groups.append(TrainingPlan._BatchGroup(name, batches.to(device = self.device, dtype = self.dtype), stats, backward=backward))
-        return self
-    
-    def with_primary_checkpoint(self, checkpoint: CheckpointAction) -> TrainingPlan:
-        self.primary_checkpoint = checkpoint
-        return self
+        def when(self, trigger: TrainingPlan.Trigger) -> TrainingPlan._ActionBuilder:
+            rule = TrainingPlan._Rule(trigger)
+            self.plan.rules.append(rule)
+            return TrainingPlan._ActionBuilder(rule)
+
+        def with_primary_checkpoint(self, checkpoint: TrainingPlan.CheckpointAction) -> TrainingPlan.Builder:
+            self.plan.primary_checkpoint = checkpoint
+            return self
+        
+        def build(self) -> TrainingPlan:
+            if not self.plan.optimizer or not self.plan.batch_groups:
+                raise Exception(f"The plan has not been properly initialized.")
+            if self.plan.primary_checkpoint: self.plan.primary_checkpoint.restore(self.plan)
+            return self.plan
 
     def run(self, max_epoch = 10000000):
         try:
@@ -251,7 +267,7 @@ class TrainingPlan:
                 logger.info(f"Batch group {entry.name} with {len(entry.batches)} batches.")
             logger.info(f"Model {type(self.model).__module__}.{type(self.model).__name__}.")
             logger.info(f"Optimizer {type(self.optimizer)}.")
-            if self.primary_checkpoint: self.primary_checkpoint.restore(self)
+            
             while not self.stop and self.epoch < max_epoch:
                 logger.info(f"Running epoch {self.epoch}")
                 for batch_group in self.batch_groups:
