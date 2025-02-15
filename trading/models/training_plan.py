@@ -3,6 +3,7 @@ import torch
 import logging
 from tqdm import tqdm
 from pathlib import Path
+from typing import Callable, NamedTuple
 from .stats import StatContainer
 from .utils import Batches
 
@@ -21,8 +22,6 @@ class TrainingPlan:
     class Trigger:
         def check(self, plan: TrainingPlan) -> bool:
             return False
-        def check_initial(self, plan: TrainingPlan) -> bool:
-            return False
         def __or__(self, value):
             return TrainingPlan.OrTrigger(self, value)
         def __and__(self, value):
@@ -32,20 +31,16 @@ class TrainingPlan:
             self.criteria = list(args)
         def check(self, plan: TrainingPlan):
             return any([it.check(plan) for it in self.criteria])
-        def check_initial(self, plan):
-            return any([it.check_initial(plan) for it in self.criteria])
     class AndTrigger(Trigger):
         def __init__(self, *args):
             self.criteria = list(args)
         def check(self, plan):
             return all([it.check(plan) for it in self.criteria])
-        def check_initial(self, plan):
-            return all([it.check_initial(plan) for it in self.criteria])
         
     class StatTrigger(Trigger):
         def __init__(self,
             key: str,
-            use_val: bool = True, #or train
+            group: str = 'val',
             lower_bound: float | None = None,
             lower_bound_inclusive: bool = True,
             upper_bound: float | None = None,
@@ -54,7 +49,7 @@ class TrainingPlan:
             trigger_once: bool = False
         ):
             self.key = key
-            self.use_val = use_val
+            self.kind = group
             self.trigger_once = trigger_once
             self.triggered = False
             self.prev_in_bounds = None
@@ -75,73 +70,88 @@ class TrainingPlan:
 
         def check(self, plan) -> bool:
             if self.trigger_once and self.triggered: return False
-            stats = plan.val_stats if self.use_val else plan.train_stats
+            stats = [it.stats for it in plan.batch_groups if it.name == self.kind][0]
             prev = self.prev_in_bounds
             cur = self.in_bounds(stats[self.key])
             self.prev_in_bounds = cur
             if self.is_trigger(prev, cur):
-                logger.info(f"Triggered stat trigger for '{self.key}' ({'val' if self.use_val else 'train'}), with value {stats[self.key]}.")
+                logger.info(f"Triggered stat trigger for '{self.kind}.{self.key}', with value {stats[self.key]}.")
                 self.triggered = True
                 return True
             else: return False
+        
+    class StatHistoryTrigger(Trigger):
+        def __init__(self,
+            key: str,
+            kind: str = 'val',
+            count: int = 10,
+            criteria: Callable[[list[object]], bool] = lambda values: True,
+            trigger_once: bool = True
+        ):
+            self.key = key
+            self.kind = kind
+            self.count = count
+            self.criteria = criteria
+            self.trigger_once = trigger_once
+            self.triggered = False
+        def check(self, plan) -> bool:
+            if self.triggered and self.trigger_once: return False
+            if STAT_HISTORY not in plan.data: return False
+            history = plan.data[STAT_HISTORY]
+            if len(history) < self.count: return False
+            values = [it[self.kind][self.key] for it in history[-self.count:]]
+            if self.criteria(values):
+                self.triggered = True
+                return True
+            return False
     
     class EpochTrigger(Trigger):
         def __init__(self, threshold: int, trigger_once: bool = True):
             self.threshold = threshold
             self.trigger_once = trigger_once
             self.triggered = False
-        def _check(self, epoch: int):
+        def check(self, plan: TrainingPlan):
+            epoch = plan.epoch
             if self.trigger_once and self.triggered: return False
             if epoch >= self.threshold:
                 logger.info(f"Triggered EpochTrigger for epoch {epoch}.")
                 self.triggered = True
                 return True
             else: return False
-        def check(self, plan):
-            return self._check(plan.epoch)
-        def check_initial(self, plan):
-            return self._check(plan.epoch-1)
         
     class AlwaysTrigger(Trigger):
-        def __init__(self, trigger_once = False, trigger_initial = True):
+        def __init__(self, trigger_once = False):
             self.trigger_once = trigger_once
             self.triggered = False
-            self.trigger_initial =trigger_initial
         def check(self, plan):
             if self.triggered and self.trigger_once:
                 return False
+            self.triggered = True
             return True
-        def check_initial(self, plan):
-            if self.trigger_initial: return self.check(plan)
-            return False
         
     class Action:
         def execute(self, plan: TrainingPlan):
-            pass
-        def execute_initial(self, plan: TrainingPlan):
             pass
     
     class StatHistoryAction(Action):
         def execute(self, plan: TrainingPlan):
             if STAT_HISTORY not in plan.data:
                 plan.data[STAT_HISTORY] = []
-            entry = {
-                'train': plan.train_stats.to_dict(),
-                'val': plan.val_stats.to_dict(),
-                'epoch': plan.epoch
-            }
-            if plan.test_stats and plan.test_batches: entry['test'] = plan.test_stats.to_dict()
+            entry = {it.name:it.stats.to_dict() for it in plan.batch_groups}
+            entry['epoch'] = plan.epoch
             plan.data[STAT_HISTORY].append(entry)
     
     class CheckpointAction(Action):
-        def __init__(self, path: Path, primary: bool = False):
+        def __init__(self, path: Path):
             self.path = path
-            self.primary = primary
             path.parent.mkdir(parents=True, exist_ok=True)
         def execute(self, plan: TrainingPlan):
-            if not self.primary and self.path.exists():
+            if self.path.exists():
                 logger.info(f"Skipping non primary checkpoint because '{self.path}' already exists.")
-                return
+            else:
+                self.save(plan)
+                logger.info(f"Saved checkpoint to '{self.path}'.")
+        def save(self, plan: TrainingPlan):
             save_dict = {
                 'model_state_dict': plan.model.state_dict(),
                 'optimizer_state_dict': plan.optimizer.state_dict(),
@@ -149,9 +159,7 @@ class TrainingPlan:
                 'data': plan.data
             }
             torch.save(save_dict, self.path)
-            if not self.primary:
-                logger.info(f"Saved non primary checkpoint to '{self.path}'.")
-        def execute_initial(self, plan: TrainingPlan):
+        def restore(self, plan: TrainingPlan):
             if not self.primary: return
             if not self.path.exists():
                 logger.info(f"No prior state, starting from scratch.")
@@ -170,8 +178,10 @@ class TrainingPlan:
             for param_group in plan.optimizer.param_groups:
                 param_group['lr'] = self.value
             logger.info(f"Updated learning rate to {self.value}.")
-        def execute_initial(self, plan: TrainingPlan):
-            self.execute(plan)
+
+    class StopAction(Action):
+        def execute(self, plan: TrainingPlan):
+            plan.stop = True
 
     class _Rule(Action):
         actions: list[TrainingPlan.Action]
@@ -182,10 +192,6 @@ class TrainingPlan:
             if self.criteria.check(plan):
                 for action in self.actions:
                     action.execute(plan)
-        def execute_initial(self, plan: TrainingPlan):
-            if self.criteria.check_initial(plan):
-                for action in self.actions:
-                    action.execute_initial(plan)
 
     class _ActionBuilder:
         def __init__(self, plan: TrainingPlan, rule: TrainingPlan._Rule):
@@ -202,71 +208,75 @@ class TrainingPlan:
     #endregion
 
     rules: list[_Rule]
+    class _BatchGroup(NamedTuple):
+        name: str
+        batches: Batches
+        stats: StatContainer
+        backward: bool = False
+    batch_groups: list[_BatchGroup]
+    primary_checkpoint: CheckpointAction
     def __init__(self, model: torch.nn.Module):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.dtype = torch.float32
         self.epoch = 1
         self.model = model.to(device=self.device, dtype=self.dtype)
         self.data = {}
+        self.batch_groups = []
         self.rules = []
+        self.stop = False
+        self.primary_checkpoint = None
 
     def with_optimizer(self, optimizer: torch.optim.Optimizer) -> TrainingPlan:
         self.optimizer = optimizer
         return self
     
-    def with_stats(self, train_stats: StatContainer, val_stats: StatContainer, test_stats: StatContainer|None = None) -> TrainingPlan:
-        self.train_stats = train_stats
-        self.val_stats = val_stats
-        self.test_stats = test_stats
+    def with_batches(self, name: str, batches: Batches, stats: StatContainer, backward: bool = False) -> TrainingPlan:
+        self.batch_groups.append(TrainingPlan._BatchGroup(name, batches.to(device = self.device, dtype = self.dtype), stats, backward=backward))
         return self
     
-    def with_batches(self, train_batches: Batches, val_batches: Batches, test_batches: Batches|None = None) -> TrainingPlan:
-        self.train_batches = train_batches.to(device = self.device, dtype = self.dtype)
-        self.val_batches = val_batches.to(device = self.device, dtype = self.dtype)
-        self.test_batches = test_batches and test_batches.to(device = self.device, dtype = self.dtype)
+    def with_primary_checkpoint(self, checkpoint: CheckpointAction) -> TrainingPlan:
+        self.primary_checkpoint = checkpoint
         return self
 
-    def run(self, max_epoch = 10000):
+    def run(self, max_epoch = 10000000):
         try:
             logger.info(f"Running loop on device: {self.device}.")
-            logger.info(f"Using {len(self.train_batches)} training, {len(self.val_batches)} validation and {len(self.test_batches)} test batches.")
+            logger.info(f"Using {len(self.batch_groups)} batch groups.")
+            for entry in self.batch_groups:
+                logger.info(f"Batch group {entry.name} with {len(entry.batches)} batches.")
             logger.info(f"Model {type(self.model).__module__}.{type(self.model).__name__}.")
             logger.info(f"Optimizer {type(self.optimizer)}.")
-            for rule in self.rules: rule.execute_initial(self)
-            while self.epoch < max_epoch:
-                self.model.train()
-                with tqdm(self.train_batches, desc=f"Epoch {self.epoch}", leave=True) as bar:
-                    for batch in bar:
-                        input = batch[:-1]
-                        expect = batch[-1]
-                        self.optimizer.zero_grad()
-                        output = self.model(*input).squeeze()
-                        loss = self.train_stats.update(expect, output)
-                        loss.backward()
-                        self.optimizer.step()
-                        bar.set_postfix_str(str(self.train_stats))
-
-                self.model.eval()
-                with torch.no_grad():
-                    with tqdm(self.val_batches, desc = 'Validation...', leave=False) as bar:
-                        for batch in bar:
-                            input = batch[:-1]
-                            expect = batch[-1]
-                            output = self.model(*input).squeeze()
-                            self.val_stats.update(expect, output)
-                    print(f"Validation: {self.val_stats}")
-                    if self.test_batches and self.test_stats:
-                        with tqdm(self.test_batches, desc = 'Testing...', leave=False) as bar:
+            if self.primary_checkpoint: self.primary_checkpoint.restore(self)
+            while not self.stop and self.epoch < max_epoch:
+                for batch_group in self.batch_groups:
+                    if batch_group.backward:
+                        self.model.train()
+                        with tqdm(batch_group.batches, desc=f"Epoch {self.epoch} ({batch_group.name})", leave=False) as bar:
                             for batch in bar:
                                 input = batch[:-1]
                                 expect = batch[-1]
+                                self.optimizer.zero_grad()
                                 output = self.model(*input).squeeze()
-                                self.test_stats.update(expect, output)
-                        print(f"Testing: {self.test_stats}")
+                                loss = batch_group.stats.update(expect, output)
+                                loss.backward()
+                                self.optimizer.step()
+                                bar.set_postfix_str(str(batch_group.stats))
+                        print(f"Training group '{batch_group.name}' stats: {batch_group.stats}")
+                    else:
+                        self.model.eval()
+                        with torch.no_grad():
+                            with tqdm(batch_group.batches, desc = f'Evaluating {batch_group.name} batches...', leave=False) as bar:
+                                for batch in bar:
+                                    input = batch[:-1]
+                                    expect = batch[-1]
+                                    output = self.model(*input).squeeze()
+                                    batch_group.stats.update(expect, output)
+                            print(f"Evaluation group '{batch_group.name}' stats: {batch_group.stats}")
+
+
                 for rule in self.rules: rule.execute(self)
-                self.train_stats.clear()
-                self.val_stats.clear()
-                if self.test_stats: self.test_stats.clear()
+                if self.primary_checkpoint: self.primary_checkpoint.save(self)
+                for batch_group in self.batch_groups: batch_group.stats.clear()
                 self.epoch += 1
 
             logger.info(f"Stopped at epoch {self.epoch}")

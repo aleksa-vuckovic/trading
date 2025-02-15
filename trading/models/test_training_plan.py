@@ -18,7 +18,7 @@ class TestTrainingPlan(unittest.TestCase):
                 return self.i
         stats = StatContainer(CountCollector())
         def make_plan(stats: StatContainer):
-            return TrainingPlan(torch.nn.Sigmoid()).with_optimizer(None).with_stats(stats, stats).with_batches(Batches([]), Batches([]))
+            return TrainingPlan(torch.nn.Sigmoid()).with_optimizer(None).with_batches('train', Batches([]), stats=stats, backward=True).with_batches('val', Batches([]), stats=stats)
         plan = make_plan(stats)
         stats.update(None, None)
         stat_history.execute(plan)

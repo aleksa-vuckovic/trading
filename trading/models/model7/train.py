@@ -1,7 +1,7 @@
 import logging
 import torch
 from pathlib import Path
-from ..model1.train import add_stats, add_batches, add_triggers
+from ..model1.train import add_batches, add_triggers
 from .. import model6
 from ..training_plan import TrainingPlan
 from . import generator
@@ -17,7 +17,6 @@ Edit: seems to have been traned up to 15 after all.
 def run_loop(max_epoch = 10000) -> TrainingPlan:
     plan = TrainingPlan(model6.train.Model())
     plan.with_optimizer(torch.optim.Adam(plan.model.parameters()))
-    add_stats(plan)
     add_batches(plan, examples_folder=generator.FOLDER, extractor=model6.network.Extractor(), merge=10)
     add_triggers(plan, checkpoints_folder=checkpoints_folder, initial_lr=initial_lr)
     plan.run(max_epoch=max_epoch)

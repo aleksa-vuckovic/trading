@@ -1,7 +1,7 @@
 import logging
 import torch
 from pathlib import Path
-from ..model1.train import add_stats, add_batches, add_triggers
+from ..model1.train import add_batches, add_triggers
 from ..training_plan import TrainingPlan
 from .network import Model, Extractor
 from . import generator
@@ -19,7 +19,6 @@ initial_lr = 10e-6
 def run_loop(max_epoch = 10000) -> TrainingPlan:
     plan = TrainingPlan(Model())
     plan.with_optimizer(torch.optim.Adam(plan.model.parameters()))
-    add_stats(plan)
     add_batches(plan, examples_folder=generator.FOLDER, extractor=Extractor(), merge=10)
     add_triggers(plan, checkpoints_folder=checkpoints_folder, initial_lr=initial_lr)
     plan.run(max_epoch=max_epoch)
