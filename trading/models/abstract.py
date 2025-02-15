@@ -11,7 +11,7 @@ from ..utils import dateutils
 logger = logging.getLogger(__name__)
 
 class ExampleGenerator:
-    STATE_FILE = 'loop_state.json'
+    STATE_FILE = '_loop_state.json'
     def generate_example(
         self,
         ticker: nasdaq.NasdaqListedEntry,
@@ -19,11 +19,15 @@ class ExampleGenerator:
         with_output: bool = True
     ) -> dict[str, Tensor]:
         pass
-    
-    def run(self):
+    def run_loop(self, hour: int):
         pass
-
-    def run_loop(
+    def run(self):
+        """
+        Run loop for all hours
+        """
+        for hour in range(11, 17):
+            self.run_loop(hour)
+    def _run_loop(
         self,
         folder: Path,
         hour: int = 16,
@@ -31,8 +35,7 @@ class ExampleGenerator:
         time_frame_start: float = dateutils.str_to_unix(config.time_frame_start),
         time_frame_end: float = dateutils.str_to_unix(config.time_frame_end),
         start_time_offset: float = 75*24*3600,
-        batch_size: int = config.batch_size,
-        batch_prefix: str = config.batch_prefix
+        batch_size: int = config.batch_size
     ):
         if not folder.exists(): folder.mkdir(parents=True, exist_ok=True)
         state_path = folder / ExampleGenerator.STATE_FILE
@@ -77,7 +80,7 @@ class ExampleGenerator:
                 break
             data = {key:torch.stack([it[key] for it in current], dim=0) for key in current[0].keys()}
             iter += 1
-            batch_file = folder / f"{batch_prefix}_batch{iter}-{hour}.pt"
+            batch_file = folder / f"hour{hour}_time{int(unix_time)}_entry{entry}_batch{iter}.pt"
             if batch_file.exists():
                 raise Exception(f"Batch file {batch_file} already exists.")
             torch.save(data, batch_file)

@@ -4,7 +4,7 @@ import config
 from torch import Tensor
 from ..utils import get_time_relativized, PriceTarget, check_tensors
 from ..abstract import TensorExtractor
-from .import generator
+from . import generator
 
 TOTAL_POINTS = 100
 INPUT_FEATURES = 6

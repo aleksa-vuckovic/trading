@@ -14,10 +14,10 @@ from .abstract import TensorExtractor
 logger = logging.getLogger(__name__)
 
 def get_batch_files(path: Path) -> list[dict]:
-    pattern = re.compile(r"([^_]+)_batch(\d+)-(\d+).pt")
+    pattern = re.compile(r"hour(\d+)_time(\d+)_entry(\d+)_batch(\d+).pt")
     files = [ pattern.fullmatch(it) for it in os.listdir(path)]
-    files = [ {'path': path / it.group(0), 'source': it.group(1), 'batch': int(it.group(2)), 'hour': int(it.group(3))} for it in files if it ]
-    return sorted(files, key=lambda it: (it['batch'], it['hour'], it['source']))
+    files = [ {'path': path / it.group(0), 'hour': int(it.group(1)), 'time': int(it.group(2)), 'entry': int(it.group(3)), 'batch': int(it.group(4))} for it in files if it ]
+    return sorted(files, key=lambda it: (it['time'], it['entry'], it['hour']))
 
 def check_tensors(tensors: list[Tensor] | tuple[Tensor] | dict[object, Tensor], allow_zeros=True):
     if isinstance(tensors, (list, tuple)):

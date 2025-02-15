@@ -58,11 +58,18 @@ class CustomLoss(StatCollector):
 def make_stats(name: str) -> StatContainer:
     return StatContainer(CustomLoss(), Accuracy(), Precision(), Miss(), name=name)
 
-def add_batches(builder: TrainingPlan.Builder, examples_folder: Path, extractor: TensorExtractor, merge:int=1, make_stats: Callable[[str], StatContainer] = make_stats) -> TrainingPlan.Builder:
-    all_files = get_batch_files(examples_folder)
+def add_batches(
+    builder: TrainingPlan.Builder,
+    examples_folder: Path,
+    extractor: TensorExtractor,
+    merge:int=1,
+    make_stats: Callable[[str], StatContainer] = make_stats,
+    hour: int|None = 11
+) -> TrainingPlan.Builder:
+    all_files = [it for it in get_batch_files(examples_folder) if not hour or it['hour'] == hour]
     test_i = int(len(all_files)*0.05)
     train_files = [it['path'] for it in all_files[:-test_i] if it['batch'] % 6]
-    val_files = [it['path'] for it in all_files[:-test_i] if it['batch']%6 == 0]
+    val_files = [it['path'] for it in all_files[:-test_i] if it['batch'] % 6 == 0]
     test_files = [it['path'] for it in all_files[-test_i:]]
     return builder.with_batches(name='train', batches=Batches(train_files, extractor=extractor, merge=merge), stats=make_stats('train'), backward=True)\
         .with_batches(name='val', batches=Batches(val_files, extractor=extractor, merge=merge), stats=make_stats('val'), backward=False)\
@@ -97,6 +104,6 @@ def get_plan() -> TrainingPlan:
     model = Model()
     builder = TrainingPlan.Builder(model)
     builder.with_optimizer(torch.optim.Adam(model.parameters()))
-    add_batches(builder, examples_folder=generator.FOLDER, extractor=Extractor(), merge=1)
+    add_batches(builder, examples_folder=generator.FOLDER, extractor=Extractor(), merge=1, hour=None)
     add_triggers(builder, checkpoints_folder=checkpoints_folder, initial_lr=initial_lr)
     return builder.build()

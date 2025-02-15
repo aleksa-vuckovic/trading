@@ -33,7 +33,7 @@ DATA = 'data'
 FOLDER = Path(__file__).parent / 'examples'
 class Generator(ExampleGenerator):
     def run(self):
-        return self.run_loop(
+        return self._run_loop(
             folder = FOLDER,
             hour = 16
         )

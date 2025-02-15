@@ -1,1 +1,1 @@
-from . import generator, train
+from . import generator, network, train

@@ -27,10 +27,12 @@ FOLDER = Path(__file__).parent / 'examples'
 
 class Generator(ExampleGenerator):
     def run(self):
-        self.run_loop(
-            folder = FOLDER,
-            hour = 16
-        )
+        for hour in range(11, 17):
+            logger.info(f"-------------Starting loop for {hour}----------------")
+            self._run_loop(
+                folder = FOLDER,
+                hour = hour
+            )
     def generate_example(
         self,
         ticker: nasdaq.NasdaqListedEntry,
