@@ -94,8 +94,12 @@ def _get_pricing(
     if interval == Interval.H1: query_from = max(query_from, now - 729*24*3600)
     query_to = unix_to
     if query_to <= query_from:
-        return {"meta": {}, "events": [], "data": []}
-    data = _get_pricing_raw(ticker, query_from, query_to, interval)
+        return {"meta": {}, "events": {}, "data": []}
+    try:
+        data = _get_pricing_raw(ticker, query_from, query_to, interval)
+    except common.BadResponseException:
+        logger.error(f"Bad response for {ticker} from {unix_from} to {unix_to} at {interval}. PERMANENT EMPTY RETURN!", exc_info=True)
+        return { "meta": {}, "events": {}, "data": [] }
     def get_meta(data):
         return data['chart']['result'][0]['meta']
     def get_events(data):
@@ -174,7 +178,11 @@ def get_splits(data: dict) -> dict:
 def _get_info(ticker: str) -> dict:
     info = yfinance.Ticker(ticker).info
     mock_time = int(time.time() - 15*24*3600)
-    meta = _get_pricing_raw(ticker, mock_time-3*24*3600, mock_time, Interval.D1)['chart']['result'][0]['meta']
+    try:
+        meta = _get_pricing_raw(ticker, mock_time-3*24*3600, mock_time, Interval.D1)['chart']['result'][0]['meta']
+    except common.BadResponseException:
+        logger.error(f"Bad response for {ticker} in _get_info. PERMANENT EMPTY RETURN!", exc_info=True)
+        meta = {}
     return {**info, **meta}
 
 def get_info(ticker: str) -> dict:

@@ -2,7 +2,7 @@ import logging
 import time
 import bisect
 from torch.nn import Module
-from typing import Callable
+from typing import Callable, Any
 from matplotlib import pyplot as plt
 from ..data import nasdaq, aggregate
 from ..utils import dateutils
@@ -27,7 +27,7 @@ class Evaluator:
         self,
         tickers: list[nasdaq.NasdaqListedEntry]|None = None,
         unix_time: float|None = None,
-        on_update: Callable[[list[dict]]]|None = None
+        on_update: Callable[[list[dict]], Any]|None = None
     ) -> list[nasdaq.NasdaqListedEntry]:
         """
         Evaluate model results for all tickers, on unix_time or live (if None).
