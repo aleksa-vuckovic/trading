@@ -323,6 +323,7 @@ class TrainingPlan:
             #cols = math.ceil(len(values)/rows)
             fig, axes = plt.subplots(1,1)
             fig.suptitle(f"Metric: {metric}")
+            axes.set_xlabel('Epoch')
             for group, color in zip(values.keys(), plotutils.COLORS):
                 axes.plot(epochs, values[group], color=color, label=group)
             axes.legend()

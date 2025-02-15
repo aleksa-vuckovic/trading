@@ -1,7 +1,10 @@
 import logging
 import torch
+import os
+import random
 from torch import Tensor
 from pathlib import Path
+from matplotlib import pyplot as plt
 from ...utils import dateutils
 from ...utils.common import Interval
 from ...data import aggregate, nasdaq
@@ -69,3 +72,23 @@ class Generator(ExampleGenerator):
         after_data = torch.tensor([max(d1_after_prices), max(d2_after_prices), max(d5_after_prices)], dtype=torch.float64)
         check_tensor(after_data, allow_zeros=False)
         return {D1_DATA: d1_data, H1_DATA: h1_data, AFTER_DATA: after_data}
+
+    def plot_statistics(self):
+        #Bin distribution of after values
+        temp = []
+        for file in random.shuffle(FOLDER/it for it in os.listdir(FOLDER))[:20]:
+            batch = torch.load(file)
+            data = (batch[AFTER_DATA] - batch[H1_DATA][:,-1:])/(batch[H1_DATA][:,-1:])
+            temp.append(data)
+        data = torch.concat(data, dim=0)
+        d1_data = data[:,D1_AFTER_I]*100
+        d2_data = data[:,D2_AFTER_I]*100
+        d5_data = data[:,D5_AFTER_I]*100
+        for data, name in [(d1_data, 'D1'), (d2_data, 'D2'), (d5_data, 'D3')]:
+            fig, axes = plt.subplots(1,1)
+            fig.suptitle(name)
+            axes.set_xlabel('Percentage change')
+            axes.set_ylabel('Number of examples')
+            axes.hist(data, bins=range(-100,100,10), edgecolor='black')
+        plt.show()
+
