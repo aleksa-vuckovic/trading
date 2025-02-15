@@ -229,7 +229,7 @@ class TrainingPlan:
     def run(self, max_epoch = 10000):
         try:
             logger.info(f"Running loop on device: {self.device}.")
-            logger.info(f"Using {len(self.train_batches)} training, {len(self.val_batches)} validation and {len(self.test_batches)} batches.")
+            logger.info(f"Using {len(self.train_batches)} training, {len(self.val_batches)} validation and {len(self.test_batches)} test batches.")
             logger.info(f"Model {type(self.model).__module__}.{type(self.model).__name__}.")
             logger.info(f"Optimizer {type(self.optimizer)}.")
             for rule in self.rules: rule.execute_initial(self)
