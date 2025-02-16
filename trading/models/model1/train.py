@@ -4,9 +4,8 @@ from pathlib import Path
 from typing import Callable
 from ..stats import StatCollector, StatContainer
 from ..training_plan import TrainingPlan
-from ..abstract import TensorExtractor
 from ..utils import Batches, get_batch_files
-from .network import Model, Extractor
+from .network import Model
 from . import generator
 
 logger = logging.getLogger(__name__)
@@ -61,7 +60,6 @@ def make_stats(name: str) -> StatContainer:
 def add_batches(
     builder: TrainingPlan.Builder,
     examples_folder: Path,
-    extractor: TensorExtractor,
     merge:int=1,
     make_stats: Callable[[str], StatContainer] = make_stats,
     hour: int|None = 11
@@ -71,9 +69,9 @@ def add_batches(
     train_files = [it['path'] for it in all_files[:-test_i] if it['batch'] % 6]
     val_files = [it['path'] for it in all_files[:-test_i] if it['batch'] % 6 == 0]
     test_files = [it['path'] for it in all_files[-test_i:]]
-    return builder.with_batches(name='train', batches=Batches(train_files, extractor=extractor, merge=merge), stats=make_stats('train'), backward=True)\
-        .with_batches(name='val', batches=Batches(val_files, extractor=extractor, merge=merge), stats=make_stats('val'), backward=False)\
-        .with_batches(name='test', batches=Batches(test_files, extractor=extractor, merge=merge), stats=make_stats('train'), backward=False)
+    return builder.with_batches(name='train', batches=Batches(train_files, merge=merge), stats=make_stats('train'), backward=True)\
+        .with_batches(name='val', batches=Batches(val_files, merge=merge), stats=make_stats('val'), backward=False)\
+        .with_batches(name='test', batches=Batches(test_files, merge=merge), stats=make_stats('train'), backward=False)
 
 def add_triggers(builder: TrainingPlan.Builder, checkpoints_folder: Path, initial_lr: float) -> TrainingPlan.Builder:
     builder.when(TrainingPlan.AlwaysTrigger())\
@@ -104,6 +102,6 @@ def get_plan() -> TrainingPlan:
     model = Model()
     builder = TrainingPlan.Builder(model)
     builder.with_optimizer(torch.optim.Adam(model.parameters()))
-    add_batches(builder, examples_folder=generator.FOLDER, extractor=Extractor(), merge=1, hour=None)
+    add_batches(builder, examples_folder=generator.FOLDER, merge=1, hour=None)
     add_triggers(builder, checkpoints_folder=checkpoints_folder, initial_lr=initial_lr)
     return builder.build()

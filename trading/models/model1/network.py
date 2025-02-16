@@ -4,7 +4,7 @@ import torchinfo
 import config
 from torch import Tensor
 from ..utils import PriceTarget, check_tensors
-from ..abstract import TensorExtractor
+from ..abstract import AbstractModel
 from . import generator
 
 class IndividualTextLayer(torch.nn.Module):
@@ -168,7 +168,7 @@ class SeriesLayer(torch.nn.Module):
         results = [self.individual_layers[i](series[i]) for i in range(4)]
         return torch.concat(results, dim=1)
 
-class Model(torch.nn.Module):
+class Model(AbstractModel):
     """64 layers"""
     def __init__(self, individual_text_features: int = 40, final_text_features: int = 100, series_features: int = 100):
         super().__init__()
@@ -196,17 +196,8 @@ class Model(torch.nn.Module):
         res = self.dense2(res)
         res = self.dense3(res)
         return res
-    
-    @staticmethod
-    def print_summary():
-        model = Model()
-        input = [(config.batch_size, generator.D1_PRICES)]*2
-        input += [(config.batch_size, generator.H1_PRICES)]*2
-        input += [(config.batch_size, generator.TEXT_EMBEDDING_SIZE)]*3
-        torchinfo.summary(model, input_size=input)
 
-class Extractor(TensorExtractor):
-    def extract_tensors(self, example: dict[str, Tensor]):
+    def extract_tensors(self, example: dict[str, Tensor]) -> tuple[Tensor, ...]:
         batch = example[generator.DATA]
         if len(batch.shape) < 2: batch = batch.unsqueeze(dim = 0)
         series1 = batch[:,generator.D1_PRICES_I:generator.D1_PRICES_I+generator.D1_PRICES]
@@ -224,3 +215,10 @@ class Extractor(TensorExtractor):
             result += (expect,)
         check_tensors(result)
         return result
+    
+    def print_summary(self, merge: int = 10):
+        model = Model()
+        input = [(config.batch_size*merge, generator.D1_PRICES)]*2
+        input += [(config.batch_size*merge, generator.H1_PRICES)]*2
+        input += [(config.batch_size*merge, generator.TEXT_EMBEDDING_SIZE)]*3
+        torchinfo.summary(model, input_size=input)

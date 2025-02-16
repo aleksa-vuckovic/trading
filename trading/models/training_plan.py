@@ -9,6 +9,7 @@ from matplotlib import pyplot as plt
 from ..utils import plotutils
 from .stats import StatContainer
 from .utils import Batches
+from .abstract import AbstractModel
 
 logger = logging.getLogger(__name__)
 STAT_HISTORY = 'stat_history'
@@ -211,7 +212,7 @@ class TrainingPlan:
 
     device: str
     dtype: str
-    model: torch.nn.Module
+    model: AbstractModel
     optimizer: torch.optim.Optimizer
     batch_groups: list[_BatchGroup]
     rules: list[_Rule]
@@ -228,7 +229,7 @@ class TrainingPlan:
             return self
 
     class Builder:
-        def __init__(self, model: torch.nn.Module):
+        def __init__(self, model: AbstractModel):
             self.plan = TrainingPlan()
             self.plan.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             self.plan.dtype = torch.float32
@@ -279,8 +280,9 @@ class TrainingPlan:
                         self.model.train()
                         with tqdm(batch_group.batches, desc=f"Epoch {self.epoch} ({batch_group.name})", leave=False) as bar:
                             for batch in bar:
-                                input = batch[:-1]
-                                expect = batch[-1]
+                                tensors = self.model.extract_tensors(batch)
+                                input = tensors[:-1]
+                                expect = tensors[-1]
                                 self.optimizer.zero_grad()
                                 output = self.model(*input).squeeze()
                                 loss = batch_group.stats.update(expect, output)

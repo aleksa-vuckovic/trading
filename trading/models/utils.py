@@ -9,7 +9,6 @@ from pathlib import Path
 from enum import Enum
 from pathlib import Path
 from matplotlib import pyplot as plt
-from .abstract import TensorExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -147,10 +146,9 @@ class PriceTarget(Enum):
         plt.show()
 
 class Batches:
-    def __init__(self, files: list[str | Path], merge: int = 1, extractor: TensorExtractor|None = None, device: str = "cpu", dtype = torch.float32):
+    def __init__(self, files: list[str | Path], merge: int = 1, device: str = "cpu", dtype = torch.float32):
         self.files = files
         self.merge = merge
-        self.extractor = extractor
         self.device = device
         self.dtype = dtype
 
@@ -179,8 +177,6 @@ class Batches:
             else:
                 data = torch.cat([torch.load(it, weights_only=True) for it in files], dim=0).to(device = self.batches.device, dtype=self.batches.dtype)
                 logger.debug(f"Loaded batch with shape {data.shape}")
-            if self.batches.extractor:
-                data = self.batches.extractor.extract_tensors(data)
             self.i += len(files)
             return data
 

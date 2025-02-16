@@ -3,7 +3,7 @@ import torch
 from pathlib import Path
 from .. import model1, model2
 from ..training_plan import TrainingPlan
-from .network import Model, Extractor
+from .network import Model
 
 logger = logging.getLogger(__name__)
 checkpoints_folder = Path(__file__).parent / 'checkpoints'
@@ -17,6 +17,6 @@ def get_plan(hour: int) -> TrainingPlan:
     model = Model()
     plan = TrainingPlan.Builder(model)
     plan.with_optimizer(torch.optim.Adam(model.parameters()))
-    model1.train.add_batches(plan, hour=hour, examples_folder=model2.generator.FOLDER, extractor=Extractor(), merge=10)
+    model1.train.add_batches(plan, hour=hour, examples_folder=model2.generator.FOLDER, merge=10)
     model1.train.add_triggers(plan, checkpoints_folder=checkpoints_folder, initial_lr=initial_lr)
     return plan.build()

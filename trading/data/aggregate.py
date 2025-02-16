@@ -17,7 +17,7 @@ def get_first_trade_time(ticker: nasdaq.NasdaqListedEntry) -> float:
     return yahoo.get_first_trade_time(ticker.symbol)
 def get_market_cap(ticker: nasdaq.NasdaqListedEntry) -> float:
     return yahoo.get_market_cap(ticker.symbol)
-def get_sorted_tickers() -> list[dict]:
+def get_sorted_tickers() -> list[nasdaq.NasdaqListedEntry]:
     tickers = []
     for it in nasdaq.get_filtered_entries():
         try:
@@ -36,7 +36,7 @@ def get_sorted_tickers() -> list[dict]:
             logger.error(f"Skipping {it.symbol}. No company summary.")
             continue
         tickers.append({"ticker": it, "unix_time": first_trade})
-    return sorted(tickers, key=lambda it: it["unix_time"])
+    return [it['ticker'] for it in sorted(tickers, key=lambda it: it["unix_time"])]
 
 def get_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, interval: Interval, return_quotes=['close','volume']) -> tuple[list[float], ...]:
     now = time.time()

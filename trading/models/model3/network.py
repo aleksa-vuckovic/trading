@@ -1,7 +1,8 @@
 import torch
+import torchinfo
+import config
 from torch import Tensor
 from .. import model2
-from ..abstract import TensorExtractor
 from ..utils import PriceTarget, get_moving_average, get_time_relativized, check_tensors
 
 TOTAL_POINTS = 100
@@ -11,7 +12,6 @@ class Model(model2.network.Model):
     def __init__(self):
         super().__init__(input_features=INPUT_FEATURES)
 
-class Extractor(TensorExtractor):
     def extract_tensors(self, example: dict[str, Tensor]):
         if len(example[model2.generator.D1_DATA].shape) < 3:
             example = {key: example[key].unsqueeze(dim=0) for key in example}
@@ -43,5 +43,7 @@ class Extractor(TensorExtractor):
         check_tensors(result)
         return result
 
-
+    def print_summary(self, merge:int = 10):
+        input = [(config.batch_size*merge, self.input_features, TOTAL_POINTS)]*2
+        torchinfo.summary(self, input_size=input)
 

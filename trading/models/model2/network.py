@@ -3,7 +3,7 @@ import torchinfo
 import config
 from torch import Tensor
 from ..utils import get_time_relativized, PriceTarget, check_tensors
-from ..abstract import TensorExtractor
+from ..abstract import AbstractModel
 from . import generator
 
 TOTAL_POINTS = 100
@@ -35,7 +35,7 @@ class ConvolutionalLayer(torch.nn.Module):
     def forward(self, series):
         return self.layer(series)
 
-class Model(torch.nn.Module):
+class Model(AbstractModel):
     """64 layers"""
     def __init__(self, input_features: int = INPUT_FEATURES):
         super().__init__()
@@ -72,12 +72,7 @@ class Model(torch.nn.Module):
           self.hourly(hourly)  
         ], dim=1)
         return self.dense(output)
-    
-    def print_summary(self):
-        input = [(config.batch_size*10, self.input_features, TOTAL_POINTS)]*2
-        torchinfo.summary(self, input_size=input)
 
-class Extractor(TensorExtractor):
     def extract_tensors(self, example: dict[str, Tensor]) -> tuple[Tensor, ...]:
         if len(example[generator.D1_DATA].shape) < 3:
             example = {key: example[key].unsqueeze(dim=0) for key in example}
@@ -107,3 +102,7 @@ class Extractor(TensorExtractor):
 
         check_tensors(result)
         return result
+    
+    def print_summary(self, merge: int = 10):
+        input = [(config.batch_size*merge, self.input_features, TOTAL_POINTS)]*2
+        torchinfo.summary(self, input_size=input)
