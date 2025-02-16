@@ -17,3 +17,5 @@ checkpoint.pth
 checkpoints/
 checkpoints_*/
 /main.py
+result.json
+backtests/

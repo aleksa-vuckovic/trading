@@ -79,10 +79,11 @@ class Model(torch.nn.Module):
 
 class Extractor(TensorExtractor):
     def extract_tensors(self, example: dict[str, Tensor]) -> tuple[Tensor, ...]:
+        if len(example[generator.D1_DATA].shape) < 3:
+            example = {key: example[key].unsqueeze(dim=0) for key in example}
         daily = example[generator.D1_DATA]
         hourly = example[generator.H1_DATA]
-        if len(daily.shape) < 3:
-            example = {key: example[key].unsqueeze(dim=0) for key in example}
+        
 
         def process(tensor: Tensor):
             tensor = tensor[:,-TOTAL_POINTS:,:]
@@ -105,4 +106,4 @@ class Extractor(TensorExtractor):
             result += (after,)
 
         check_tensors(result)
-        return daily, hourly, after
+        return result

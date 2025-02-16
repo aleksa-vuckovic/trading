@@ -12,11 +12,12 @@ class Model(model2.network.Model):
         super().__init__(input_features=INPUT_FEATURES)
 
 class Extractor(TensorExtractor):
-    def extract_tensors(self, example):
+    def extract_tensors(self, example: dict[str, Tensor]):
+        if len(example[model2.generator.D1_DATA].shape) < 3:
+            example = {key: example[key].unsqueeze(dim=0) for key in example}
         daily = example[model2.generator.D1_DATA]
         hourly = example[model2.generator.H1_DATA]
-        if len(daily.shape) < 3:
-            example = {key: example[key].unsqueeze(dim=0) for key in example}
+
 
         def process(tensor: Tensor):
             tensor = tensor[:,-TOTAL_POINTS-MOVING_AVG:,:]
