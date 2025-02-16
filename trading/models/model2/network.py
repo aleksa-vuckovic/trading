@@ -3,7 +3,7 @@ import torchinfo
 import config
 from torch import Tensor
 from ..utils import get_time_relativized, PriceTarget, check_tensors
-from ..abstract import AbstractModel
+from ..abstract import AbstractModel, ModelMetadata
 from . import generator
 
 TOTAL_POINTS = 100
@@ -106,3 +106,9 @@ class Model(AbstractModel):
     def print_summary(self, merge: int = 10):
         input = [(config.batch_size*merge, self.input_features, TOTAL_POINTS)]*2
         torchinfo.summary(self, input_size=input)
+
+    def get_metadata(self) -> ModelMetadata:
+        return ModelMetadata(projection_period=1, description="""
+            Predict price change on a tanh scale for the next business day,
+            based on OHLCV time series (daily an hourly).
+        """)

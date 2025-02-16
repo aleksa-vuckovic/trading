@@ -5,6 +5,7 @@ import config
 from torch import Tensor
 from pathlib import Path
 from tqdm import tqdm
+from typing import NamedTuple
 from ..data import nasdaq, aggregate
 from ..utils import dateutils
 
@@ -94,6 +95,16 @@ class ExampleGenerator:
             current.clear()
 
 
+class ModelMetadata(NamedTuple):
+    """
+    Args:
+        projection_period: The projected period length in business days.
+        description: Short description of what the model is trained to do.
+    """
+    projection_period: int
+    description: str
+
+
 class AbstractModel(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -101,5 +112,8 @@ class AbstractModel(torch.nn.Module):
         pass
     def print_summary(self, merge: int = 10):
         pass
+    def get_metadata(self) -> ModelMetadata:
+        pass
+
 
    

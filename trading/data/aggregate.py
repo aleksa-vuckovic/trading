@@ -64,18 +64,6 @@ def get_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: flo
             return recent
     else:
         return yahoo.get_pricing(ticker.symbol, unix_from, unix_to, interval, return_quotes=return_quotes, backup_behavior=httputils.BackupBehavior.RETHROW|httputils.BackupBehavior.SLEEP)
-def get_pricing_live(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, interval: Interval, return_quotes=['close', 'volume']) -> tuple:
-    try:
-        return yahoo.get_pricing(ticker.symbol, unix_from, unix_to, interval, return_quotes=return_quotes)
-    except:
-        logger.warning(f"Failed live yahoo for {ticker.symbol}.")
-        pass
-    try:
-        return wsj.get_pricing(ticker.symbol, unix_from, unix_to, interval, return_quotes=return_quotes)
-    except:
-        logger.warning(f"Failed wsj for {ticker.symbol}.")
-        pass
-    return financialtimes.get_pricing(ticker.symbol, unix_from, unix_to, interval, return_quotes=return_quotes)
 
 def get_market_summary(unix_time: float) -> str:
     return zacks.get_summary(unix_time, backup_behavior=httputils.BackupBehavior.RETHROW|httputils.BackupBehavior.SLEEP)

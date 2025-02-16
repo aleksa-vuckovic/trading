@@ -49,6 +49,9 @@ def escape_filename(name: str):
         return f"[[{name}]]"
     return name
 
+def get_full_classname(obj: object) -> str:
+    return f"{type(obj).__module__}.{type(obj).__name__}"
+
 class BinarySearchEdge(Enum):
     LOW ='low'
     HIGH = 'high'

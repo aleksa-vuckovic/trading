@@ -6,7 +6,7 @@ from tqdm import tqdm
 from pathlib import Path
 from typing import Callable, NamedTuple
 from matplotlib import pyplot as plt
-from ..utils import plotutils
+from ..utils import plotutils, common
 from .stats import StatContainer
 from .utils import Batches
 from .abstract import AbstractModel
@@ -270,7 +270,7 @@ class TrainingPlan:
             logger.info(f"Using {len(self.batch_groups)} batch groups.")
             for entry in self.batch_groups:
                 logger.info(f"Batch group {entry.name} with {len(entry.batches)} batches.")
-            logger.info(f"Model {type(self.model).__module__}.{type(self.model).__name__}.")
+            logger.info(f"Model {common.get_full_classname(self.model)}.")
             logger.info(f"Optimizer {type(self.optimizer)}.")
             
             while not self.stop and self.epoch < max_epoch:

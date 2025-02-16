@@ -4,6 +4,7 @@ import config
 from torch import Tensor
 from .. import model2
 from ..utils import PriceTarget, get_moving_average, get_time_relativized, check_tensors
+from ..abstract import ModelMetadata
 
 TOTAL_POINTS = 100
 INPUT_FEATURES = 10
@@ -47,3 +48,9 @@ class Model(model2.network.Model):
         input = [(config.batch_size*merge, self.input_features, TOTAL_POINTS)]*2
         torchinfo.summary(self, input_size=input)
 
+    def get_metadata(self) -> ModelMetadata:
+        return ModelMetadata(projection_period=1, description="""
+            Predict price change on a tanh scale for the next business day,
+            based on OHLCV time series (daily an hourly),
+            and their 10-data-point moving average counterparts.
+        """)
