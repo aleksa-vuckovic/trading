@@ -182,16 +182,18 @@ class Evaluator:
             except:
                 logger.error(f"Failed to evaluate at {dateutils.unix_to_datetime(unix_time)}.", exc_info=True)
         plt.ioff()
-        modelname = type(self.model).__name__
+        model_name = type(self.model).__name__
+        selector_name = type(selector).__name__
         tosave = {
             'history': history,
             'unix_from': unix_from,
             'unix_to': unix_to,
-            'model': type(self.model).__name__,
+            'model': model_name,
             'hour': hour,
-            'selector': type(selector).__name__
+            'selector': selector_name
         }
-        path = FOLDER / f"{}"
+        path = FOLDER / f"backtest{time.time()}_{model_name}_{selector_name}_hour{hour}.json"
+        path.write_text(json.dumps(tosave))
         plt.show(block = True)
         return history
 
