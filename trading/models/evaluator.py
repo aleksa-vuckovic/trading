@@ -1,7 +1,9 @@
 import logging
 import time
 import bisect
+import matplotlib.lines
 import torch
+import matplotlib
 from tqdm import tqdm
 from torch.nn import Module
 from typing import Callable, Any
@@ -95,10 +97,11 @@ class Evaluator:
         ax2.set_title('Cumulative gain')
         ax1.set_xlabel('Days')
         ax2.set_xlabel('Days')
+        ax1.scatt
         mock = [1,2]
-        lines = {
-            LAST_WIN: ax1.scatter(mock, mock, s=2, color = 'blue', label = LAST_WIN),
-            REAL_LAST_WIN: ax1.scatter(mock, mock, s=2, color='red', label = REAL_LAST_WIN),
+        lines: dict[str, matplotlib.lines.Line2D] = {
+            LAST_WIN: ax1.plot(mock, mock, color = 'blue', label = LAST_WIN, marker='o', markersize=2, linestyle='')[0],
+            REAL_LAST_WIN: ax1.plot(mock, mock, color='red', label = REAL_LAST_WIN, marker='o', markersize=2, linestyle='')[0],
             WIN: ax2.plot(mock, mock, color = 'blue', label = WIN)[0],
             REAL_WIN: ax2.plot(mock, mock, color = 'red', label = REAL_WIN)[0],
         }
@@ -129,8 +132,8 @@ class Evaluator:
                 logger.info(f"Output: {output}. Market cap: {market_cap}.")
                 logger.info(f"WIN: {history[LAST_WIN][-1]}. REAL WIN {history[REAL_LAST_WIN][-1]}")
 
-                lines[LAST_WIN].set_offsets([[i, history[LAST_WIN][i]] for i in range(len(history[LAST_WIN]))])
-                lines[REAL_LAST_WIN].set_offsets([[i, history[REAL_LAST_WIN][i]] for i in range(len(history[REAL_LAST_WIN]))])
+                lines[LAST_WIN].set_data(range(len(history[LAST_WIN])), history[LAST_WIN])
+                lines[REAL_LAST_WIN].set_data(range(len(history[REAL_LAST_WIN])), history[REAL_LAST_WIN])
                 lines[WIN].set_data(range(len(history[WIN])), history[WIN])
                 lines[REAL_WIN].set_data(range(len(history[REAL_WIN])), history[REAL_WIN])
                 plotutils.refresh_interactive_figures(fig1, fig2)
