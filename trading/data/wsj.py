@@ -3,13 +3,14 @@ import logging
 from ..utils.common import Interval
 from ..utils import httputils, dateutils, common
 from .utils import combine_series, fix_daily_timestamps, filter_by_timestamp, separate_quotes
+from .caching import cached_scalar, cached_series, CACHE_ROOT
 
 logger = logging.getLogger(__name__)
 _TOKEN_KEY='Dylan2010.Entitlementtoken'
 _TOKEN_VALUE='57494d5ed7ad44af85bc59a51dd87c90'
 _CKEY='57494d5ed7'
 _MODULE: str = __name__.split(".")[-1]
-_CACHE = common.CACHE / _MODULE
+_CACHE = CACHE_ROOT / _MODULE
 
 
 """
@@ -95,7 +96,7 @@ def _fix_timestamps(timestamps: list[float|int|None], interval: Interval) -> lis
         return result
     else: raise Exception(f"Unknown interval {Interval}")
 
-@common.cached_series(
+@cached_series(
     unix_from_arg=1,
     unix_to_arg=2,
     include_args=[0,3],
@@ -107,7 +108,7 @@ def _fix_timestamps(timestamps: list[float|int|None], interval: Interval) -> lis
     return_series_only=False,
     time_step_fn=10000000
 )
-@common.backup_timeout()
+@httputils.backup_timeout()
 def _get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interval) -> dict:
     if interval == Interval.H1: step = 'PT30M'
     elif interval == Interval.D1: step = 'P1D'

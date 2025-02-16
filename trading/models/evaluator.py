@@ -25,6 +25,7 @@ LAST_WIN = 'last_win'
 REAL_LAST_WIN = 'real_last_win'
 
 FOLDER = Path(__file__).parent / 'backtests'
+if not FOLDER.exists(): FOLDER.mkdir()
 
 class Result(NamedTuple):
     ticker: nasdaq.NasdaqListedEntry

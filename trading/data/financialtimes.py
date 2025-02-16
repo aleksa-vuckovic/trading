@@ -6,12 +6,13 @@ from pathlib import Path
 from ..utils.common import Interval
 from ..utils import httputils, dateutils, common
 from .utils import combine_series, fix_daily_timestamps, separate_quotes
+from .caching import cached_scalar, cached_series, CACHE_ROOT
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
-_CACHE: Path = common.CACHE / _MODULE
+_CACHE: Path = CACHE_ROOT / _MODULE
 
-@common.cached_scalar(
+@cached_scalar(
     include_args=[0],
     path_fn=lambda args: _CACHE/args[0]/'info'
 )
@@ -91,7 +92,7 @@ def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
     else:
         raise Exception(f"Unknown interval {interval}")
 
-@common.cached_series(
+@cached_series(
     unix_from_arg=1,
     unix_to_arg=2,
     include_args=[0,3],
@@ -103,7 +104,7 @@ def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
     time_step_fn=10000000,
     timestamp_field='t'
 )
-@common.backup_timeout()
+@httputils.backup_timeout()
 def _get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interval) -> dict:
     days = math.ceil((time.time() - unix_from)/(24*3600)) + 1
     if days <= 3: days = 4

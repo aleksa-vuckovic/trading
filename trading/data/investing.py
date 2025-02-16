@@ -4,10 +4,11 @@ import math
 from pathlib import Path
 from ..utils import httputils, common
 from ..utils.common import Interval
+from .caching import cached_scalar, cached_series, CACHE_ROOT
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
-_CACHE: Path = common.CACHE / _MODULE
+_CACHE: Path = CACHE_ROOT / _MODULE
 
 def _interval_to_str(interval: Interval) -> str:
   if interval == Interval.H1: return '60'
@@ -15,11 +16,11 @@ def _interval_to_str(interval: Interval) -> str:
 
 carrier = "bc26ca13e9d438b569fcb3b5769c64e2/1738843815"
 
-@common.cached_scalar(
+@cached_scalar(
     include_args=[0],
     path_fn=lambda args: _CACHE/common.escape_filename(args[0])/'info'
 )
-@common.backup_timeout()
+@httputils.backup_timeout()
 def _get_info(ticker: str, exchange: str = 'NASDAQ') -> dict:
   url = f"https://tvc4.investing.com/{carrier}/1/1/8/symbols?symbol={exchange.upper()}%20%3A{ticker.upper()}"
   resp = httputils.get_as_browser(url)

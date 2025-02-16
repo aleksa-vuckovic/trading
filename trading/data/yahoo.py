@@ -8,6 +8,7 @@ from pathlib import Path
 from ..utils import httputils, common, dateutils
 from ..utils.common import Interval
 from .utils import combine_series, fix_daily_timestamps, separate_quotes
+from .caching import cached_scalar, cached_series, CACHE_ROOT
 
 """
 Hourly data from yahoo covers 1 hour periods starting from 9:30.
@@ -17,7 +18,7 @@ The timestamps correspond to the START of the period (not the end!).
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
-_CACHE: Path = common.CACHE / _MODULE
+_CACHE: Path = CACHE_ROOT / _MODULE
 _MIN_AFTER_FIRST_TRADE = 14*24*3600 # The minimum time after the first trade time to query for prices
 _MIN_ADJUSTMENT_PERIOD = 10*24*3600
 
@@ -69,7 +70,7 @@ def _fix_timestamps(timestamps: list[float], interval: Interval):
         return result
     raise Exception(f"Unknown interval {interval}")
 
-@common.cached_series(
+@cached_series(
     unix_from_arg=1,
     unix_to_arg=2,
     include_args=[0,3],
@@ -81,7 +82,7 @@ def _fix_timestamps(timestamps: list[float], interval: Interval):
     refresh_delay_fn=lambda args: args[1].refresh_time(),
     return_series_only=False
 )
-@common.backup_timeout()
+@httputils.backup_timeout()
 def _get_pricing(
     ticker: str,
     unix_from: float, #unix
@@ -97,7 +98,7 @@ def _get_pricing(
         return {"meta": {}, "events": {}, "data": []}
     try:
         data = _get_pricing_raw(ticker, query_from, query_to, interval)
-    except common.BadResponseException:
+    except httputils.BadResponseException:
         logger.error(f"Bad response for {ticker} from {unix_from} to {unix_to} at {interval}. PERMANENT EMPTY RETURN!", exc_info=True)
         return { "meta": {}, "events": {}, "data": [] }
     def get_meta(data):
@@ -171,7 +172,7 @@ def get_splits(data: dict) -> dict:
         return data['events']['splits']
     return {}
 
-@common.cached_scalar(
+@cached_scalar(
     include_args=[0],
     path_fn=lambda args: _CACHE / common.escape_filename(args[0]) / 'info'
 )
@@ -180,7 +181,7 @@ def _get_info(ticker: str) -> dict:
     mock_time = int(time.time() - 15*24*3600)
     try:
         meta = _get_pricing_raw(ticker, mock_time-3*24*3600, mock_time, Interval.D1)['chart']['result'][0]['meta']
-    except common.BadResponseException:
+    except httputils.BadResponseException:
         logger.error(f"Bad response for {ticker} in _get_info. PERMANENT EMPTY RETURN!", exc_info=True)
         meta = {}
     return {**info, **meta}

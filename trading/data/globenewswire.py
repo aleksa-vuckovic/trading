@@ -1,14 +1,13 @@
+import logging
 from urllib import parse
-from datetime import datetime
+from bs4 import BeautifulSoup
 from ..utils import dateutils, common, httputils
 from ..data import nasdaq
-import requests
-from bs4 import BeautifulSoup
-import logging
+from .caching import cached_scalar, cached_series, CACHE_ROOT
 
 logger = logging.getLogger(__name__)
 _MODULE = __name__.split(".")[-1]
-_CACHE = common.CACHE / _MODULE
+_CACHE = CACHE_ROOT / _MODULE
 _BASE_URL = "https://www.globenewswire.com"
 def _format_for_url(input: str) -> str:
     input = input.replace('.', '§').replace(',', 'δ')
@@ -57,7 +56,7 @@ def _get_news_raw(orgs: list[str], keywords: list[str], unix_from: float, unix_t
             break
     return result
 
-@common.cached_series(
+@cached_series(
     unix_from_arg=1,
     unix_to_arg=2,
     include_args=[0],
@@ -69,7 +68,7 @@ def _get_news_raw(orgs: list[str], keywords: list[str], unix_from: float, unix_t
     refresh_delay_fn=2*3600,
     return_series_only=True
 )
-@common.backup_timeout()
+@httputils.backup_timeout()
 def _get_news(org: str, unix_from: float, unix_to: float) -> list[dict]:
     result = _get_news_raw([org], [], unix_from, unix_to)
     result = reversed(result)

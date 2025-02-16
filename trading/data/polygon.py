@@ -3,19 +3,20 @@ import json
 import logging
 from ..utils import httputils, common
 from ..utils.common import Interval
+from .caching import cached_scalar, cached_series, CACHE_ROOT
 
 logger = logging.getLogger(__name__)
 _API_KEY = "2mpdazNwFmxCMwRVx87Crv4JwoSWwqoe"
 #_API_KEY = "t_EpcFm2mmah_opokpJm4F7bUqmiSZNN"
 _MODULE = __name__.split(".")[-1]
-_CACHE = common.CACHE / _MODULE
+_CACHE = CACHE_ROOT / _MODULE
 
 def _interval_to_str(interval: Interval) -> str:
     if interval == Interval.H1: return '1/hour'
     if interval == Interval.D1: return '1/day'
     raise Exception(f'Unknown interval {Interval}')
 
-@common.cached_series(
+@cached_series(
     unix_from_arg=1,
     unix_to_arg=2,
     include_args=[0,3],
@@ -27,7 +28,7 @@ def _interval_to_str(interval: Interval) -> str:
     refresh_delay_fn=None,
     return_series_only=True
 )
-@common.backup_timeout()
+@httputils.backup_timeout()
 def _get_polygon_pricing(
     ticker: str,
     unix_from: float,

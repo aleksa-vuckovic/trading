@@ -1,13 +1,12 @@
-import requests
-from enum import Enum
 import logging
 import re
-from ..utils import httputils, common
-from pathlib import Path
+from enum import Enum
+from ..utils import httputils
+from .caching import cached_scalar, cached_series, CACHE_ROOT
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
-_CACHE = common.CACHE / _MODULE
+_CACHE = CACHE_ROOT / _MODULE
 
 class NasdaqMarket(Enum):
     SELECT = 'Q'
@@ -116,7 +115,7 @@ class NasdaqListedEntry:
     def __repr__(self):
         return self._line
 
-@common.cached_scalar(
+@cached_scalar(
     cache_root=_CACHE/"entries" 
 )
 def _get_all_entries() -> list[str]:

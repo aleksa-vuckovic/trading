@@ -3,12 +3,13 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from ..utils import common, httputils
+from .caching import cached_scalar, cached_series, CACHE_ROOT
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
-_CACHE: Path = common.CACHE / _MODULE
+_CACHE: Path = CACHE_ROOT / _MODULE
 
-@common.cached_series(
+@cached_series(
     unix_from_arg=1,
     unix_to_arg=2,
     include_args=0,
@@ -19,7 +20,7 @@ _CACHE: Path = common.CACHE / _MODULE
     live_delay_fn=3600,
     refresh_delay_fn=12*3600
 )
-@common.backup_timeout()
+@httputils.backup_timeout()
 def _get_news(ticker: str, unix_from: float, unix_to: float) -> list[dict]:
     ticker = ticker.lower()
     url = f"https://seekingalpha.com/api/v3/symbols/{ticker}/news?filter[since]={int(unix_from-1000)}&filter[until]={int(unix_to+1000)}&id={ticker}&include=author&isMounting=true&page[size]=50&page[number]="

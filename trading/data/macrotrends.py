@@ -1,22 +1,22 @@
-from . import nasdaq
+
 import re
-from bs4 import BeautifulSoup
-from ..utils import httputils, dateutils
 import logging
-from pathlib import Path
-import json
-from ..utils import common
+from bs4 import BeautifulSoup
+from ..utils import httputils, dateutils, common
+from .caching import cached_scalar, cached_series, CACHE_ROOT
+from . import nasdaq
+
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
-_CACHE = common.CACHE / _MODULE
+_CACHE = CACHE_ROOT / _MODULE
 
 
-@common.cached_scalar(
+@cached_scalar(
     include_args=[0],
     cache_root=_CACHE
 )
-@common.backup_timeout()
+@httputils.backup_timeout()
 def _get_shares_outstanding(ticker: str, short_name: str) -> dict[str, str]:
     url = f"https://www.macrotrends.net/stocks/charts/{ticker}/{short_name}/shares-outstanding"
     resp = httputils.get_as_browser(url)

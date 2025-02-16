@@ -10,7 +10,7 @@ checkpoints_folder = Path(__file__).parent / 'checkpoints'
 initial_lr = 10e-6
 
 """
-Different from models 6-8 in that it has 10 features, with moving averages.
+Different from model2 in that it has 10 features, with moving averages.
 Data up to 13:30
 """
 def get_plan(hour: int) -> TrainingPlan:

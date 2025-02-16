@@ -1,16 +1,15 @@
-from datetime import datetime
-from ..utils import dateutils, httputils, common
 import logging
-from bs4 import BeautifulSoup
-from pathlib import Path
 import math
 import re
-import json
 import time
+from bs4 import BeautifulSoup
+from pathlib import Path
+from ..utils import dateutils, httputils, common
+from .caching import cached_scalar, cached_series, CACHE_ROOT
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
-_CACHE: Path = common.CACHE / _MODULE
+_CACHE: Path = CACHE_ROOT / _MODULE
 
 def _format_date(unix: float) -> str:
     return dateutils.unix_to_datetime(unix, tz = dateutils.ET)\
@@ -19,11 +18,11 @@ def _format_date(unix: float) -> str:
         .replace("jun", "june")\
         .lower()
 
-@common.cached_scalar(
+@cached_scalar(
     include_args=[0],
     path_fn=lambda args: _CACHE / _format_date(args[0])
 )
-@common.backup_timeout()
+@httputils.backup_timeout()
 def _get_summary(unix_time: int) -> str:
     #First find the id by searching through the pages
     #One page = approximately 1 month (more than 1 month, less than 2 months)
