@@ -33,7 +33,7 @@ class Result(NamedTuple):
 
 class SelectionStrategy:
     results: list[Result]
-    def __init__(self, top_count:int):
+    def __init__(self, top_count:int = 10):
         self.results = []
         self.top_count = top_count
     def insert(self, result: Result):
