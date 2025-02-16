@@ -9,6 +9,7 @@ from pathlib import Path
 from enum import Enum
 from pathlib import Path
 from matplotlib import pyplot as plt
+from ..utils.common import get_full_classname
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,8 @@ def get_model_device(model: torch.nn.Module) -> torch.device:
     return next(model.parameters()).device
 def get_model_dtype(model: torch.nn.Module) -> torch.dtype:
     return next(model.parameters()).dtype
+def get_model_name(model: torch.nn.Module) -> str:
+    return get_full_classname(model).split(".")[-3]
 
 def get_batch_files(path: Path) -> list[dict]:
     pattern = re.compile(r"hour(\d+)_time(\d+)_entry(\d+)_batch(\d+).pt")

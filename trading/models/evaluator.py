@@ -13,7 +13,7 @@ from matplotlib import pyplot as plt
 from ..data import nasdaq, aggregate
 from ..utils import dateutils, plotutils
 from ..utils.common import Interval, get_full_classname
-from .utils import get_model_device, get_model_dtype
+from .utils import get_model_device, get_model_dtype, get_model_name
 from .abstract import ExampleGenerator, AbstractModel
 
 logger = logging.getLogger()
@@ -172,7 +172,6 @@ class Evaluator:
         ax2.set_title('Cumulative gain')
         ax1.set_xlabel('Days')
         ax2.set_xlabel('Days')
-        ax1.scatt
         mock = [1,2]
         lines: dict[str, matplotlib.lines.Line2D] = {
             LAST_WIN: ax1.plot(mock, mock, color = 'blue', label = LAST_WIN, marker='o', markersize=2, linestyle='')[0],
@@ -191,7 +190,7 @@ class Evaluator:
             try:
                 #Take the largest mcap of the top 10
                 selector.clear()
-                self.evaluate(tickers, unix_time=unix_time, log=False, selector=selector)[:10]
+                self.evaluate(tickers, unix_time=unix_time, log=False, selector=selector)
                 
                 result = selector.get_selected()
                 
@@ -215,7 +214,7 @@ class Evaluator:
             except:
                 logger.error(f"Failed to evaluate at {dateutils.unix_to_datetime(unix_time)}.", exc_info=True)
         plt.ioff()
-        model_name = type(self.model).__name__
+        model_name = get_model_name(self.model)
         tosave = {
             'history': history,
             'unix_from': unix_from,

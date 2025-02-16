@@ -173,7 +173,7 @@ class TrainingPlan:
             if not self.path.exists():
                 logger.info(f"No prior state, starting from scratch.")
                 return
-            save_dict = torch.load(self.path, weights_only=True)
+            save_dict = torch.load(self.path, weights_only=True, map_location=plan.device)
             plan.model.load_state_dict(save_dict['model_state_dict'])
             plan.optimizer.load_state_dict(save_dict['optimizer_state_dict'])
             plan.epoch = save_dict['epoch'] + 1
