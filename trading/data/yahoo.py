@@ -108,10 +108,9 @@ def _get_pricing(
         if 'events' in data:
             return data['events']
         return {}
-    def get_series(data):
+    def get_series(data) -> list[dict]:
         data = data['chart']['result'][0]
-        if 'timestamp' not in data or not data['timestamp']:
-            return {'timestamp': [], 'open': [], 'close': [], 'low': [], 'high': [], 'volume': []}
+        if 'timestamp' not in data or not data['timestamp']: return []
         arrays = data['indicators']['quote'][0]
         arrays['timestamp'] = _fix_timestamps(data['timestamp'], interval)
         try:
