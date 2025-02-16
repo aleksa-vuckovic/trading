@@ -31,8 +31,7 @@ they are often a few milliseconds off!
 def _get_pricing_raw(symbol: str, days: int, data_period: str, data_interval: int, realtime: bool):
     info = _get_info(symbol)
     if 'xid' not in info:
-        logger.warning(f"No xid for '{symbol}'. Returning empty prices.")
-        return {}
+        raise Exception(f"No xid for '{symbol}'.")
     xid = info['xid']
     url = "https://markets.ft.com/data/chartapi/series"
     request = {
@@ -98,6 +97,7 @@ def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
     include_args=[0,3],
     cache_root=_CACHE,
     live_delay_fn=15*60,
+    refresh_delay_fn=lambda args: args[1].refresh_time(),
     return_series_only=False,
     series_field='data',
     time_step_fn=10000000,

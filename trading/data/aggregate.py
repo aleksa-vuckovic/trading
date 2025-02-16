@@ -51,13 +51,11 @@ def get_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: flo
             recent = yahoo.get_pricing(ticker.symbol, sep, unix_to, interval, return_quotes=return_quotes)
         except:
             logger.warning(f"Failed live yahoo for {ticker.symbol}.")
-            pass
-        try:
-            recent = wsj.get_pricing(ticker.symbol, sep, unix_to, interval, return_quotes=return_quotes)
-        except:
-            logger.warning(f"Failed wsj for {ticker.symbol}.")
-            pass
-        recent = financialtimes.get_pricing(ticker.symbol, sep, unix_to, interval, return_quotes=return_quotes, backup_behavior=common.BackupBehavior.RETHROW|common.BackupBehavior.SLEEP)
+            try:
+                recent = wsj.get_pricing(ticker.symbol, sep, unix_to, interval, return_quotes=return_quotes)
+            except:
+                logger.warning(f"Failed wsj for {ticker.symbol}.")
+                recent = financialtimes.get_pricing(ticker.symbol, sep, unix_to, interval, return_quotes=return_quotes, backup_behavior=common.BackupBehavior.RETHROW|common.BackupBehavior.SLEEP)
         if old:
             for i in range(len(recent)):
                 old[i].extend(recent[i])

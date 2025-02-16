@@ -24,7 +24,7 @@ def configure_logging(testing: bool = False, console: bool = False):
     #handlers
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(simple_formatter)
-    file_handler_names = ["data", "yahoo", "models", "http", "others"]
+    file_handler_names = ["data", "yahoo", "models", "http", "common", "others"]
     file_handlers = {}
     for name in file_handler_names:
         handler = RotatingFileHandler(filename=logroot / f"{date} - {name}.txt", mode="w", maxBytes=1024*1024, backupCount=3)
@@ -47,6 +47,9 @@ def configure_logging(testing: bool = False, console: bool = False):
     models = logging.getLogger("trading.models")
     models.propagate = False
     models.addHandler(file_handlers["models"])
+    common = logging.getLogger("trading.utils.common")
+    common.propagate = False
+    common.addHandler(file_handlers["common"])
     http = logging.getLogger("trading.utils.httputils")
     http.propagate = False
     http.addHandler(file_handlers["http"])

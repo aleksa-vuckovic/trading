@@ -32,8 +32,8 @@ class Interval(Enum):
     """
 
     def refresh_time(self) -> float:
-        if self == Interval.D1: return 6*3600
-        if self == Interval.H1: return 1800
+        if self == Interval.D1: return 24*3600#6*3600
+        if self == Interval.H1: return 24*3600#1800
         raise ValueError(f"Unknown interval {self}.")
     def time(self) -> float:
         if self == Interval.D1: return 24*3600
