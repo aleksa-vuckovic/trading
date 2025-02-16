@@ -1,5 +1,6 @@
 import requests
 import logging
+import json
 from . import common
 
 logger = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ def get_as_browser(
 ) -> requests.Response:
     cookie = ";".join([f"{key}={value}" for key,value in cookies.items()]) if cookies else None
     response = requests.get(url, headers = {**_CHROME_HEADERS, 'Cookie': cookie, **headers}, params=params)
-    logger.info(f"GET {url} -> {response.status_code}")
+    logger.info(f"GET {url} ? {params} -> {response.status_code}")
     if check_reponse:
         common.check_response(url, response)
     return response
@@ -27,6 +28,7 @@ def get_as_browser(
 def post_as_browser(url: str, body: object, check_response: bool = True) -> requests.Response:
     response = requests.post(url, json=body, headers={**_CHROME_HEADERS})
     logger.info(f"POST {url} -> {response.status_code}")
+    logger.info(json.dumps(body, indent = 4))
     if check_response:
         common.check_response(url, response)
     return response
