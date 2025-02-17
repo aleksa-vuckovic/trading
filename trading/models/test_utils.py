@@ -47,3 +47,9 @@ class TestUtils(TestCase):
         expect = expect[:,:count,:]
         result = get_moving_average(tensor, start_index=-dims[1], count=count, dim=1, window=3)
         self.assertAlmostEqual(0, torch.abs(result-expect).mean().item(), 15)
+
+
+        tensor = torch.tensor([[1,2,3,4,5,6,7]], dtype=torch.float32)
+        expect = torch.tensor([[1,5/4,7/4,10/4,14/4,18/4,22/4]], dtype=torch.float32)
+        result = get_moving_average(tensor, dim=1, window=4)
+        self.assertEqual(7, (expect==result).sum().item())

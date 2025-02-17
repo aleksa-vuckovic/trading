@@ -37,7 +37,7 @@ class ConvolutionalLayer(torch.nn.Module):
 
 class Model(AbstractModel):
     """64 layers"""
-    def __init__(self, input_features: int = INPUT_FEATURES):
+    def __init__(self, input_features: int = INPUT_FEATURES, is_tanh: bool = True):
         super().__init__()
         self.input_features = input_features
         self.daily_conv = torch.nn.Sequential(
@@ -61,7 +61,7 @@ class Model(AbstractModel):
             torch.nn.Sigmoid(),
             torch.nn.BatchNorm1d(num_features=10, momentum=0.5),
             torch.nn.Linear(in_features=10, out_features=1),
-            torch.nn.Tanh()
+            torch.nn.Tanh() if is_tanh else torch.nn.Sigmoid()
         )
 
     def forward(self, daily, hourly):
@@ -76,8 +76,8 @@ class Model(AbstractModel):
     def extract_tensors(self, example: dict[str, Tensor]) -> tuple[Tensor, ...]:
         if len(example[generator.D1_DATA].shape) < 3:
             example = {key: example[key].unsqueeze(dim=0) for key in example}
-        daily = example[generator.D1_DATA]
-        hourly = example[generator.H1_DATA]
+        daily_raw = example[generator.D1_DATA]
+        hourly_raw = example[generator.H1_DATA]
         
 
         def process(tensor: Tensor):
@@ -90,13 +90,13 @@ class Model(AbstractModel):
             #3 Time relativize close, low, high, volume
             tensor[:,:,1:-1] = get_time_relativized(tensor[:,:,1:-1], dim=1)
             return tensor.transpose(1,2)
-        daily = process(daily)
-        hourly = process(hourly)
+        daily = process(daily_raw)
+        hourly = process(hourly_raw)
         result = (daily, hourly)
 
         if generator.AFTER_DATA in example:
             after = example[generator.AFTER_DATA]
-            after = (after[:,generator.D1_AFTER_I] - daily[:,-1,generator.CLOSE_I]) / daily[:,-1,generator.CLOSE_I]
+            after = (after[:,generator.D1_AFTER_I] - hourly_raw[:,-1,generator.CLOSE_I]) / hourly_raw[:,-1,generator.CLOSE_I]
             after = PriceTarget.TANH_10_10.get_price(after)
             result += (after,)
 

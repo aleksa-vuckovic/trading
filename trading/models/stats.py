@@ -1,4 +1,6 @@
+import torch
 from torch import Tensor
+from typing import Callable
 
 class StatCollector:
     def __init__(self, name: str):
@@ -62,3 +64,43 @@ class StatContainer:
     def to_dict(self):
         return {key: self.stats[key].running for key in self.stats}
     
+class Accuracy(StatCollector):
+    """
+    Ovrlapping truths, divided by total output truths.
+    """
+    def __init__(self,
+        name: str,
+        to_bool_output: Callable[[Tensor], Tensor],
+        to_bool_expect: Callable[[Tensor], Tensor]|None=None
+    ):
+        super().__init__(name)
+        self.to_bool_output = to_bool_output
+        self.to_bool_expect = to_bool_expect or to_bool_output
+    
+    def _calculate(self, expect, output):
+        output = self.to_bool_output(output)
+        expect = self.to_bool_expect(expect)
+        hits = torch.logical_and(output, expect).sum().item()
+        output_n = output.sum().item()
+        expect_n = expect.sum().item()
+        return hits / output_n if output_n else 1
+    
+class Precision(StatCollector):
+    """
+    Ovrlapping truths, divided by total expect truths.
+    """
+    def __init__(self,    
+        name: str,
+        to_bool_output: Callable[[Tensor], Tensor],
+        to_bool_expect: Callable[[Tensor], Tensor]|None=None
+    ):
+        super().__init__(name)
+        self.to_bool_output = to_bool_output
+        self.to_bool_expect = to_bool_expect or to_bool_output
+
+    def _calculate(self, expect, output):
+        output = self.to_bool_output(output)
+        expect = self.to_bool_expect(expect)
+        hits = torch.logical_and(output, expect).sum().item()
+        expect_n = expect.sum().item()
+        return hits / expect_n if expect_n else 1

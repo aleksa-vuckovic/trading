@@ -1,14 +1,13 @@
 from __future__ import annotations
 import torch
 import logging
-import math
 from tqdm import tqdm
 from pathlib import Path
 from typing import Callable, NamedTuple
 from matplotlib import pyplot as plt
 from ..utils import plotutils, common
 from .stats import StatContainer
-from .utils import Batches
+from .utils import Batches, get_batch_files
 from .abstract import AbstractModel
 
 logger = logging.getLogger(__name__)
@@ -31,15 +30,29 @@ class TrainingPlan:
         def __and__(self, value):
             return TrainingPlan.AndTrigger(self, value)
     class OrTrigger(Trigger):
-        def __init__(self, *args):
+        def __init__(self, *args, trigger_once: bool = False):
             self.criteria = list(args)
+            self.trigger_once = trigger_once
+            self.triggered = False
         def check(self, plan: TrainingPlan):
-            return any([it.check(plan) for it in self.criteria])
+            if self.trigger_once and self.triggered: return False
+            for it in self.criteria:
+                if it.check(plan):
+                    self.triggered = True
+                    return True
+            return False
     class AndTrigger(Trigger):
-        def __init__(self, *args):
+        def __init__(self, *args, trigger_once: bool = False):
             self.criteria = list(args)
+            self.trigger_once = trigger_once
+            self.triggered = False
         def check(self, plan):
-            return all([it.check(plan) for it in self.criteria])
+            if self.trigger_once and self.triggered: return
+            for it in self.criteria:
+                if not it.check(plan):
+                    return False
+            self.triggered = True
+            return True
         
     class StatTrigger(Trigger):
         def __init__(self,
@@ -330,4 +343,49 @@ class TrainingPlan:
                 axes.plot(epochs, values[group], color=color, label=group)
             axes.legend()
         plt.show()
-            
+
+
+def add_train_val_test_batches(
+    builder: TrainingPlan.Builder,
+    examples_folder: Path,
+    make_stats: Callable[[str], StatContainer],
+    merge:int=1,
+    hour: int|None = 11
+) -> TrainingPlan.Builder:
+    all_files = [it for it in get_batch_files(examples_folder) if not hour or it['hour'] == hour]
+    test_i = int(len(all_files)*0.05)
+    train_files = [it['path'] for it in all_files[:-test_i] if it['batch'] % 6]
+    val_files = [it['path'] for it in all_files[:-test_i] if it['batch'] % 6 == 0]
+    test_files = [it['path'] for it in all_files[-test_i:]]
+    return builder.with_batches(name='train', batches=Batches(train_files, merge=merge), stats=make_stats('train'), backward=True)\
+        .with_batches(name='val', batches=Batches(val_files, merge=merge), stats=make_stats('val'), backward=False)\
+        .with_batches(name='test', batches=Batches(test_files, merge=merge), stats=make_stats('train'), backward=False)
+
+def add_triggers(
+    builder: TrainingPlan.Builder,
+    checkpoints_folder: Path,
+    initial_lr: float,
+    lr_steps = [(100, 10), (0.4, 5), (0.35, 2), (0.3, 1), (0.25, 0.5), (0.2, 0.1), (0.15, 0.05), (0.1, 0.01)]
+) -> TrainingPlan.Builder:
+    builder.when(TrainingPlan.AlwaysTrigger())\
+        .then(TrainingPlan.StatHistoryAction())
+    
+    for loss, lr_factor in lr_steps:
+        builder.when(TrainingPlan.StatTrigger('loss', upper_bound=loss, trigger_once=True))\
+            .then(TrainingPlan.CheckpointAction(checkpoints_folder / f'loss_{int(loss*100)}_checkpoint.pth'))\
+            .then(TrainingPlan.LearningRateAction(initial_lr*lr_factor))
+    for precision in range(5, 100, 5):
+        builder.when(TrainingPlan.StatTrigger('precision', lower_bound=precision/100, trigger_once=True))\
+            .then(TrainingPlan.CheckpointAction(checkpoints_folder / f"precision_{precision}_checkpoint.pth"))
+    for accuracy in range(5, 100, 5):
+        builder.when(TrainingPlan.StatTrigger('accuracy', lower_bound=accuracy/100, trigger_once=True))\
+            .then(TrainingPlan.CheckpointAction(checkpoints_folder / f"accuracy_{accuracy}_checkpoint.pth"))
+        
+    def loss_plateau(values: list[float]) -> bool:
+        high = max(values)
+        last = values[-1]
+        return last>=high or (high-last)/high < 0.001
+    builder.when(TrainingPlan.StatHistoryTrigger('loss', group='val', count=10, criteria=loss_plateau) | TrainingPlan.EpochTrigger(threshold=100))\
+        .then(TrainingPlan.StopAction())
+        
+    return builder.with_primary_checkpoint(TrainingPlan.CheckpointAction(checkpoints_folder / 'primary_checkpoint.pth'))

@@ -37,7 +37,7 @@ def check_tensor(tensor: Tensor, allow_zeros=True):
     if not allow_zeros: result = result | (tensor == 0)
     bad_entries = result.sum().item()
     if bad_entries > 0:
-        raise Exception(f"Found {bad_entries} unwanted inf, nan {'or 0 ' if allow_zeros else ''} values in tensors.")
+        raise Exception(f"Found {bad_entries} unwanted inf, nan {'or 0 ' if not allow_zeros else ''}values in tensors.")
 
 def get_time_relativized(tensor: Tensor, start_index: int = 0, count: int = -1, dim: int = 0, use_previous: bool = False) -> Tensor:
     """
@@ -78,7 +78,7 @@ def get_normalized_by_largest(tensor: Tensor, start_index: int = 0, count: int =
 def get_moving_average(tensor: Tensor, start_index: int = 0, count: int = -1, dim: int = 1, window: int = 10) -> Tensor:
     """
     Get a tensor of moving averages accross the given dimension and with the given window size.
-    If fill is true, returns a tensor of the same shape, otherwise the averaged dimension is reduced by window-1.
+    Returns a tensor of the same shape.
     """
     total_dims = len(tensor.shape)
     if dim >= total_dims: raise Exception(f"Dimension {dim} not valid for shape {tensor.shape}.")
@@ -121,6 +121,7 @@ class PriceTarget(Enum):
         if self == PriceTarget.LINEAR_10_10:
             return torch.clamp(x, min=-0.1, max=0.1)
         if self == PriceTarget.SIGMOID_0_5:
+            x = torch.clamp(x, min=-0.2, max=0.2)
             x = torch.exp(300*x-6)
             return x/(1+x)
         if self == PriceTarget.SIGMOID_0_10:
