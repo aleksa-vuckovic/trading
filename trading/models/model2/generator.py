@@ -21,9 +21,9 @@ CLOSE_I = 1
 LOW_I = 2
 HIGH_I = 3
 VOLUME_I = 4
-D1_AFTER_I = 0
-D2_AFTER_I = 6
-D5_AFTER_I = 12
+AFTER_D1_I = 0
+AFTER_D2_I = 6
+AFTER_D5_I = 12
 AFTER_HIGH_OFF = 0
 AFTER_LOW_OFF = 1
 AFTER_LOWHIGH_OFF = 2
@@ -95,9 +95,9 @@ class Generator(ExampleGenerator):
             data = (batch[AFTER_DATA] - batch[H1_DATA][:,-1:,CLOSE_I])/(batch[H1_DATA][:,-1:,CLOSE_I])
             temp.append(data)
         data = torch.concat(temp, dim=0)
-        d1_data = data[:,D1_AFTER_I+index]
-        d2_data = data[:,D2_AFTER_I+index]
-        d5_data = data[:,D5_AFTER_I+index]
+        d1_data = data[:,AFTER_D1_I+index]
+        d2_data = data[:,AFTER_D2_I+index]
+        d5_data = data[:,AFTER_D5_I+index]
         for data, name in [(d1_data, 'D1'), (d2_data, 'D2'), (d5_data, 'D5')]:
             fig, axes = plt.subplots(1, 2)
             axes: list[matplotlib.axes.Axes] = axes

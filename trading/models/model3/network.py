@@ -3,6 +3,7 @@ import torchinfo
 import config
 from torch import Tensor
 from .. import model2
+from ..model2.generator import D1_DATA, H1_DATA, AFTER_DATA, OPEN_I, CLOSE_I, LOW_I, HIGH_I, AFTER_D1_I, AFTER_CLOSE_OFF
 from ..utils import PriceTarget, get_moving_average, get_time_relativized, check_tensors, check_tensor
 from ..abstract import ModelMetadata
 
@@ -14,21 +15,15 @@ class Model(model2.network.Model):
         super().__init__(input_features=INPUT_FEATURES, is_tanh=False)
 
     def extract_tensors(self, example: dict[str, Tensor]):
-        if len(example[model2.generator.D1_DATA].shape) < 3:
+        if len(example[D1_DATA].shape) < 3:
             example = {key: example[key].unsqueeze(dim=0) for key in example}
-        daily_raw = example[model2.generator.D1_DATA]
-        hourly_raw = example[model2.generator.H1_DATA]
-
-        OPEN = model2.generator.OPEN_I
-        CLOSE = model2.generator.CLOSE_I
-        LOW = model2.generator.LOW_I
-        HIGH = model2.generator.HIGH_I
-        VOL = model2.generator.VOLUME_I
+        daily_raw = example[D1_DATA]
+        hourly_raw = example[H1_DATA]
 
         def process(tensor: Tensor):
             tensor = tensor[:,-TOTAL_POINTS-MOVING_AVG:,:]
             #1 Get high-low relative to low (relative span)
-            tensor[:,:,OPEN] = (tensor[:,:,HIGH] - tensor[:,:,LOW]) / tensor[:,:,LOW]
+            tensor[:,:,OPEN_I] = (tensor[:,:,HIGH_I] - tensor[:,:,LOW_I]) / tensor[:,:,LOW_I]
             #2 Get moving averages for everything
             mvg = get_moving_average(tensor, dim=1, window=MOVING_AVG)
             #3 Concat everything
@@ -41,9 +36,9 @@ class Model(model2.network.Model):
         hourly = process(hourly_raw)
         result = (daily, hourly)
 
-        if model2.generator.AFTER_DATA in example:
-            after = example[model2.generator.AFTER_DATA]
-            after = (after[:,model2.generator.D1_AFTER_I] - hourly_raw[:,-1,CLOSE]) / hourly_raw[:,-1,CLOSE]
+        if AFTER_DATA in example:
+            after = example[AFTER_DATA]
+            after = (after[:,AFTER_D1_I+AFTER_CLOSE_OFF] - hourly_raw[:,-1,CLOSE_I]) / hourly_raw[:,-1,CLOSE_I]
             after = PriceTarget.SIGMOID_0_5.get_price(after)
             result += (after,)
 

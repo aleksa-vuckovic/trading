@@ -4,7 +4,7 @@ import config
 from torch import Tensor
 from ..utils import get_time_relativized, PriceTarget, check_tensors
 from ..abstract import AbstractModel, ModelMetadata
-from .generator import D1_DATA, H1_DATA, AFTER_DATA, OPEN_I, CLOSE_I, LOW_I, HIGH_I, D1_AFTER_I, AFTER_CLOSE_OFF
+from .generator import D1_DATA, H1_DATA, AFTER_DATA, OPEN_I, CLOSE_I, LOW_I, HIGH_I, AFTER_D1_I, AFTER_CLOSE_OFF
 
 TOTAL_POINTS = 100
 INPUT_FEATURES = 6
@@ -95,7 +95,7 @@ class Model(AbstractModel):
 
         if AFTER_DATA in example:
             after = example[AFTER_DATA]
-            after = (after[:,D1_AFTER_I+AFTER_CLOSE_OFF] - hourly_raw[:,-1,CLOSE_I]) / hourly_raw[:,-1,CLOSE_I]
+            after = (after[:,AFTER_D1_I+AFTER_CLOSE_OFF] - hourly_raw[:,-1,CLOSE_I]) / hourly_raw[:,-1,CLOSE_I]
             after = PriceTarget.TANH_10_10.get_price(after)
             result += (after,)
 
