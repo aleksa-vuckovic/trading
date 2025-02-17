@@ -10,6 +10,7 @@ from tqdm import tqdm
 from pathlib import Path
 from typing import Callable, Any, NamedTuple
 from matplotlib import pyplot as plt
+from matplotlib.gridspec import GridSpec
 from ..data import nasdaq, aggregate
 from ..utils import dateutils, plotutils
 from ..utils.common import Interval, get_full_classname
@@ -204,10 +205,11 @@ class Evaluator:
                 logger.info(f"Output: {result.output}. Data: {result.data}.")
                 logger.info(f"WIN: {history[LAST_WIN][-1]}. REAL WIN {history[REAL_LAST_WIN][-1]}")
 
-                lines[LAST_WIN].set_data(range(len(history[LAST_WIN])), history[LAST_WIN])
-                lines[REAL_LAST_WIN].set_data(range(len(history[REAL_LAST_WIN])), history[REAL_LAST_WIN])
-                lines[WIN].set_data(range(len(history[WIN])), history[WIN])
-                lines[REAL_WIN].set_data(range(len(history[REAL_WIN])), history[REAL_WIN])
+                x = list(range(len(history[LAST_WIN])))
+                lines[LAST_WIN].set_data(x, history[LAST_WIN])
+                lines[REAL_LAST_WIN].set_data(x, history[REAL_LAST_WIN])
+                lines[WIN].set_data(x, history[WIN])
+                lines[REAL_WIN].set_data(x, history[REAL_WIN])
                 plotutils.refresh_interactive_figures(fig1, fig2)
             except KeyboardInterrupt:
                 raise
@@ -228,6 +230,39 @@ class Evaluator:
         path.write_text(json.dumps(tosave))
         plt.show(block = True)
         return history
+
+    @staticmethod
+    def show_backtest(file: Path, block: bool = True):
+        data = json.loads(file.read_text())
+        history = data['history']
+        fig = plt.figure(figsize=(6,4))
+        gs = GridSpec(4, 2, figure=fig)
+        ax_title = fig.add_subplot(gs[0,:])
+        ax_left = fig.add_subplot(gs[1:,0])
+        ax_right = fig.add_subplot(gs[1:,1])
+        ax_title.text(0.5, 1, f"""\
+Model {data['model']}, hour {data['hour']}, from {dateutils.unix_to_datetime(data['unix_from'])} to {dateutils.unix_to_datetime(data['unix_to'])}.
+Selector {data['selector']}.
+Estimator {data['estimator']}.\
+        """, ha='center', va='top', fontsize=10)
+        ax_title.grid(False)
+        ax_title.axis('off')
+        
+        ax_left.set_title('Daily gain')
+        ax_right.set_title('Cumulative gain')
+        ax_left.set_xlabel('Days')
+        ax_right.set_xlabel('Days')
+
+        x = range(len(history[LAST_WIN]))
+        ax_left.plot(x, history[LAST_WIN], color = 'blue', label = LAST_WIN, marker='o', markersize=2, linestyle='')
+        ax_left.plot(x, history[REAL_LAST_WIN], color='red', label = REAL_LAST_WIN, marker='o', markersize=2, linestyle='')
+        ax_right.plot(x, history[WIN], color = 'blue', label = WIN)
+        ax_right.plot(x, history[REAL_WIN], color = 'red', label = REAL_WIN)
+        ax_left.legend()
+        ax_right.legend()
+
+        plt.show(block=block)
+        return
 
 
 
