@@ -1,14 +1,16 @@
 import logging
+import matplotlib.axes
 import torch
 import os
 import random
+import matplotlib
 from torch import Tensor
 from pathlib import Path
 from matplotlib import pyplot as plt
 from ...utils import dateutils
 from ...utils.common import Interval
 from ...data import aggregate, nasdaq
-from ..utils import check_tensor
+from ..utils import check_tensor, PriceTarget
 from ..abstract import ExampleGenerator
 
 logger = logging.getLogger(__name__)
@@ -73,22 +75,33 @@ class Generator(ExampleGenerator):
         check_tensor(after_data, allow_zeros=False)
         return {D1_DATA: d1_data, H1_DATA: h1_data, AFTER_DATA: after_data}
 
-    def plot_statistics(self):
+    def plot_statistics(self, target: PriceTarget = PriceTarget.TANH_10_10):
         #Bin distribution of after values
         temp = []
-        for file in random.shuffle(FOLDER/it for it in os.listdir(FOLDER))[:20]:
-            batch = torch.load(file)
-            data = (batch[AFTER_DATA] - batch[H1_DATA][:,-1:])/(batch[H1_DATA][:,-1:])
+        files = [FOLDER/it for it in os.listdir(FOLDER)]
+        random.shuffle(files)
+        for file in files[:20]:
+            batch = torch.load(file, weights_only=True)
+            data = (batch[AFTER_DATA] - batch[H1_DATA][:,-1:,CLOSE_I])/(batch[H1_DATA][:,-1:,CLOSE_I])
             temp.append(data)
-        data = torch.concat(data, dim=0)
-        d1_data = data[:,D1_AFTER_I]*100
-        d2_data = data[:,D2_AFTER_I]*100
-        d5_data = data[:,D5_AFTER_I]*100
+        data = torch.concat(temp, dim=0)
+        d1_data = data[:,D1_AFTER_I]
+        d2_data = data[:,D2_AFTER_I]
+        d5_data = data[:,D5_AFTER_I]
         for data, name in [(d1_data, 'D1'), (d2_data, 'D2'), (d5_data, 'D3')]:
-            fig, axes = plt.subplots(1,1)
+            fig, axes = plt.subplots(1, 2)
+            axes: list[matplotlib.axes.Axes] = axes
             fig.suptitle(name)
-            axes.set_xlabel('Percentage change')
-            axes.set_ylabel('Number of examples')
-            axes.hist(data, bins=range(-100,100,10), edgecolor='black')
+
+            axes[0].set_title('Raw')
+            axes[0].set_xlabel('Percentage change')
+            axes[0].set_ylabel('Number of examples')
+            axes[0].hist(data*100, bins=range(-20,21,1), edgecolor='black')
+
+            axes[1].set_title(target.name)
+            axes[1].set_xlabel('Expected output')
+            axes[1].set_ylabel('Number of examples')
+            axes[1].hist(target.get_price(data), bins=20, edgecolor='black')
+            
         plt.show()
 

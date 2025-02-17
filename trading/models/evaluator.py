@@ -40,8 +40,11 @@ class SelectionStrategy:
         self.top_count = top_count
     def insert(self, result: Result):
         bisect.insort_right(self.results, result, key=lambda it: -it.output)
-    def get_selected(self) -> Result:
-        return self.results[-1]
+    def get_selected(self) -> list[Result]:
+        """
+        Returns results sorted from best to worst.
+        """
+        return self.results
     def clear(self):
         self.results.clear()
     def to_json(self) -> str:
@@ -63,8 +66,8 @@ class MarketCapSelector(SelectionStrategy):
         result.data['market_cap'] = market_cap
         return super().insert(result)
     def get_selected(self):
-        selection = sorted(self.results[:self.top_count], key=lambda it: it.data['market_cap'])
-        return selection[round(self.select_at*(len(selection)-1))]
+        selection = sorted(self.results[:self.top_count], key=lambda it: -it.data['market_cap'])
+        return selection[round(self.select_at*(len(selection)-1)):]
     def to_config_dict(self):
         return {**super().to_config_dict(), 'select_at': self.select_at}
     
@@ -72,7 +75,9 @@ class RandomSelector(SelectionStrategy):
     def __init__(self, top_count: int = 10):
         super().__init__(top_count)
     def get_selected(self) -> Result:
-        random.choice(self.results[:self.top_count])
+        selection = self.results[:self.top_count]
+        random.shuffle(selection)
+        return selection
 
 class FirstTradeTimeSelector(SelectionStrategy):
     def __init__(self, top_count: int = 10):
@@ -81,7 +86,7 @@ class FirstTradeTimeSelector(SelectionStrategy):
         result.data['first_trade_time'] = aggregate.get_first_trade_time(result.ticker)
         return super().insert(result)
     def get_selected(self):
-        return sorted(self.results[:self.top_count], key=lambda it: it.data['first_trade_time'])[0]
+        return sorted(self.results[:self.top_count], key=lambda it: it.data['first_trade_time'])
     
 class PriceEstimator:
     def __init__(self, interval: Interval, quote:str='high', last_count: int|None = None, min_count: int|None = None):
@@ -95,7 +100,7 @@ class PriceEstimator:
         if not prices:
             raise Exception(f"Got empty after prices for {ticker.symbol} at {unix_time}")
         if self.min_count and len(prices) < self.min_count:
-            raise Exception(f"Not enough after prices. Got {len(prices)}, expecting at least {self.min_count}.")
+            raise Exception(f"Not enough after prices for {ticker.symbol} at {unix_time}. Got {len(prices)}, expecting at least {self.min_count}.")
         if self.last_count: prices = prices[-self.last_count:]
         if self.quote == 'h': return max(prices)
         if self.quote == 'l': return min(prices)
@@ -132,6 +137,9 @@ class Evaluator:
         """
         tickers = tickers or aggregate.get_sorted_tickers()
         logger.info(f"Evaluating {len(tickers)} tickers for {dateutils.unix_to_datetime(unix_time) if unix_time else 'live'}.")
+        if isinstance(selector, RandomSelector) and selector.top_count >= len(tickers):
+            for ticker in tickers: selector.insert(Result(ticker, 0))
+            return selector
         self.model.eval()
         with torch.no_grad():
             for ticker in tqdm(tickers, leave=True, desc=f"Evaluating for {dateutils.unix_to_datetime(unix_time)}"):
@@ -198,10 +206,18 @@ class Evaluator:
                 selector.clear()
                 self.evaluate(tickers, unix_time=unix_time, log=False, selector=selector)
                 
-                result = selector.get_selected()
-                
-                last_price = aggregate.get_pricing(result.ticker, unix_from=unix_time-24*3600, unix_to=unix_time, interval=Interval.H1, return_quotes=['close'])[0][-1]
-                sell_price = estimator.estimate_price(self.model, result.ticker, unix_time)
+                results = selector.get_selected()
+                result = None
+                for it in results:
+                    try:
+                        sell_price = estimator.estimate_price(self.model, it.ticker, unix_time)
+                        last_price = aggregate.get_pricing(it.ticker, unix_from=unix_time-24*3600, unix_to=unix_time, interval=Interval.H1, return_quotes=['close'])[0][-1]
+                        result = it
+                        break
+                    except:
+                        logger.warning(f"Failed to estimate sell price for {it.ticker.symbol}", exc_info=True)
+                if not result: raise Exception(f"Failed to estimate sell price for all selected entries.")
+
                 history[LAST_WIN].append(sell_price/last_price)
                 history[REAL_LAST_WIN].append((sell_price-commission*sell_price-commission*last_price)/last_price)
                 history[WIN].append(history[WIN][-1]*history[LAST_WIN][-1])

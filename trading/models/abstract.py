@@ -22,6 +22,8 @@ class ExampleGenerator:
         pass
     def run_loop(self, hour: int):
         pass
+    def plot_statistics(self, **kwargs):
+        pass
     def run(self):
         """
         Run loop for all hours
