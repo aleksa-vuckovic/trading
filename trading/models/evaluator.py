@@ -27,10 +27,11 @@ REAL_LAST_WIN = 'real_last_win'
 FOLDER = Path(__file__).parent / 'backtests'
 if not FOLDER.exists(): FOLDER.mkdir()
 
-class Result(NamedTuple):
-    ticker: nasdaq.NasdaqListedEntry
-    output: float
-    data: dict = {}
+class Result:
+    def __init__(self, ticker: nasdaq.NasdaqListedEntry, output: float):
+        self.ticker = ticker
+        self.output = output
+        self.data = {}
 
 class SelectionStrategy:
     results: list[Result]
@@ -232,8 +233,11 @@ class Evaluator:
         return history
 
     @staticmethod
-    def show_backtest(file: Path, block: bool = True):
+    def show_backtest_file(file: Path, block: bool = True):
         data = json.loads(file.read_text())
+        Evaluator.show_backtest(data)
+    @staticmethod
+    def show_backtest(data: dict, block: bool = True):
         history = data['history']
         fig = plt.figure(figsize=(6,4))
         gs = GridSpec(4, 2, figure=fig)
