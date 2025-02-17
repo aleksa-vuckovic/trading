@@ -8,7 +8,7 @@ import json
 import random
 from tqdm import tqdm
 from pathlib import Path
-from typing import Callable, Any, NamedTuple
+from typing import Callable, Any
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 from ..data import nasdaq, aggregate
@@ -52,8 +52,9 @@ class SelectionStrategy:
             'top_count': self.top_count
         }
 class MarketCapSelector(SelectionStrategy):
-    def __init__(self, top_count: int = 10):
+    def __init__(self, top_count: int = 10, select_at: float = 1):
         super().__init__(top_count)
+        self.select_at = select_at
     def insert(self, result):
         try:
             market_cap = aggregate.get_market_cap(result.ticker)
@@ -62,7 +63,10 @@ class MarketCapSelector(SelectionStrategy):
         result.data['market_cap'] = market_cap
         return super().insert(result)
     def get_selected(self):
-        return sorted(self.results[:self.top_count], key=lambda it: it.data['market_cap'])[-1]
+        selection = sorted(self.results[:self.top_count], key=lambda it: it.data['market_cap'])
+        return selection[round(self.select_at*(len(selection)-1))]
+    def to_config_dict(self):
+        return {**super().to_config_dict(), 'select_at': self.select_at}
     
 class RandomSelector(SelectionStrategy):
     def __init__(self, top_count: int = 10):
