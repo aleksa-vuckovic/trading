@@ -3,7 +3,7 @@ import torchinfo
 import config
 from torch import Tensor
 from .. import model2
-from ..model2.generator import D1_DATA, H1_DATA, AFTER_DATA, OPEN_I, CLOSE_I, LOW_I, HIGH_I, AFTER_D1_I, AFTER_CLOSE_OFF
+from ..model2.generator import D1_DATA, H1_DATA, AFTER_DATA, OPEN_I, CLOSE_I, LOW_I, HIGH_I, AFTER_D1_I, AFTER_CLOSE_OFF, AFTER_LOWHIGH_OFF
 from ..utils import PriceTarget, get_moving_average, get_time_relativized, check_tensors, check_tensor
 from ..abstract import ModelMetadata
 
@@ -38,7 +38,7 @@ class Model(model2.network.Model):
 
         if AFTER_DATA in example:
             after = example[AFTER_DATA]
-            after = (after[:,AFTER_D1_I+AFTER_CLOSE_OFF] - hourly_raw[:,-1,CLOSE_I]) / hourly_raw[:,-1,CLOSE_I]
+            after = (after[:,AFTER_D1_I+AFTER_LOWHIGH_OFF] - hourly_raw[:,-1,CLOSE_I]) / hourly_raw[:,-1,CLOSE_I]
             after = PriceTarget.SIGMOID_0_5.get_price(after)
             result += (after,)
 

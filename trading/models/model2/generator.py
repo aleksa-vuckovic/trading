@@ -85,7 +85,7 @@ class Generator(ExampleGenerator):
         check_tensor(after_data, allow_zeros=False)
         return {D1_DATA: d1_data, H1_DATA: h1_data, AFTER_DATA: after_data}
 
-    def plot_statistics(self, target: PriceTarget = PriceTarget.TANH_10_10, index: int = AFTER_CLOSE_OFF):
+    def plot_statistics(self, target: PriceTarget = PriceTarget.TANH_10_10, offset: int = AFTER_CLOSE_OFF):
         #Bin distribution of after values
         temp = []
         files = [FOLDER/it for it in os.listdir(FOLDER)]
@@ -95,9 +95,9 @@ class Generator(ExampleGenerator):
             data = (batch[AFTER_DATA] - batch[H1_DATA][:,-1:,CLOSE_I])/(batch[H1_DATA][:,-1:,CLOSE_I])
             temp.append(data)
         data = torch.concat(temp, dim=0)
-        d1_data = data[:,AFTER_D1_I+index]
-        d2_data = data[:,AFTER_D2_I+index]
-        d5_data = data[:,AFTER_D5_I+index]
+        d1_data = data[:,AFTER_D1_I+offset]
+        d2_data = data[:,AFTER_D2_I+offset]
+        d5_data = data[:,AFTER_D5_I+offset]
         for data, name in [(d1_data, 'D1'), (d2_data, 'D2'), (d5_data, 'D5')]:
             fig, axes = plt.subplots(1, 2)
             axes: list[matplotlib.axes.Axes] = axes
