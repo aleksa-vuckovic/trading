@@ -2,25 +2,38 @@ import logging
 import torch
 from pathlib import Path
 from ..training_plan import TrainingPlan, add_train_val_test_batches, add_triggers
-from .. import model1
+from ..stats import StatCollector, StatContainer, Accuracy, Precision
 from . import generator
 from .network import Model
 
 
 logger = logging.getLogger(__name__)
 initial_lr = 10e-6
-"""
-Uses prices only.
-    -Time relative hlcv
-    -Relative span
-    -Close relative to open (useless?)
-"""
+
+class CustomLoss(StatCollector):
+    def __init__(self):
+        super().__init__('loss')
+    
+    def _calculate(self, expect, output):
+        eps = 1e-5
+        loss = -torch.log(1 + eps - torch.abs(output - expect) / (1+torch.abs(expect)))
+        return loss.mean()
+
+def make_stats(name: str) -> StatContainer:
+    return StatContainer(
+        CustomLoss(),
+        Accuracy(name='accuracy', to_bool_output=lambda it: it > 0.5),
+        Precision(name='precision', to_bool_output=lambda it: it > 0.5),
+        Accuracy(name='miss', to_bool_output=lambda it: it>0.2, to_bool_expect=lambda it: it<0),
+        name=name
+    )
+
 def get_plan(hour: int) -> TrainingPlan:
     checkpoints_folder = Path(__file__).parent / f"checkpoints_{hour}"
     model = Model()
     builder = TrainingPlan.Builder(model)
     builder.with_optimizer(torch.optim.Adam(model.parameters()))
-    add_train_val_test_batches(builder, examples_folder=generator.FOLDER, make_stats=model1.train.make_stats, merge=10, hour=hour)
+    add_train_val_test_batches(builder, examples_folder=generator.FOLDER, make_stats=make_stats, merge=10, hour=hour)
     add_triggers(
         builder,
         checkpoints_folder=checkpoints_folder,
