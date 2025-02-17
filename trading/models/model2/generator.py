@@ -22,8 +22,14 @@ LOW_I = 2
 HIGH_I = 3
 VOLUME_I = 4
 D1_AFTER_I = 0
-D2_AFTER_I = 1
-D5_AFTER_I = 2
+D2_AFTER_I = 6
+D5_AFTER_I = 12
+AFTER_HIGH_I = 0
+AFTER_LOW_I = 1
+AFTER_LOWHIGH_I = 2
+AFTER_CLOSE_I = 3
+AFTER_CLOSEHIGH_I = 4
+AFTER_CLOSELOW_I = 5
 D1_DATA = 'd1_data'
 H1_DATA = 'h1_data'
 AFTER_DATA = 'after_data'
@@ -32,7 +38,7 @@ FOLDER = Path(__file__).parent / 'examples'
 
 class Generator(ExampleGenerator):
     def run(self):
-        for hour in range(11, 17):
+        for hour in [12, 15, 13, 14]:
             logger.info(f"-------------Starting loop for {hour}----------------")
             self._run_loop(
                 folder = FOLDER,
@@ -62,20 +68,24 @@ class Generator(ExampleGenerator):
         if not with_output:
             return {D1_DATA: d1_data, H1_DATA: h1_data}
 
-        d1_after_prices, = aggregate.get_pricing(ticker, end_time, dateutils.add_business_days_unix(end_time, 1, tz=dateutils.ET), Interval.H1, return_quotes=['high'])
-        d2_after_prices, = aggregate.get_pricing(ticker, end_time, dateutils.add_business_days_unix(end_time, 2, tz=dateutils.ET), Interval.H1, return_quotes=['high'])
-        d5_after_prices, = aggregate.get_pricing(ticker, end_time, dateutils.add_business_days_unix(end_time, 5, tz=dateutils.ET), Interval.D1, return_quotes=['high'])
-        if len(d1_after_prices) < 2:
-            raise Exception(f"Failed to fetch enough hourly after prices for {ticker.symbol}. Got {len(d1_after_prices)}.")
-        if len(d2_after_prices) < 3:
-            raise Exception(f"Failed to fetch enough daily after prices for {ticker.symbol}. Got {len(d2_after_prices)}.")
-        if len(d5_after_prices) < 2:
-            raise Exception(f"Failed to fetch enough hourly after prices for {ticker.symbol}. Got {len(d5_after_prices)}.")
-        after_data = torch.tensor([max(d1_after_prices), max(d2_after_prices), max(d5_after_prices)], dtype=torch.float64)
+        d1_after_high, d1_after_low, d1_after_close = aggregate.get_pricing(ticker, end_time, dateutils.add_business_days_unix(end_time, 1, tz=dateutils.ET), Interval.H1, return_quotes=['high', 'low', 'close'])
+        d2_after_high, d2_after_low, d2_after_close = aggregate.get_pricing(ticker, end_time, dateutils.add_business_days_unix(end_time, 2, tz=dateutils.ET), Interval.H1, return_quotes=['high', 'low', 'close'])
+        d5_after_high, d5_after_low, d5_after_close = aggregate.get_pricing(ticker, end_time, dateutils.add_business_days_unix(end_time, 5, tz=dateutils.ET), Interval.D1, return_quotes=['high', 'low', 'close'])
+        if len(d1_after_high) < 3:
+            raise Exception(f"Failed to fetch enough hourly after prices for {ticker.symbol}. Got {len(d1_after_high)}.")
+        if len(d2_after_high) < 6:
+            raise Exception(f"Failed to fetch enough hourly after prices for {ticker.symbol}. Got {len(d2_after_high)}.")
+        if len(d5_after_high) < 3:
+            raise Exception(f"Failed to fetch enough daily after prices for {ticker.symbol}. Got {len(d5_after_high)}.")
+        after_data = torch.tensor([
+            max(d1_after_high), min(d1_after_low), max(d1_after_low), d1_after_close[-1], max(d1_after_close), min(d1_after_close),
+            max(d2_after_high), min(d2_after_low), max(d2_after_low), d2_after_close[-1], max(d2_after_close), min(d2_after_close),
+            max(d5_after_high), min(d5_after_low), max(d5_after_low), d5_after_close[-1], max(d5_after_close), min(d5_after_close),
+        ], dtype=torch.float64)
         check_tensor(after_data, allow_zeros=False)
         return {D1_DATA: d1_data, H1_DATA: h1_data, AFTER_DATA: after_data}
 
-    def plot_statistics(self, target: PriceTarget = PriceTarget.TANH_10_10):
+    def plot_statistics(self, target: PriceTarget = PriceTarget.TANH_10_10, index: int = AFTER_CLOSE_I):
         #Bin distribution of after values
         temp = []
         files = [FOLDER/it for it in os.listdir(FOLDER)]
@@ -85,9 +95,9 @@ class Generator(ExampleGenerator):
             data = (batch[AFTER_DATA] - batch[H1_DATA][:,-1:,CLOSE_I])/(batch[H1_DATA][:,-1:,CLOSE_I])
             temp.append(data)
         data = torch.concat(temp, dim=0)
-        d1_data = data[:,D1_AFTER_I]
-        d2_data = data[:,D2_AFTER_I]
-        d5_data = data[:,D5_AFTER_I]
+        d1_data = data[:,D1_AFTER_I+index]
+        d2_data = data[:,D2_AFTER_I+index]
+        d5_data = data[:,D5_AFTER_I+index]
         for data, name in [(d1_data, 'D1'), (d2_data, 'D2'), (d5_data, 'D3')]:
             fig, axes = plt.subplots(1, 2)
             axes: list[matplotlib.axes.Axes] = axes
