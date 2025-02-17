@@ -2,12 +2,10 @@ import torch
 import torchinfo
 import config
 from torch import Tensor
-from ..utils import get_time_relativized, PriceTarget, check_tensors
+from ..utils import get_time_relativized, PriceTarget, check_tensors, get_moving_average
 from ..abstract import AbstractModel, ModelMetadata
 from .generator import D1_DATA, H1_DATA, AFTER_DATA, OPEN_I, CLOSE_I, LOW_I, HIGH_I, AFTER_D1_I, AFTER_CLOSE_OFF
 
-TOTAL_POINTS = 100
-INPUT_FEATURES = 6
 
 class RecursiveLayer(torch.nn.Module):
     def __init__(self, in_features: int, out_features: int):
@@ -37,9 +35,11 @@ class ConvolutionalLayer(torch.nn.Module):
 
 class Model(AbstractModel):
     """64 layers"""
-    def __init__(self, input_features: int = INPUT_FEATURES, is_tanh: bool = True):
+    def __init__(self, input_features: int = 10, data_points: int = 100, mvg_window: int = 10,  is_tanh: bool = True):
         super().__init__()
         self.input_features = input_features
+        self.data_points = data_points
+        self.mvg_window = mvg_window
         self.daily_conv = torch.nn.Sequential(
             ConvolutionalLayer(input_features=input_features, output_features=2*input_features),
             torch.nn.BatchNorm1d(num_features=2*input_features),
@@ -73,41 +73,49 @@ class Model(AbstractModel):
         ], dim=1)
         return self.dense(output)
 
-    def extract_tensors(self, example: dict[str, Tensor]) -> tuple[Tensor, ...]:
+    def extract_tensors(self, example):
+        return self.extract_tensors_impl(example, target=PriceTarget.TANH_10_10, result_offset=AFTER_D1_I+AFTER_CLOSE_OFF)
+
+    def extract_tensors_impl(self, example: dict[str, Tensor], target: PriceTarget, result_offset:int):
         if len(example[D1_DATA].shape) < 3:
             example = {key: example[key].unsqueeze(dim=0) for key in example}
         daily_raw = example[D1_DATA]
         hourly_raw = example[H1_DATA]
 
         def process(tensor: Tensor):
-            tensor = tensor[:,-TOTAL_POINTS:,:]
-            #1 Append high-low relative to low
-            relative_span = (tensor[:,:,HIGH_I] - tensor[:,:,LOW_I]) / tensor[:,:,LOW_I]
-            tensor = torch.concat([tensor, relative_span.unsqueeze(dim=2)], dim=2)
-            #2 Relativize open to close
-            tensor[:,:,OPEN_I] = (tensor[:,:,CLOSE_I] - tensor[:,:,OPEN_I]) / tensor[:,:,OPEN_I]
-            #3 Time relativize close, low, high, volume
-            tensor[:,:,1:-1] = get_time_relativized(tensor[:,:,1:-1], dim=1)
-            return tensor.transpose(1,2)
+            tensor = tensor[:,-self.data_points-self.mvg_window:,:]
+            #1 Get high-low relative to low (relative span)
+            tensor[:,:,OPEN_I] = (tensor[:,:,HIGH_I] - tensor[:,:,LOW_I]) / tensor[:,:,LOW_I]
+            #2 Get moving averages for everything
+            mvg = get_moving_average(tensor, dim=1, window=self.mvg_window)
+            #3 Concat everything
+            tensor = torch.concat([tensor, mvg], dim=2)
+            #4 Relativize all except relative span
+            tensor[:,:,1:5] = get_time_relativized(tensor[:,:,1:5], dim=1)
+            tensor[:,:,6:10] = get_time_relativized(tensor[:,:,6:10], dim=1)
+            return tensor[:,-self.data_points:,:].transpose(1,2)
         daily = process(daily_raw)
         hourly = process(hourly_raw)
         result = (daily, hourly)
 
         if AFTER_DATA in example:
             after = example[AFTER_DATA]
-            after = (after[:,AFTER_D1_I+AFTER_CLOSE_OFF] - hourly_raw[:,-1,CLOSE_I]) / hourly_raw[:,-1,CLOSE_I]
-            after = PriceTarget.TANH_10_10.get_price(after)
+            after = (after[:,result_offset] - hourly_raw[:,-1,CLOSE_I]) / hourly_raw[:,-1,CLOSE_I]
+            after = target.get_price(after)
             result += (after,)
 
         check_tensors(result)
         return result
-    
-    def print_summary(self, merge: int = 10):
-        input = [(config.batch_size*merge, self.input_features, TOTAL_POINTS)]*2
+
+    def print_summary(self, merge:int = 10):
+        input = [(config.batch_size*merge, self.input_features, self.data_points)]*2
         torchinfo.summary(self, input_size=input)
 
     def get_metadata(self) -> ModelMetadata:
         return ModelMetadata(projection_period=1, description="""
             Predict price change on a tanh scale for the next business day,
-            based on OHLCV time series (daily an hourly).
+            based on OHLCV time series (daily an hourly),
+            and their 10-data-point moving average counterparts.
+            The output should approach -1 for falls nearing 10 percent,
+            and +1 for rises nearing 10 percent.
         """)
