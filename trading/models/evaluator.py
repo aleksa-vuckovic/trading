@@ -198,7 +198,7 @@ class Evaluator:
         plotutils.refresh_interactive_figures(fig1, fig2)
         
         while True:
-            unix_time = dateutils.get_next_working_time(unix_time, hour=hour)
+            unix_time = dateutils.get_next_working_time_unix(unix_time, hour=hour)
             if unix_time >= unix_to:
                 break
             try:

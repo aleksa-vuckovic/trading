@@ -56,7 +56,7 @@ class ExampleGenerator:
             with tqdm(total=batch_size, desc=f'Generating batch {iter+1} ({hour})', leave=True) as bar:
                 while len(current) < batch_size:
                     if entry >= len(tickers) - 1 or entry < 0:
-                        new_time = dateutils.get_next_working_time(unix_time, hour=hour)
+                        new_time = dateutils.get_next_working_time_unix(unix_time, hour=hour)
                         if new_time > time_frame_end:
                             logger.info(f"Finished. (new time is now bigger than end time)")
                             break
