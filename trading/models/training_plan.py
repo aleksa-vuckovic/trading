@@ -308,13 +308,14 @@ class TrainingPlan:
                         with torch.no_grad():
                             with tqdm(batch_group.batches, desc = f'Evaluating {batch_group.name} batches...', leave=False) as bar:
                                 for batch in bar:
-                                    input = batch[:-1]
-                                    expect = batch[-1]
+                                    tensors = self.model.extract_tensors(batch)
+                                    input = tensors[:-1]
+                                    expect = tensors[-1]
                                     output = self.model(*input).squeeze()
                                     batch_group.stats.update(expect, output)
                             print(f"Evaluation group '{batch_group.name}' stats: {batch_group.stats}")
 
-
+                print("----------------------------------------------")
                 for rule in self.rules: rule.execute(self)
                 if self.primary_checkpoint: self.primary_checkpoint.save(self)
                 for batch_group in self.batch_groups: batch_group.stats.clear()

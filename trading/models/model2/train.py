@@ -33,7 +33,7 @@ def get_plan(hour: int) -> TrainingPlan:
     model = Model()
     builder = TrainingPlan.Builder(model)
     builder.with_optimizer(torch.optim.Adam(model.parameters()))
-    add_train_val_test_batches(builder, examples_folder=generator.FOLDER, make_stats=make_stats, merge=10, hour=hour)
+    add_train_val_test_batches(builder, examples_folder=generator.FOLDER, make_stats=make_stats, merge=5, hour=hour)
     add_triggers(
         builder,
         checkpoints_folder=checkpoints_folder,
