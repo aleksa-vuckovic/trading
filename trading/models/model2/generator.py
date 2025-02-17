@@ -24,12 +24,12 @@ VOLUME_I = 4
 D1_AFTER_I = 0
 D2_AFTER_I = 6
 D5_AFTER_I = 12
-AFTER_HIGH_I = 0
-AFTER_LOW_I = 1
-AFTER_LOWHIGH_I = 2
-AFTER_CLOSE_I = 3
-AFTER_CLOSEHIGH_I = 4
-AFTER_CLOSELOW_I = 5
+AFTER_HIGH_OFF = 0
+AFTER_LOW_OFF = 1
+AFTER_LOWHIGH_OFF = 2
+AFTER_CLOSE_OFF = 3
+AFTER_CLOSEHIGH_OFF = 4
+AFTER_CLOSELOW_OFF = 5
 D1_DATA = 'd1_data'
 H1_DATA = 'h1_data'
 AFTER_DATA = 'after_data'
@@ -85,7 +85,7 @@ class Generator(ExampleGenerator):
         check_tensor(after_data, allow_zeros=False)
         return {D1_DATA: d1_data, H1_DATA: h1_data, AFTER_DATA: after_data}
 
-    def plot_statistics(self, target: PriceTarget = PriceTarget.TANH_10_10, index: int = AFTER_CLOSE_I):
+    def plot_statistics(self, target: PriceTarget = PriceTarget.TANH_10_10, index: int = AFTER_CLOSE_OFF):
         #Bin distribution of after values
         temp = []
         files = [FOLDER/it for it in os.listdir(FOLDER)]
@@ -98,7 +98,7 @@ class Generator(ExampleGenerator):
         d1_data = data[:,D1_AFTER_I+index]
         d2_data = data[:,D2_AFTER_I+index]
         d5_data = data[:,D5_AFTER_I+index]
-        for data, name in [(d1_data, 'D1'), (d2_data, 'D2'), (d5_data, 'D3')]:
+        for data, name in [(d1_data, 'D1'), (d2_data, 'D2'), (d5_data, 'D5')]:
             fig, axes = plt.subplots(1, 2)
             axes: list[matplotlib.axes.Axes] = axes
             fig.suptitle(name)

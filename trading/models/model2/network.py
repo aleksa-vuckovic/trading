@@ -4,7 +4,7 @@ import config
 from torch import Tensor
 from ..utils import get_time_relativized, PriceTarget, check_tensors
 from ..abstract import AbstractModel, ModelMetadata
-from . import generator
+from .generator import D1_DATA, H1_DATA, AFTER_DATA, OPEN_I, CLOSE_I, LOW_I, HIGH_I, D1_AFTER_I, AFTER_CLOSE_OFF
 
 TOTAL_POINTS = 100
 INPUT_FEATURES = 6
@@ -74,19 +74,18 @@ class Model(AbstractModel):
         return self.dense(output)
 
     def extract_tensors(self, example: dict[str, Tensor]) -> tuple[Tensor, ...]:
-        if len(example[generator.D1_DATA].shape) < 3:
+        if len(example[D1_DATA].shape) < 3:
             example = {key: example[key].unsqueeze(dim=0) for key in example}
-        daily_raw = example[generator.D1_DATA]
-        hourly_raw = example[generator.H1_DATA]
-        
+        daily_raw = example[D1_DATA]
+        hourly_raw = example[H1_DATA]
 
         def process(tensor: Tensor):
             tensor = tensor[:,-TOTAL_POINTS:,:]
             #1 Append high-low relative to low
-            relative_span = (tensor[:,:,generator.HIGH_I] - tensor[:,:,generator.LOW_I]) / tensor[:,:,generator.LOW_I]
+            relative_span = (tensor[:,:,HIGH_I] - tensor[:,:,LOW_I]) / tensor[:,:,LOW_I]
             tensor = torch.concat([tensor, relative_span.unsqueeze(dim=2)], dim=2)
             #2 Relativize open to close
-            tensor[:,:,generator.OPEN_I] = (tensor[:,:,generator.CLOSE_I] - tensor[:,:,generator.OPEN_I]) / tensor[:,:,generator.OPEN_I]
+            tensor[:,:,OPEN_I] = (tensor[:,:,CLOSE_I] - tensor[:,:,OPEN_I]) / tensor[:,:,OPEN_I]
             #3 Time relativize close, low, high, volume
             tensor[:,:,1:-1] = get_time_relativized(tensor[:,:,1:-1], dim=1)
             return tensor.transpose(1,2)
@@ -94,9 +93,9 @@ class Model(AbstractModel):
         hourly = process(hourly_raw)
         result = (daily, hourly)
 
-        if generator.AFTER_DATA in example:
-            after = example[generator.AFTER_DATA]
-            after = (after[:,generator.D1_AFTER_I] - hourly_raw[:,-1,generator.CLOSE_I]) / hourly_raw[:,-1,generator.CLOSE_I]
+        if AFTER_DATA in example:
+            after = example[AFTER_DATA]
+            after = (after[:,D1_AFTER_I+AFTER_CLOSE_OFF] - hourly_raw[:,-1,CLOSE_I]) / hourly_raw[:,-1,CLOSE_I]
             after = PriceTarget.TANH_10_10.get_price(after)
             result += (after,)
 
