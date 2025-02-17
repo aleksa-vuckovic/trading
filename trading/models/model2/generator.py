@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 
 DATA_POINTS = 300
 OPEN_I = 0
-CLOSE_I = 1
+HIGH_I = 1
 LOW_I = 2
-HIGH_I = 3
+CLOSE_I = 3
 VOLUME_I = 4
 AFTER_D1_I = 0
 AFTER_D2_I = 6
@@ -53,7 +53,7 @@ class Generator(ExampleGenerator):
         #1. Get the prices
         d1_start_time = (end_time-(DATA_POINTS/5*7*1.5+5)*24*3600)
         h1_start_time = (end_time-(DATA_POINTS/6/5*7*1.5+5)*24*3600)
-        quotes = ['open', 'close', 'low', 'high', 'volume']
+        quotes = ['open', 'high', 'low', 'close', 'volume']
         d1_data = aggregate.get_pricing(ticker, d1_start_time, end_time, Interval.D1, return_quotes=quotes)
         if len(d1_data[0]) < DATA_POINTS:
             raise Exception(f'Failed to fetch enough daily prices for {ticker.symbol}. Got {len(d1_data[0])}')
