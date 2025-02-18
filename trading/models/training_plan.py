@@ -288,10 +288,11 @@ class TrainingPlan:
             
             while not self.stop and self.epoch < max_epoch:
                 logger.info(f"Running epoch {self.epoch}")
+                print(f"---------EPOCH {self.epoch}-------------------------------------")
                 for batch_group in self.batch_groups:
                     if batch_group.backward:
                         self.model.train()
-                        with tqdm(batch_group.batches, desc=f"Epoch {self.epoch} ({batch_group.name})", leave=False) as bar:
+                        with tqdm(batch_group.batches, desc=f"Epoch {self.epoch} ({batch_group.name})", leave=True) as bar:
                             for batch in bar:
                                 tensors = self.model.extract_tensors(batch)
                                 input = tensors[:-1]
@@ -315,7 +316,6 @@ class TrainingPlan:
                                     batch_group.stats.update(expect, output)
                             print(f"Evaluation group '{batch_group.name}' stats: {batch_group.stats}")
 
-                print("----------------------------------------------")
                 for rule in self.rules: rule.execute(self)
                 if self.primary_checkpoint: self.primary_checkpoint.save(self)
                 for batch_group in self.batch_groups: batch_group.stats.clear()

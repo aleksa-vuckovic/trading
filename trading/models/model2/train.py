@@ -22,8 +22,8 @@ class CustomLoss(StatCollector):
 def make_stats(name: str) -> StatContainer:
     return StatContainer(
         CustomLoss(),
-        Accuracy(name='accuracy', to_bool_output=lambda it: it > 0.5),
-        Precision(name='precision', to_bool_output=lambda it: it > 0.5),
+        Accuracy(name='accuracy', to_bool_output=lambda it: it > 0.55),
+        Precision(name='precision', to_bool_output=lambda it: it > 0.55),
         Accuracy(name='miss', to_bool_output=lambda it: it>0.2, to_bool_expect=lambda it: it<0),
         name=name
     )

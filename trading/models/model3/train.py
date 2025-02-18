@@ -7,7 +7,6 @@ from ..stats import StatCollector, StatContainer, Accuracy, Precision
 from .network import Model
 
 logger = logging.getLogger(__name__)
-checkpoints_folder = Path(__file__).parent / 'checkpoints'
 initial_lr = 10e-6
 
 class CustomLoss(StatCollector):
@@ -37,8 +36,8 @@ def get_plan(hour: int) -> TrainingPlan:
     add_train_val_test_batches(plan, examples_folder=model2.generator.FOLDER, make_stats=make_stats, hour=hour, merge=5)
     add_triggers(
         plan,
-        checkpoints_folder=checkpoints_folder,
+        checkpoints_folder=Path(__file__).parent / f"checkpoints_{hour}",
         initial_lr=initial_lr,
-        lr_steps=[(100, 10), (0.4, 5), (0.35, 2), (0.3, 1), (0.25, 0.5), (0.2, 0.1), (0.15, 0.05), (0.1, 0.01)]
+        lr_steps=[(100, 1), (0.7, 0.8), (0.6, 0.6), (0.5, 0.4), (0.4, 0.2), (0.35, 0.1), (0.3, 0.05), (0.25, 0.01), (0.2, 0.01), (0.15, 0.01), (0.1, 0.01)]
     )
     return plan.build()
