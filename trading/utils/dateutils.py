@@ -125,13 +125,6 @@ def is_interval_time_datetime(date: datetime, interval: Interval):
     raise Exception(f"Unknown interval {interval}")
 def is_interval_time_unix(unix_time: float, interval: Interval, tz=ET):
     return is_interval_time_datetime(unix_to_datetime(unix_time, tz=tz), interval)
-"""def get_interval_timestamps(unix_from: float, unix_to: float, interval: Interval, tz=ET) -> list[float]:
-    cur = unix_from if is_interval_time_unix(unix_from, interval) else get_next_interval_time_unix(unix_from, interval)
-    result = []
-    while cur < unix_to:
-        result.append(cur)
-        cur = get_next_interval_time_unix(cur, interval)
-    return result"""
 def get_interval_timestamps(unix_from: float, unix_to: float, interval: Interval, tz=ET) -> list[float]:
     cur = unix_to_datetime(unix_from, tz=tz)
     cur = cur if is_interval_time_datetime(cur, interval) else get_next_interval_time_datetime(cur, interval)

@@ -10,7 +10,7 @@ class TestWsj(unittest.TestCase):
     def test_merge_30m_to_1h(self):
         start = dateutils.str_to_unix('2025-01-10 10:00:00')
         input = [{'t': start+i*1800, 'o': i, 'h': i, 'l': i, 'c': i, 'v': i}for i in range(7)]
-        expect = [{'t': start+(i+(1 if i < 6 else 0))*1800 , 'o': i, 'h': i+1 if i < 6 else i, 'l': i, 'c': i+1 if i < 6 else i, 'v': 2*i+1 if i < 6 else i} for i in range(0, 7, 2)]
+        expect = [{'t': start+(i+1)*1800 , 'o': i, 'h': i+1 if i < 6 else i, 'l': i, 'c': i+1 if i < 6 else i, 'v': 2*i+1 if i < 6 else i} for i in range(0, 7, 2)]
         result = wsj._merge_data_1h(input)
         self.assertEqual(expect, result)
 
@@ -19,6 +19,11 @@ class TestWsj(unittest.TestCase):
         input = [*good, bad]
         expect = good
         result = wsj._merge_data_1h(input)
+        self.assertEqual(expect, result)
+
+        input = [{'t': start + 5*3600 + i*1800, 'o': 1, 'h': 1, 'l': 1, 'c': 1, 'v': 1} for i in range(3)]
+        expect = [{'t': start + 5*3600+1800, 'o':1, 'h':1, 'l': 1, 'c': 1, 'v': 2}, {'t': start + 6*3600, 'o':1, 'h':1, 'l':1, 'c':1, 'v':1}]
+        result =wsj._merge_data_1h(input)
         self.assertEqual(expect, result)
 
     def test_pricing_hourly(self):

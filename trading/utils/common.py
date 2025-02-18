@@ -52,6 +52,10 @@ def escape_filename(name: str):
 def get_full_classname(obj: object) -> str:
     return f"{type(obj).__module__}.{type(obj).__name__}"
 
+def shorter(text: str):
+    if len(text) > 500: return f"{text[:497]}..."
+    return text
+
 class BinarySearchEdge(Enum):
     LOW ='low'
     HIGH = 'high'

@@ -72,18 +72,14 @@ def _get_period_for_interval(interval: Interval) -> tuple[str, int]:
     raise Exception(f"Unknown interval {interval}")
 def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
     if interval == Interval.H1:
-        lower_bound = 10*3600+30*60
-        upper_bound = 16*3600
         result = []
         for it in timestamps:
             if not it:
                 result.append(None)
                 continue
             it = round(it/10)*10
-            date = dateutils.unix_to_datetime(it, tz=dateutils.ET)
-            daysecs = dateutils.datetime_to_daysecs(date)
-            if daysecs < lower_bound or daysecs > upper_bound or it % 1800:
-                logger.error(f"Unexpected timestamp {date} for period H1. Skipping entry.")
+            if not dateutils.is_interval_time_unix(it, interval, tz=dateutils.ET):
+                logger.error(f"Unexpected timestamp {dateutils.unix_to_datetime(it, tz=dateutils.ET)} for period H1. Skipping entry.")
                 result.append(None)
             result.append(it)
         return result

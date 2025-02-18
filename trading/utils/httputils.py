@@ -3,8 +3,10 @@ import logging
 import json
 import re
 import time
+import config
 from http import HTTPStatus
 from enum import Flag, auto
+from ..utils import common
 
 logger = logging.getLogger(__name__)
 
@@ -60,13 +62,18 @@ def get_as_browser(
     cookie = ";".join([f"{key}={value}" for key,value in cookies.items()]) if cookies else None
     response = requests.get(url, headers = {**_CHROME_HEADERS, 'Cookie': cookie, **headers}, params=params)
     logger.info(f"GET {url} ? {params} -> {response.status_code}")
+    if config.http.log_response: logger.info(response.text)
+    elif config.http.log_response_short: logger.info(common.shorter(response.text))
     if check_reponse: assert_response(url, response)
     return response
 
 def post_as_browser(url: str, body: object, check_response: bool = True) -> requests.Response:
     response = requests.post(url, json=body, headers={**_CHROME_HEADERS})
     logger.info(f"POST {url} -> {response.status_code}")
-    logger.info(json.dumps(body, indent = 4))
+    if config.http.log_request: logger.info("->" + json.dumps(body, indent = 4))
+    elif config.http.log_request_short: logger.info("->" + common.shorter(json.dumps(body, indent=4)))
+    if config.http.log_response: logger.info("<-" + response.text)
+    elif config.http.log_response_short: logger.info("<-" + common.shorter(response.text))
     if check_response: assert_response(url, response)
     return response
 

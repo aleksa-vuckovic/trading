@@ -55,9 +55,9 @@ def _merge_data_1h(data):
     i = 0
     while i < len(data):
         if dates[i].minute == 0:
-            if dates[i].hour == 16 or i == len(data)-1:
+            if dates[i].hour == 16:
                 result.append(data[i])
-            elif dates[i+1].hour == dates[i].hour and dates[i+1].minute == 30:
+            elif i+1 < len(dates) and dates[i+1].hour == dates[i].hour and dates[i+1].minute == 30:
                 #Merge with next
                 data[i]['h'] = max(data[i]['h'],data[i+1]['h'])
                 data[i]['l'] = min(data[i]['l'],data[i+1]['l'])
@@ -79,13 +79,14 @@ def _fix_timestamps(timestamps: list[float|int|None], interval: Interval) -> lis
     timestamps = [it//1000 if it else None for it in timestamps]
     if interval == Interval.D1: return fix_daily_timestamps(timestamps)
     if interval == Interval.H1:
-        lower_bound = 9*3600+30*60
-        upper_bound = 15*3600+30*60
+        lower_bound = 10*3600
+        upper_bound = 16*3600
         result = []
         for it in timestamps:
             if not it:
                 result.append(None)
                 continue
+            it+=1800
             date = dateutils.unix_to_datetime(it, tz=dateutils.ET)
             daysecs = dateutils.datetime_to_daysecs(date)
             if daysecs < lower_bound or daysecs > upper_bound or it %1800:
