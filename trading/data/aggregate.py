@@ -64,11 +64,15 @@ def get_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: flo
             return recent
     else:
         return yahoo.get_pricing(ticker.symbol, unix_from, unix_to, interval, return_quotes=return_quotes, backup_behavior=httputils.BackupBehavior.RETHROW|httputils.BackupBehavior.SLEEP)
-def get_interpolated_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, interval: Interval, return_quotes=['close', 'volume']) -> tuple[list[float], ...]:
+def get_interpolated_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, interval: Interval, return_quotes=['close', 'volume'], max_fill_ratio: float = 0.4) -> tuple[list[float], ...]:
     raw_times, *raw_data = get_pricing(ticker, unix_from, unix_to, interval, ['timestamp', *return_quotes])
-    if not raw_times:
-        return raw_data
     timestamps = dateutils.get_interval_timestamps(unix_from, unix_to, interval)
+    if not raw_times:
+        if timestamps: raise Exception(f"Can't interpolate with no data at all! Ticker {ticker.symbol} from {unix_from} to {unix_to}.")
+        return raw_data
+    fill_ratio = (len(timestamps)-len(raw_times))/len(timestamps)
+    if fill_ratio > max_fill_ratio:
+        raise Exception(f"Fill ratio {fill_ratio} is larger than the maximum {max_fill_ratio}.")
     return interpolate_pricing(raw_times, raw_data, timestamps)
     
 def interpolate_pricing(raw_timestamps: list[float], raw_data: tuple[list[float], ...], timestamps: list[float]):
