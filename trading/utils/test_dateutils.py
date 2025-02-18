@@ -99,6 +99,21 @@ class TestDates(unittest.TestCase):
             else:
                 self.assertEqual(expect.timestamp(), dateutils.get_next_interval_time_unix(input.timestamp(), Interval.D1))
 
+    def test_get_next_interval_time_dst(self):
+        # Test interval 
+        pairs = [
+            ('2024-03-09 16:00:00', '2024-03-11 10:30:00'),
+            ('2024-11-01 16:00:00', '2024-11-04 10:30:00')
+        ]
+        for input, expect in pairs:
+            input = dateutils.str_to_datetime(input)
+            expect = dateutils.str_to_datetime(expect)
+            if random.random() < 0.5:
+                self.assertEqual(expect, dateutils.get_next_interval_time_datetime(input, interval=Interval.H1))
+            else:
+                self.assertEqual(expect.timestamp(), dateutils.get_next_interval_time_unix(input.timestamp(), Interval.H1))
+
+
     def test_get_interval_timestamps(self):
         start = dateutils.str_to_unix('2025-02-16 00:00:00')
         end = dateutils.str_to_unix('2025-02-19 15:30:00')

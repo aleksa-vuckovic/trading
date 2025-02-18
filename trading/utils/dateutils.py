@@ -1,6 +1,6 @@
-import pytz
 import re
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from .common import Interval
 
 """
@@ -8,12 +8,12 @@ datetime stores the date components and an optional timezone (if unset, treated 
 datetime.astimezone converts to a different timezone, without changing the intrinsic timestamp, while adapting date components
 pytz.localize just sets the timezone, keeping the date components
 """
-ET = pytz.timezone('US/Eastern')
-UTC = pytz.timezone('UTC')
-CET = pytz.timezone('CET')
+ET =  ZoneInfo('US/Eastern')
+UTC = ZoneInfo('UTC')
+CET = ZoneInfo('CET')
 
 def str_to_datetime(time_string: str, format: str = "%Y-%m-%d %H:%M:%S", tz = ET) -> datetime:
-    return tz.localize(datetime.strptime(time_string, format))
+    return datetime.strptime(time_string, format).replace(tzinfo=tz)
 def str_to_unix(time_string: str, format: str = "%Y-%m-%d %H:%M:%S", tz = ET) -> float:
     return str_to_datetime(time_string, format=format, tz=tz).timestamp()
 
@@ -24,12 +24,13 @@ def add_business_days_unix(unix: float, count: int, tz = ET) -> float:
     time = unix_to_datetime(unix, tz=tz)
     return add_business_days_datetime(time, count).timestamp()
 
-
-
 def add_business_days_datetime(time: datetime, count: int) -> datetime:
     """
     Adds count business days to time and returns the result.
-    A business day is 24 hours during weekdays.
+    A business day is an entire calendar day during weekdays.
+        DST is accounted for, so if the datetime is localized,
+        the result will always have the same hour as the input.
+        If the input is on a weekend, the start of Tuesday is returned.
     """
     if is_weekend_datetime(time):
         time = to_start_of_day_datetime(time)
