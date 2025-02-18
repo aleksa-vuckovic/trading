@@ -107,12 +107,31 @@ def get_next_interval_time_datetime(date: datetime, interval: Interval) -> datet
     if interval == Interval.H1:
         if is_weekend_datetime(date) or daysecs >= 16*3600:
             date = date.replace(hour = 10, minute=30, second=0, microsecond=0)
+            date += timedelta(days=1)
             while is_weekend_datetime(date): date += timedelta(days=1)
             return date
         if daysecs >= 15.5*3600: return date.replace(hour = 16, minute = 0, second = 0, microsecond= 0)
         if daysecs < 10.5*3600: return date.replace(hour = 10, minute = 30, second=0, microsecond=0)
         if daysecs%3600 >= 30*60: return date.replace(hour = date.hour + 1, minute = 30, second = 0, microsecond= 0)
         return date.replace(minute = 30, second=0, microsecond=0)
+    raise Exception(f"Unknown interval {interval}")
+def is_interval_time(date: datetime, interval: Interval):
+    if is_weekend_datetime(date): return False
+    if interval == Interval.D1:
+        return date.hour == 16 and date.minute == 0 and date.second == 0 and date.microsecond == 0
+    if interval == Interval.H1:
+        daysecs = datetime_to_daysecs(date)
+        return (daysecs >= 10.5*3600 and daysecs <= 15.5*3600 and daysecs%3600 == 1800) or daysecs == 16*3600
+    raise Exception(f"Unknown interval {interval}")
+def get_interval_timestamps(unix_from: float, unix_to: float, interval: Interval, tz=ET) -> list[float]:
+    cur = unix_to_datetime(unix_from-1, tz=tz)
+    cur = cur if is_interval_time(cur, interval) else get_next_interval_time_datetime(cur, interval)
+    date_to = unix_to_datetime(unix_to, tz=tz)
+    result = []
+    while cur < date_to:
+        result.append(cur.timestamp())
+        cur = get_next_interval_time_datetime(cur, interval)
+    return result
 
 def datetime_to_daysecs(date: datetime) -> float:
     return date.hour*3600 + date.minute*60 + date.second + date.microsecond/1_000_000

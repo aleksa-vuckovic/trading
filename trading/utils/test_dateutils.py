@@ -98,3 +98,17 @@ class TestDates(unittest.TestCase):
                 self.assertEqual(expect, dateutils.get_next_interval_time_datetime(input, interval=Interval.D1))
             else:
                 self.assertEqual(expect.timestamp(), dateutils.get_next_interval_time_unix(input.timestamp(), Interval.D1))
+
+    def test_get_interval_timestamps(self):
+        start = dateutils.str_to_unix('2025-02-16 00:00:00')
+        end = dateutils.str_to_unix('2025-02-19 15:30:00')
+        times = dateutils.get_interval_timestamps(start, end, Interval.D1)
+        self.assertEqual([1739826000.0, 1739912400.0], times)
+        times = dateutils.get_interval_timestamps(start, end, Interval.H1)
+        self.assertEqual([
+            1739806200.0, 1739809800.0, 1739813400.0, 1739817000.0, 
+            1739820600.0, 1739824200.0, 1739826000.0, 1739892600.0, 
+            1739896200.0, 1739899800.0, 1739903400.0, 1739907000.0, 
+            1739910600.0, 1739912400.0, 1739979000.0, 1739982600.0, 
+            1739986200.0, 1739989800.0, 1739993400.0
+        ], times)

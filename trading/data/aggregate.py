@@ -68,10 +68,30 @@ def get_interpolated_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float,
     raw_times, *raw_data = get_pricing(ticker, unix_from, unix_to, interval, ['timestamp', *return_quotes])
     if not raw_times:
         return raw_data
+    timestamps = dateutils.get_interval_timestamps(unix_from, unix_to, interval)
+    return interpolate_pricing(raw_times, raw_data, timestamps)
     
-def get_interpolation_array(timestamps: list[float], interval: Interval):
-    pass
-
+def interpolate_pricing(raw_timestamps: list[float], raw_data: tuple[list[float], ...], timestamps: list[float]):
+    results = tuple([] for _ in raw_data)
+    for it in raw_data:
+        it.insert(0, it[0])
+    raw_timestamps.insert(0, timestamps[0])
+    if raw_timestamps[-1] < timestamps[-1]:
+        for it in raw_data:
+            it.append(it[-1])
+        raw_timestamps.append(timestamps[-1])
+    j = 0
+    for i in range(1,len(raw_timestamps)):
+        fills = 0
+        while raw_timestamps[i] > timestamps[j]:
+            fills += 1
+            j += 1
+        for r in range(fills+1):
+            factor = (r+1)/(fills+1)
+            for k in range(len(raw_data)):
+                results[k].append((1-factor)*raw_data[k][i-1]+factor*raw_data[k][i])
+        j+=1
+    return results
 
 def get_market_summary(unix_time: float) -> str:
     return zacks.get_summary(unix_time, backup_behavior=httputils.BackupBehavior.RETHROW|httputils.BackupBehavior.SLEEP)
