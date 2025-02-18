@@ -1,4 +1,6 @@
 import unittest
+import random
+from .common import Interval
 from . import dateutils
 
 class TestDates(unittest.TestCase):
@@ -27,11 +29,11 @@ class TestDates(unittest.TestCase):
 
     def test_get_next_time(self):
         input = dateutils.str_to_unix('2025-01-23 02:12:22', tz=dateutils.ET)
-        expect = dateutils.str_to_unix('2025-01-23 09:00:00', tz=dateutils.ET)
+        expect = dateutils.str_to_unix('2025-01-23 10:00:00', tz=dateutils.ET)
         self.assertEqual(expect, dateutils.get_next_working_time_unix(input))
 
         input = dateutils.str_to_unix('2025-01-17 20:01:12', tz=dateutils.ET)
-        expect = dateutils.str_to_unix('2025-01-20 09:00:00', tz=dateutils.ET)
+        expect = dateutils.str_to_unix('2025-01-20 10:00:00', tz=dateutils.ET)
         self.assertEqual(expect, dateutils.get_next_working_time_unix(input))
 
         input = dateutils.str_to_unix('2025-01-20 11:00:00', tz=dateutils.ET)
@@ -67,3 +69,32 @@ class TestDates(unittest.TestCase):
         result = dateutils.unix_to_daysecs(dateutils.str_to_unix('2020-05-01 23:59:59', tz=dateutils.ET), dateutils.ET)
         expect = 23*3600 + 59*60 + 59
         self.assertEqual(expect, result)
+
+    def test_get_next_interval_time(self):
+        pairs = [
+            ('2025-02-18 09:15:12', '2025-02-18 10:30:00'),
+            ('2025-02-18 14:30:00', '2025-02-18 15:30:00'),
+            ('2025-02-18 15:30:00', '2025-02-18 16:00:00'),
+            ('2025-02-18 12:31:12', '2025-02-18 13:30:00'),
+            ('2025-02-18 12:29:59', '2025-02-18 12:30:00')
+        ]
+        for input, expect in pairs:
+            input = dateutils.str_to_datetime(input)
+            expect = dateutils.str_to_datetime(expect)
+            if random.random() < 0.5:
+                self.assertEqual(expect, dateutils.get_next_interval_time_datetime(input, interval=Interval.H1))
+            else:
+                self.assertEqual(expect.timestamp(), dateutils.get_next_interval_time_unix(input.timestamp(), Interval.H1))
+
+        pairs = [
+            ('2025-02-15 05:00:12', '2025-02-17 16:00:00'),
+            ('2025-02-17 10:44:44', '2025-02-17 16:00:00'),
+            ('2025-02-17 16:00:00', '2025-02-18 16:00:00')
+        ]
+        for input, expect in pairs:
+            input = dateutils.str_to_datetime(input)
+            expect = dateutils.str_to_datetime(expect)
+            if random.random() < 0.5:
+                self.assertEqual(expect, dateutils.get_next_interval_time_datetime(input, interval=Interval.D1))
+            else:
+                self.assertEqual(expect.timestamp(), dateutils.get_next_interval_time_unix(input.timestamp(), Interval.D1))

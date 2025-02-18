@@ -1,6 +1,6 @@
 import logging
 import time
-from ..utils import httputils
+from ..utils import httputils, dateutils
 from ..utils.common import Interval
 from . import nasdaq, macrotrends, yahoo, zacks, seekingalpha, globenewswire, wsj, financialtimes
 
@@ -64,6 +64,14 @@ def get_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: flo
             return recent
     else:
         return yahoo.get_pricing(ticker.symbol, unix_from, unix_to, interval, return_quotes=return_quotes, backup_behavior=httputils.BackupBehavior.RETHROW|httputils.BackupBehavior.SLEEP)
+def get_interpolated_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, interval: Interval, return_quotes=['close', 'volume']) -> tuple[list[float], ...]:
+    raw_times, *raw_data = get_pricing(ticker, unix_from, unix_to, interval, ['timestamp', *return_quotes])
+    if not raw_times:
+        return raw_data
+    
+def get_interpolation_array(timestamps: list[float], interval: Interval):
+    pass
+
 
 def get_market_summary(unix_time: float) -> str:
     return zacks.get_summary(unix_time, backup_behavior=httputils.BackupBehavior.RETHROW|httputils.BackupBehavior.SLEEP)

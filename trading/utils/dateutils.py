@@ -1,6 +1,7 @@
-from datetime import datetime, timedelta
 import pytz
 import re
+from datetime import datetime, timedelta
+from .common import Interval
 
 """
 datetime stores the date components and an optional timezone (if unset, treated as the local timezone)
@@ -64,19 +65,18 @@ def market_close_unix(date: str):
 def get_next_working_time_datetime(date: datetime, hour: int | None = None) -> datetime:
     if date.minute or date.second or date.microsecond:
         date = date.replace(minute=0, second=0, microsecond=0)
-        date = date + timedelta(hours = 1)
     if is_weekend_datetime(date) or date.hour >= (hour or 16):
-        date = date.replace(hour = hour or 9)
+        date = date.replace(hour = hour or 10)
         date += timedelta(days=1)
         while is_weekend_datetime(date):
             date += timedelta(days=1)
         return date
-    elif date.hour < (hour or 9):
-        return date.replace(hour = hour or 9)
+    elif date.hour < (hour or 10):
+        return date.replace(hour = hour or 10)
     else:
         return date.replace(hour = date.hour + 1)
-def get_next_working_time_unix(unix_time: float, hour: int | None = None) -> float:
-    time = unix_to_datetime(unix_time, tz = ET)
+def get_next_working_time_unix(unix_time: float, hour: int | None = None, tz = ET) -> float:
+    time = unix_to_datetime(unix_time, tz = tz)
     return get_next_working_time_datetime(time, hour).timestamp()
 
 def get_prev_working_time(unix_time: float, hour: int | None = None) -> float:
@@ -95,6 +95,25 @@ def get_prev_working_time(unix_time: float, hour: int | None = None) -> float:
         time = time.replace(hour = time.hour - 1)
     return time.timestamp()
 
+def get_next_interval_time_unix(unix_time: float, interval: Interval, tz = ET) -> float:
+    time = unix_to_datetime(unix_time, tz = ET)
+    return get_next_interval_time_datetime(time, interval).timestamp()
+def get_next_interval_time_datetime(date: datetime, interval: Interval) -> datetime:
+    daysecs = datetime_to_daysecs(date)
+    if interval == Interval.D1:
+        if daysecs >= 16*3600: date += timedelta(days = 1)
+        while is_weekend_datetime(date): date += timedelta(days = 1)
+        return date.replace(hour=16, minute=0, second=0, microsecond=0)
+    if interval == Interval.H1:
+        if is_weekend_datetime(date) or daysecs >= 16*3600:
+            date = date.replace(hour = 10, minute=30, second=0, microsecond=0)
+            while is_weekend_datetime(date): date += timedelta(days=1)
+            return date
+        if daysecs >= 15.5*3600: return date.replace(hour = 16, minute = 0, second = 0, microsecond= 0)
+        if daysecs < 10.5*3600: return date.replace(hour = 10, minute = 30, second=0, microsecond=0)
+        if daysecs%3600 >= 30*60: return date.replace(hour = date.hour + 1, minute = 30, second = 0, microsecond= 0)
+        return date.replace(minute = 30, second=0, microsecond=0)
+
 def datetime_to_daysecs(date: datetime) -> float:
     return date.hour*3600 + date.minute*60 + date.second + date.microsecond/1_000_000
 def str_to_daysecs(date: str) -> float:
@@ -102,3 +121,9 @@ def str_to_daysecs(date: str) -> float:
 def unix_to_daysecs(unix_time: float, tz=ET) -> float:
     date = unix_to_datetime(unix_time, tz=tz)
     return datetime_to_daysecs(date)
+def set_datetime_daysecs(date: datetime, daysecs: float) -> datetime:
+    hour = daysecs//3600
+    minute = daysecs%3600//60
+    second = daysecs%60//1
+    microsecond =daysecs%1
+    return date.replace(hour = round(hour), minute = round(minute), second = round(second), microsecond=round(microsecond))
