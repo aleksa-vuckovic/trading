@@ -2,6 +2,7 @@ import unittest
 import time
 import shutil
 import json
+import math
 from enum import Enum
 from pathlib import Path
 from .caching import cached_scalar, cached_series, CACHE_ROOT
@@ -24,21 +25,22 @@ class TestCaching(unittest.TestCase):
         def get_series(unix_from: float, *, unix_to: float, type: str):
             return {
                 "name": type,
-                "series": [{"time": float(it), "data": it} for it in range(int(unix_from), int(unix_to) )]
+                "series": [{"time": float(it), "data": it} for it in range(math.floor(unix_from)+1, math.floor(unix_to)+1 )]
             }
         
-        test1 = get_series(15, unix_to=29, type="type10")
-        test2 = get_series(15, unix_to=29, type="other")
+        test1 = get_series(16, unix_to=30, type="type10")
+        test2 = get_series(16, unix_to=30, type="other")
         self.assertEqual(14, len(test1))
         self.assertEqual(14, len(test2))
-        self.assertEqual(15, test1[0]['data'])
-        self.assertEqual(28, test2[-1]['data'])
+        self.assertEqual(17, test1[0]['data'])
+        self.assertEqual(30, test2[-1]['data'])
         type10_path = cache / "type10"
         other_path = cache / "other"
         self.assertTrue(type10_path.exists())
         self.assertTrue(other_path.exists())
         self.assertTrue((type10_path/"1").exists())
         self.assertTrue((type10_path/"2").exists())
+        self.assertTrue((type10_path/"3").exists())
         self.assertTrue((other_path/"0").exists())
         self.assertEqual(10, len(json.loads((type10_path/"1").read_text())["series"]))
         self.assertEqual(10, len(json.loads((type10_path/"2").read_text())["series"]))
@@ -64,7 +66,7 @@ class TestCaching(unittest.TestCase):
         def get_series(unix_from: float,  unix_to: float):
             nonlocal invocations
             invocations += 1
-            return [{"time": unix_from}, {"time": unix_to-1}]
+            return [{"time": unix_from+1}, {"time": unix_to}]
         
         unix_to = time.time()
         unix_from = unix_to - 1000
@@ -84,7 +86,7 @@ class TestCaching(unittest.TestCase):
         new_unix_to = time.time()
         series = get_series(unix_from, new_unix_to)
         self.assertEqual(3, len(series)) #now get_series will be invoked with the previous upper border
-        self.assertGreater(series[2]["time"], unix_to)
+        self.assertGreaterEqual(series[2]["time"], unix_to)
         self.assertEqual(series[0]["time"] + 1, series[1]["time"])
         self.assertEqual(2, invocations)
         self.assertEqual(4, len(json.loads(livepath.read_text()))) #Make sure previous data is not deleted 

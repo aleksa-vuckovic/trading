@@ -28,8 +28,8 @@ def cached_series(
     Denotes a method which returns time series data, based on unix timestamps, and whose results should be cached.
     The result MUST be a dictionary, list or None, and the time series part MUST be a list or None.
     The time series should be validated and filtered already.
-    The underlying method is assumed to be closed at the start and open at the end of the interval.
-        The return of this method is guaranteed to be closed at the start and open at the end.
+    The underlying method is assumed to be OPEN at the start and CLOSED at the end of the interval.
+        The return of this method is guaranteed to be OPEN at the start and CLOSED at the end.
     It is also assumed to return data sorted by timestamp!
     Args:
         include_args - Arguments to be included as time series inputs.
@@ -106,9 +106,9 @@ def cached_series(
             # Take at most the last available time point. We don't want to rush and cache invalid or nonexistent data.
             unix_to = min(unix_to, unix_now)
             unix_from = min(unix_from, unix_to)
-            start_id = int(unix_from) // time_step
-            end_id = (int(unix_to) if unix_to%1 else int(unix_to)-1) // time_step
-            now_id = int(unix_now) // time_step
+            start_id = int(unix_from//time_step)
+            end_id = int(unix_to//time_step)
+            now_id = int(unix_now//time_step)
             result = []
             last_data = None
             def extend(data):
@@ -116,11 +116,11 @@ def cached_series(
                 last_data = data
                 series = get_series(data)
                 if not series: return
-                first = binary_search(series, get_timestamp, unix_from, BinarySearchEdge.HIGH)
-                last = binary_search(series, get_timestamp, unix_to, BinarySearchEdge.HIGH)
-                if first is None: return
-                if last is None: result.extend(series[first:])
-                else: result.extend(series[first:last])
+                first = binary_search(series, get_timestamp, unix_from, BinarySearchEdge.LOW)
+                last = binary_search(series, get_timestamp, unix_to, BinarySearchEdge.LOW)
+                if last is None: return
+                if first is None: result.extend(series[:last+1])
+                else: result.extend(series[first+1:last+1])
 
             for id in range(start_id, end_id+1):
                 if id == now_id:
@@ -160,7 +160,7 @@ def cached_series(
                         extend(json.loads(subpath.read_text()))
                     else:
                         # Invoke the underlying method for the entire chunk
-                        set_unix_args(args, kwargs, float(id*time_step), float((id+1)*time_step))
+                        set_unix_args(args, kwargs, float(id*time_step)-1e-5, float((id+1)*time_step)-1e-5)
                         data = func(*args, **kwargs)
                         subpath.write_text(json.dumps(data))
                         extend(data)

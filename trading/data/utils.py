@@ -31,7 +31,7 @@ def combine_series(
         def is_ok(i: int):
             for key in must_be_truthy:
                 if not data[key][i]: return False
-            return data[timestamp_key][i] >= timestamp_from and data[timestamp_key][i] < timestamp_to
+            return data[timestamp_key][i] > timestamp_from and data[timestamp_key][i] <= timestamp_to
     else:
         def is_ok(i: int):
             for key in must_be_truthy:
@@ -43,7 +43,7 @@ def combine_series(
 def separate_quotes(data: list[dict], quotes: list[str]) -> tuple[list[float], ...]:
     return tuple([it[quote[0]] for it in data] for quote in quotes)
 def filter_by_timestamp(data: list[dict|list], unix_from: float, unix_to: float, timestamp_field: str | int = 't') -> list[dict]:
-    return [it for it in data if it[timestamp_field] >= unix_from and it[timestamp_field] < unix_to]
+    return [it for it in data if it[timestamp_field] > unix_from and it[timestamp_field] <= unix_to]
 
 def fix_daily_timestamps(timestamps: list[float|int|None]) -> list[float]:
     result = []

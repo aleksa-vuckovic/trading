@@ -1,9 +1,10 @@
 import logging
 from urllib import parse
 from bs4 import BeautifulSoup
-from ..utils import dateutils, common, httputils
+from ..utils import dateutils, httputils
 from ..data import nasdaq
-from .caching import cached_scalar, cached_series, CACHE_ROOT
+from .caching import cached_series, CACHE_ROOT
+from .utils import filter_by_timestamp
 
 logger = logging.getLogger(__name__)
 _MODULE = __name__.split(".")[-1]
@@ -72,7 +73,7 @@ def _get_news_raw(orgs: list[str], keywords: list[str], unix_from: float, unix_t
 def _get_news(org: str, unix_from: float, unix_to: float) -> list[dict]:
     result = _get_news_raw([org], [], unix_from, unix_to)
     result = reversed(result)
-    result = [it for it in result if it['unix_time'] >= unix_from and it['unix_time'] < unix_to]
+    result = filter_by_timestamp(result, unix_from=unix_from, unix_to=unix_to, timestamp_field='unix_time')
     return sorted(result, key=lambda it: it['unix_time'])
 
 def get_news(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, **kwargs) -> list[str]:

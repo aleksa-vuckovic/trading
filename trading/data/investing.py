@@ -4,7 +4,7 @@ import math
 from pathlib import Path
 from ..utils import httputils, common
 from ..utils.common import Interval
-from .caching import cached_scalar, cached_series, CACHE_ROOT
+from .caching import cached_scalar, CACHE_ROOT
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]

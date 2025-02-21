@@ -2,8 +2,8 @@
 import re
 import logging
 from bs4 import BeautifulSoup
-from ..utils import httputils, dateutils, common
-from .caching import cached_scalar, cached_series, CACHE_ROOT
+from ..utils import httputils, dateutils
+from .caching import cached_scalar, CACHE_ROOT
 from . import nasdaq
 
 

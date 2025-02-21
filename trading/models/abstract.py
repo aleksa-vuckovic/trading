@@ -169,6 +169,7 @@ class PriceEstimator:
         return self.agg.apply_tensor(tensor[index])
 
     def estimate(self, ticker: nasdaq.NasdaqListedEntry, unix_time: float) -> float:
+        end_time = dateutils.add_intervals_unix
         end_time = dateutils.add_business_days_unix(unix_time, model.get_metadata().projection_period, tz=dateutils.ET)
         prices, = aggregate.get_pricing(ticker, unix_time, end_time, self.interval, return_quotes=[self.quote])
         if not prices:

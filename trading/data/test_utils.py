@@ -31,6 +31,6 @@ class TestUtils(unittest.TestCase):
 
     def test_combine_series_time(self):
         input = {key: [i*(index+1) for i in range(1,11)] for index, key in enumerate(['t','x'])}
-        expect = [{'t': i*1, 'x': i*2} for i in range(3,7)]
+        expect = [{'t': i*1, 'x': i*2} for i in range(4,8)]
         result = utils.combine_series(input, must_be_there=['t','x'], timestamp_from=3, timestamp_to=7)
         self.assertEqual(expect, result)

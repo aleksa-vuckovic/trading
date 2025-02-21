@@ -2,8 +2,9 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from ..utils import common, httputils
-from .caching import cached_scalar, cached_series, CACHE_ROOT
+from ..utils import httputils
+from .caching import cached_series, CACHE_ROOT
+from .utils import filter_by_timestamp
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
@@ -42,7 +43,8 @@ def _get_news(ticker: str, unix_from: float, unix_to: float) -> list[dict]:
         if len(data) < 50:
             break
         i += 1
-    return sorted([it for it in ret if it['unix_time'] >= unix_from and it['unix_time'] < unix_to], key = lambda it: it['unix_time'])
+    ret = filter_by_timestamp(ret, unix_from=unix_from, unix_to=unix_to, timestamp_field='unix_time')
+    return sorted(ret, key = lambda it: it['unix_time'])
     
 def get_news(ticker: str, unix_from: float, unix_to: float, **kwargs) -> list[str]:
     return [it['title'] for it in _get_news(ticker.upper(), unix_from, unix_to, **kwargs)]
