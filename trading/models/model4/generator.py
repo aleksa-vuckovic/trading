@@ -11,7 +11,7 @@ from matplotlib import pyplot as plt
 from ...utils import dateutils
 from ...utils.common import Interval
 from ...data import nasdaq, aggregate
-from ..abstract import ExampleGenerator
+from ..abstract import ExampleGenerator, QUOTES, CLOSE_I
 from ..utils import check_tensors, PriceTarget
 
 
@@ -22,18 +22,10 @@ H1_DATA_POINTS = 150
 AFTER_D1_DATA_POINTS = 10
 AFTER_H1_DATA_POINTS = 21
 
-OPEN_I = 0
-HIGH_I = 1
-LOW_I = 2
-CLOSE_I = 3
-VOLUME_I = 4
-
 D1_DATA = 'd1_data'
 H1_DATA = 'h1_data'
 AFTER_D1_DATA = 'after_d1_data'
 AFTER_H1_DATA = 'after_h1_data'
-
-QUOTES = ['open', 'high', 'low', 'close', 'volume']
 
 FOLDER = Path(__file__).parent / 'examples'
 

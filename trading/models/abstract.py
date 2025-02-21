@@ -6,10 +6,21 @@ from torch import Tensor
 from pathlib import Path
 from tqdm import tqdm
 from typing import NamedTuple
+from enum import Enum, auto
 from ..data import nasdaq, aggregate
 from ..utils import dateutils
+from ..utils.common import Interval
 
 logger = logging.getLogger(__name__)
+
+OPEN_I = 0
+HIGH_I = 1
+LOW_I = 2
+CLOSE_I = 3
+VOLUME_I = 4
+
+QUOTES = ['open', 'high', 'low', 'close', 'volume']
+QUOTE_I = {it[0]:i for i,it in enumerate(QUOTES)}
 
 class ExampleGenerator:
     STATE_FILE = '_loop_state.json'
@@ -52,6 +63,7 @@ class ExampleGenerator:
         tickers = tickers or aggregate.get_sorted_tickers()
 
         current: list[dict[str, Tensor]] = []
+
         while True:
             with tqdm(total=batch_size, desc=f'Generating batch {iter+1} ({hour})', leave=True) as bar:
                 while len(current) < batch_size:
@@ -118,4 +130,55 @@ class AbstractModel(torch.nn.Module):
         pass
 
 
+class Aggregation(Enum):
+    FIRST = 'first'
+    LAST = 'last'
+    AVG = 'avg'
+    MAX = 'max'
+    MIN = 'min'
+    def apply_tensor(self, tensor: Tensor, dim:int=-1) -> Tensor:
+        dims = len(tensor.shape)
+        while dim<0: dim+=dims
+        if self==Aggregation.FIRST: return tensor[tuple(slice(None,None) if it!=dim else 0 for it in range(dims))]
+        if self==Aggregation.LAST: return tensor[tuple(slice(None,None) if it!=dim else -1 for it in range(dims))]
+        if self==Aggregation.AVG: return tensor.mean(dim=dim)
+        if self==Aggregation.MAX: return tensor.max(dim=dim)
+        if self==Aggregation.MIN: return tensor.min(dim=dim)
+        raise Exception(f"Unknown aggregation {self}")
+    def apply_list(self, data: list, dim:int=-1) -> list|float:
+        tensor = torch.tensor(data, dtype=torch.float64)
+        return self.apply_tensor(tensor, dim=dim).tolist()
+
+class PriceEstimator:
+    def __init__(
+        self,
+        quote: str,
+        interval: Interval,
+        slice: slice,
+        agg: Aggregation
+    ):
+        self.quote = quote
+        self.index = QUOTE_I[quote[0].lower()]
+        self.interval = interval
+        self.slice = slice
+        self.agg = agg
+
+    def estimate_tensor(self, tensor: Tensor) -> Tensor:
+        dims = len(tensor.shape)
+        index = tuple(slice(None,None) if it < dims-2 else self.slice if it < dims - 1 else self.index for it in range(dims))
+        return self.agg.apply_tensor(tensor[index])
+
+    def estimate(self, ticker: nasdaq.NasdaqListedEntry, unix_time: float) -> float:
+        end_time = dateutils.add_business_days_unix(unix_time, model.get_metadata().projection_period, tz=dateutils.ET)
+        prices, = aggregate.get_pricing(ticker, unix_time, end_time, self.interval, return_quotes=[self.quote])
+        if not prices:
+            raise Exception(f"Got empty after prices for {ticker.symbol} at {unix_time}")
+        if self.min_count and len(prices) < self.min_count:
+            raise Exception(f"Not enough after prices for {ticker.symbol} at {unix_time}. Got {len(prices)}, expecting at least {self.min_count}.")
+        if self.last_count: prices = prices[-self.last_count:]
+        if self.quote == 'h': return max(prices)
+        if self.quote == 'l': return min(prices)
+        if self.quote == 'o': return prices[0]
+        if self.quote == 'c': return prices[-1]
+        raise Exception(f"Unsupported quote {self.quote}")
    

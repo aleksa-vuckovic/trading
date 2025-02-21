@@ -10,37 +10,38 @@ class TestDates(unittest.TestCase):
         self.assertEqual(1683368430, unix)
         self.assertIsInstance(unix, float)
 
-    def test_market_open(self):
-        open_time = dateutils.market_open_unix('2023-05-06')
-        self.assertEqual(dateutils.str_to_unix('2023-05-06 09:30:00', tz = dateutils.ET), open_time)
+    def test_add_intervals_d1(self):
+        examples = [
+            ('2025-01-25 18:00:00', 1, '2025-01-27 16:00:00'),
+            ('2025-01-24 12:01:02', 2, '2025-01-28 12:01:02'),
+            ('2025-01-28 09:30:00', 2, '2025-01-29 16:00:00'),
+            ('2025-01-28 16:00:00', 3, '2025-01-31 16:00:00'),
+            ('2025-01-28 15:35:00', 14, '2025-02-17 15:35:00')
+        ]
+        for date, count, expect in examples:
+            date = dateutils.str_to_unix(date, tz=dateutils.ET)
+            expect = dateutils.str_to_unix(expect, tz=dateutils.ET)
+            result = dateutils.add_intervals_unix(date, Interval.D1, count, tz=dateutils.ET)
+            self.assertEqual(expect, result)
     
-    def test_market_close(self):
-        close_time = dateutils.market_close_unix('2023-05-06')
-        self.assertEqual(dateutils.str_to_unix('2023-05-06 16:00:00', tz = dateutils.ET), close_time)
+    def test_add_intervals_h1(self):
+        examples = [
+            ('2025-01-28 10:01:02', 1, '2025-01-28 11:01:02'),
+            ('2025-01-28 08:13:11', 2, '2025-01-28 11:30:00'),
+            ('2025-01-28 08:00:00', 7, '2025-01-28 16:00:00'),
+            ('2025-01-28 08:00:00', 8, '2025-01-29 10:30:00'),
+            ('2025-01-28 11:23:45', 72, '2025-02-11 13:23:45'),
+            ('2025-01-28 09:30:00', 70, '2025-02-10 16:00:00'),
+            ('2025-01-28 15:30:00', 1, '2025-01-28 16:00:00'),
+            ('2025-01-28 15:31:00', 1, '2025-01-29 09:32:00')
+        ]
+        for date, count, expect in examples:
+            date = dateutils.str_to_unix(date, tz=dateutils.ET)
+            expect = dateutils.str_to_unix(expect, tz=dateutils.ET)
+            result = dateutils.add_intervals_unix(date, Interval.H1, count, tz=dateutils.ET)
+            self.assertEqual(expect, result)
 
-    def test_add_business_days(self):
-        unix = dateutils.str_to_unix('2025-01-25 18:00:00', tz=dateutils.ET)
-        result = dateutils.add_business_days_unix(unix, 1, tz=dateutils.ET)
-        self.assertEqual(dateutils.str_to_unix('2025-01-28 00:00:00', tz=dateutils.ET), result)
-
-        unix = dateutils.str_to_unix('2025-01-24 12:01:02', tz=dateutils.ET)
-        result = dateutils.add_business_days_unix(unix, 2, tz=dateutils.ET)
-        self.assertEqual(dateutils.str_to_unix('2025-01-28 12:01:02', tz=dateutils.ET), result)
-
-    def test_get_next_time(self):
-        input = dateutils.str_to_unix('2025-01-23 02:12:22', tz=dateutils.ET)
-        expect = dateutils.str_to_unix('2025-01-23 10:00:00', tz=dateutils.ET)
-        self.assertEqual(expect, dateutils.get_next_working_time_unix(input))
-
-        input = dateutils.str_to_unix('2025-01-17 20:01:12', tz=dateutils.ET)
-        expect = dateutils.str_to_unix('2025-01-20 10:00:00', tz=dateutils.ET)
-        self.assertEqual(expect, dateutils.get_next_working_time_unix(input))
-
-        input = dateutils.str_to_unix('2025-01-20 11:00:00', tz=dateutils.ET)
-        expect = dateutils.str_to_unix('2025-01-20 12:00:00', tz=dateutils.ET)
-        self.assertEqual(expect, dateutils.get_next_working_time_unix(input))
-
-    def test_get_next_time_by_hour(self):
+    def test_get_next_working_time(self):
         input = dateutils.str_to_unix('2025-01-23 02:12:22', tz=dateutils.ET)
         expect = dateutils.str_to_unix('2025-01-23 11:00:00', tz=dateutils.ET)
         self.assertEqual(expect, dateutils.get_next_working_time_unix(input, hour=11))
@@ -76,7 +77,9 @@ class TestDates(unittest.TestCase):
             ('2025-02-18 14:30:00', '2025-02-18 15:30:00'),
             ('2025-02-18 15:30:00', '2025-02-18 16:00:00'),
             ('2025-02-18 12:31:12', '2025-02-18 13:30:00'),
-            ('2025-02-18 12:29:59', '2025-02-18 12:30:00')
+            ('2025-02-18 12:29:59', '2025-02-18 12:30:00'),
+            ('2025-02-18 15:39:00', '2025-02-18 16:00:00'),
+            ('2925-02-14 16:00:00', '2025-02-17 10:30:00')
         ]
         for input, expect in pairs:
             input = dateutils.str_to_datetime(input)
@@ -89,7 +92,8 @@ class TestDates(unittest.TestCase):
         pairs = [
             ('2025-02-15 05:00:12', '2025-02-17 16:00:00'),
             ('2025-02-17 10:44:44', '2025-02-17 16:00:00'),
-            ('2025-02-17 16:00:00', '2025-02-18 16:00:00')
+            ('2025-02-17 16:00:00', '2025-02-18 16:00:00'),
+            ('2025-02-14 20:00:00', '2025-02-17 16:00:00')
         ]
         for input, expect in pairs:
             input = dateutils.str_to_datetime(input)
@@ -100,7 +104,6 @@ class TestDates(unittest.TestCase):
                 self.assertEqual(expect.timestamp(), dateutils.get_next_interval_time_unix(input.timestamp(), Interval.D1))
 
     def test_get_next_interval_time_dst(self):
-        # Test interval 
         pairs = [
             ('2024-03-09 16:00:00', '2024-03-11 10:30:00'),
             ('2024-11-01 16:00:00', '2024-11-04 10:30:00')
@@ -112,8 +115,7 @@ class TestDates(unittest.TestCase):
                 self.assertEqual(expect, dateutils.get_next_interval_time_datetime(input, interval=Interval.H1))
             else:
                 self.assertEqual(expect.timestamp(), dateutils.get_next_interval_time_unix(input.timestamp(), Interval.H1))
-
-
+    
     def test_get_interval_timestamps(self):
         start = dateutils.str_to_unix('2025-02-16 00:00:00')
         end = dateutils.str_to_unix('2025-02-19 15:30:00')
@@ -127,3 +129,16 @@ class TestDates(unittest.TestCase):
             1739910600.0, 1739912400.0, 1739979000.0, 1739982600.0, 
             1739986200.0, 1739989800.0, 1739993400.0
         ], times)
+
+        start = dateutils.str_to_unix('2024-03-08 14:30:00')
+        end = dateutils.str_to_unix('2024-03-12 10:30:00')
+        times = dateutils.get_interval_timestamps(start, end, Interval.D1)
+        expect = [dateutils.str_to_unix(it, tz=dateutils.ET) for it in ['2024-03-08 16:00:00', '2024-03-11 16:00:00']]
+        self.assertEqual(expect, times)
+        times = dateutils.get_interval_timestamps(start, end, Interval.H1)
+        expect = [dateutils.str_to_unix(it, tz=dateutils.ET) for it in [
+            '2024-03-08 14:30:00', '2024-03-08 15:30:00', '2024-03-08 16:00:00',
+            '2024-03-11 10:30:00', '2024-03-11 11:30:00', '2024-03-11 12:30:00', '2024-03-11 13:30:00'
+            '2024-03-11 14:30:00', '2024-03-11 15:30:00', '2024-03-11 16:00:00'
+        ]]
+        self.assertEqual(expect, times)
