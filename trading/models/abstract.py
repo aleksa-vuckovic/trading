@@ -13,6 +13,7 @@ from ..data import nasdaq, aggregate
 from ..utils import dateutils
 from ..utils.dateutils import TimingConfig
 from ..utils.common import Interval
+from ..utils.jsonutils import serializable
 
 logger = logging.getLogger(__name__)
 
@@ -157,11 +158,15 @@ class PriceEstimator:
         tensor = torch.tensor(prices, dtype=torch.float64)
         self.agg.apply_tensor(tensor, dim=-1).item()
     
-    def to_str(self) -> str:
-        return f"quote{self.quote}_interval{self.interval.name}_{self.index}_agg{self.agg.name}_mfr{int(self.max_fill_ratio*100)}"
+    def to_dict(self) -> dict:
+        return {
+            'quote': self.quote,
+            'interval': self.interval,
+            'index': self.inde
+        }
     
     @staticmethod
-    def from_str(value: str) -> PriceEstimator:
+    def from_dict(value: dict) -> PriceEstimator:
         data = re.match(r"quote([^_]+)_interval([^_])_(slice[^_]+)_agg([^_]+)_mfr(\d+)", value)
         if not data: raise Exception(f"Can't parse PriceEstimator string '{value}'")
         quote = data.group(1)
