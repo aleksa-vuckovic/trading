@@ -61,12 +61,12 @@ class BinarySearchEdge(Enum):
     HIGH = 'high'
     NONE = 'none'
 def binary_search(
-    collection: list, key: Callable[[Any], int|float], value: int|float, edge: BinarySearchEdge = BinarySearchEdge.NONE) -> int | None:
+    collection: list, value: int|float, key: Callable[[Any], int|float]=lambda x:x, edge: BinarySearchEdge = BinarySearchEdge.NONE) -> int | None:
     """
     Returns the index of value.
     If the value is not there, returns the index of:
-        - The last smaller value (LOW).
-        - The first bigger value (HIGH).
+        - The last smaller value or -1 if all values are larger (LOW).
+        - The first bigger value or len if all values are smaller (HIGH).
         - None (NONE).
     The collection is assumed to be sorted in ascending order, based on the key.
     """
@@ -77,21 +77,14 @@ def binary_search(
     #Ensure proper initial conditions
     ival = key(collection[i])
     jval = key(collection[j])
-    if ival == value:
-        return i
-    if jval == value:
-        return j
-    if ival > value:
-        return i if edge == BinarySearchEdge.HIGH else None
-    if jval < value:
-        return j if edge == BinarySearchEdge.LOW else None
+    if ival == value: return i
+    if jval == value: return j
+    if ival > value: return i if edge == BinarySearchEdge.HIGH else i-1
+    if jval < value: return j if edge == BinarySearchEdge.LOW else j+1
     while j - i > 1:
         mid = (i + j) // 2
         midval = key(collection[mid])
-        if midval == value:
-            return mid
-        if midval > value:
-            j = mid
-        else:
-            i = mid
+        if midval == value: return mid
+        if midval > value: j = mid
+        else: i = mid
     return j if edge == BinarySearchEdge.HIGH else i if edge == BinarySearchEdge.LOW else None

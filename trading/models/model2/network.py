@@ -3,7 +3,7 @@ import torchinfo
 import config
 from torch import Tensor
 from ..utils import get_time_relativized, PriceTarget, check_tensors, get_moving_average
-from ..abstract import AbstractModel, ModelMetadata
+from ..abstract import AbstractModel
 from .generator import D1_DATA, H1_DATA, AFTER_DATA, OPEN_I, CLOSE_I, LOW_I, HIGH_I, AFTER_D1_I, AFTER_CLOSE_OFF
 
 
@@ -111,11 +111,11 @@ class Model(AbstractModel):
         input = [(config.batch_size*merge, self.input_features, self.data_points)]*2
         torchinfo.summary(self, input_size=input)
 
-    def get_metadata(self) -> ModelMetadata:
-        return ModelMetadata(projection_period=1, description="""
-            Predict price change on a tanh scale for the next business day,
-            based on OHLCV time series (daily an hourly),
-            and their 10-data-point moving average counterparts.
-            The output should approach -1 for falls nearing 10 percent,
-            and +1 for rises nearing 10 percent.
-        """)
+    #def get_metadata(self) -> ModelMetadata:
+    #    return ModelMetadata(projection_period=1, description="""
+    #        Predict price change on a tanh scale for the next business day,
+    #        based on OHLCV time series (daily an hourly),
+    #        and their 10-data-point moving average counterparts.
+    #        The output should approach -1 for falls nearing 10 percent,
+    #        and +1 for rises nearing 10 percent.
+    #    """)

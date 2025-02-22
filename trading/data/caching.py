@@ -116,11 +116,9 @@ def cached_series(
                 last_data = data
                 series = get_series(data)
                 if not series: return
-                first = binary_search(series, get_timestamp, unix_from, BinarySearchEdge.LOW)
-                last = binary_search(series, get_timestamp, unix_to, BinarySearchEdge.LOW)
-                if last is None: return
-                if first is None: result.extend(series[:last+1])
-                else: result.extend(series[first+1:last+1])
+                first = binary_search(series, unix_from, key=get_timestamp, edge=BinarySearchEdge.LOW)
+                last = binary_search(series, unix_to, key=get_timestamp,  edge=BinarySearchEdge.LOW)
+                result.extend(series[first+1:last+1])
 
             for id in range(start_id, end_id+1):
                 if id == now_id:

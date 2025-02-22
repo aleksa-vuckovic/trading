@@ -4,7 +4,7 @@ import torchinfo
 import config
 from torch import Tensor
 from ..utils import PriceTarget, check_tensors
-from ..abstract import AbstractModel, ModelMetadata
+from ..abstract import AbstractModel
 from . import generator
 
 class IndividualTextLayer(torch.nn.Module):
@@ -223,9 +223,9 @@ class Model(AbstractModel):
         input += [(config.batch_size*merge, generator.TEXT_EMBEDDING_SIZE)]*3
         torchinfo.summary(model, input_size=input)
 
-    def get_metadata(self):
-        return ModelMetadata(projection_period=1, description="""
-            Predict price change on a tanh scale for the next business day,
-            based on closing price time series, and textual data -
-            headlines, general market sentiment and company description.
-        """)
+    #def get_metadata(self):
+    #    return ModelMetadata(projection_period=1, description="""
+    #        Predict price change on a tanh scale for the next business day,
+    #        based on closing price time series, and textual data -
+    #        headlines, general market sentiment and company description.
+    #    """)

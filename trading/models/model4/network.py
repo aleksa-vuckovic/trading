@@ -6,7 +6,7 @@ from ..utils import PriceTarget
 from ..abstract import AbstractModel
 from ..utils import get_moving_average, get_time_relativized, check_tensors
 from .generator import D1_DATA, H1_DATA, AFTER_D1_DATA, AFTER_H1_DATA
-from ..abstract import OPEN_I, HIGH_I, LOW_I, CLOSE_I, VOLUME_I, ModelMetadata
+from ..abstract import OPEN_I, HIGH_I, LOW_I, CLOSE_I, VOLUME_I
 
 class RecursiveLayer(torch.nn.Module):
     def __init__(self, in_features: int, out_features: int):
@@ -111,11 +111,11 @@ class Model(AbstractModel):
         input = [(config.batch_size*merge, self.input_features, self.data_points)]*2
         torchinfo.summary(self, input_size=input)
 
-    def get_metadata(self) -> ModelMetadata:
-        return ModelMetadata(projection_period=1, description="""
-            Predict price change on a tanh scale for the next business day,
-            based on OHLCV time series (daily an hourly),
-            and their 10-data-point moving average counterparts.
-            The output should approach -1 for falls nearing 10 percent,
-            and +1 for rises nearing 10 percent.
-        """)
+    #def get_metadata(self) -> ModelMetadata:
+    #    return ModelMetadata(projection_period=1, description="""
+    #        Predict price change on a tanh scale for the next business day,
+    #        based on OHLCV time series (daily an hourly),
+    #        and their 10-data-point moving average counterparts.
+    #        The output should approach -1 for falls nearing 10 percent,
+    #        and +1 for rises nearing 10 percent.
+    #    """)

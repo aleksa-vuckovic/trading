@@ -1,8 +1,7 @@
-import re
+from __future__ import annotations
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from enum import Enum
-from .common import Interval
+from .common import Interval, binary_search, BinarySearchEdge
 
 """
 datetime stores the date components and an optional timezone (if unset, treated as the local timezone)
@@ -30,7 +29,7 @@ def add_intervals_datetime(date: datetime, interval: Interval, count: int) -> da
     """
     Add count trading intervals to date.
     For example, 1 trading day means 7.5 hours of trading.
-    1 hour of trading means 1hour between 9:30 and 15:30,
+    1 hour of trading means 1 hour between 9:30 and 15:30,
     or 30 minutes between 15:30 and 16:00 - i.e. the last 30 minutes are counted double.
     The returned time *date2* is the minimum possible time such that *date2-date1*
     includes *count* trading intervals.
@@ -62,17 +61,7 @@ def add_intervals_datetime(date: datetime, interval: Interval, count: int) -> da
         return date        
     raise Exception(f"Unknown interval {interval}")
 def add_intervals_unix(unix_time: float, interval: Interval, count: int, tz=ET) -> float:
-    date = unix_to_datetime(unix_time, tz=tz)
-    return add_intervals_datetime(date, interval, count).timestamp()
-
-def get_next_working_time_datetime(date: datetime, hour: int) -> datetime:
-    result = date.replace(hour=hour,minute=0, second=0, microsecond=0)
-    result += timedelta(days=2 if result.weekday() == 5 else 1 if result.weekday() == 6 else 0)
-    if result > date: return result
-    return add_intervals_datetime(result, Interval.D1, 1)
-def get_next_working_time_unix(unix_time: float, hour: int | None = None, tz = ET) -> float:
-    time = unix_to_datetime(unix_time, tz = tz)
-    return get_next_working_time_datetime(time, hour).timestamp()
+    return add_intervals_datetime(unix_to_datetime(unix_time, tz=tz), interval, count).timestamp()
 
 def get_next_interval_time_datetime(date: datetime, interval: Interval) -> datetime:
     if interval == Interval.D1:
@@ -85,8 +74,7 @@ def get_next_interval_time_datetime(date: datetime, interval: Interval) -> datet
         return add_intervals_datetime(date.replace(hour=date.hour-1, minute=30, second=0, microsecond=0), Interval.H1, 1)
     raise Exception(f"Unknown interval {interval}")
 def get_next_interval_time_unix(unix_time: float, interval: Interval, tz = ET) -> float:
-    time = unix_to_datetime(unix_time, tz = tz)
-    return get_next_interval_time_datetime(time, interval).timestamp()
+    return get_next_interval_time_datetime(unix_to_datetime(unix_time, tz = tz), interval).timestamp()
 
 def is_interval_time_datetime(date: datetime, interval: Interval):
     if date.weekday()>=5: return False
@@ -123,3 +111,84 @@ def set_datetime_daysecs(date: datetime, daysecs: float) -> datetime:
     microsecond =daysecs%1
     return date.replace(hour = round(hour), minute = round(minute), second = round(second), microsecond=round(microsecond))
 
+def skip_weekend_datetime(date: datetime) -> datetime:
+    if date.weekday() >= 5: return date.replace(hour=0,minute=0,second=0,microsecond=0) + timedelta(7-date.weekday())
+    return date
+def skip_weekend_unix(unix_time: float, tz = ET) -> float:
+    date = unix_to_datetime(unix_time, tz=tz)
+    return skip_weekend_datetime(date).timestamp()
+
+class TimingConfig:
+    _timestamps: dict[Interval, list[float]]
+    def __init__(self, components: list[float|tuple[float,float]]):
+        self.components = components
+        self._timestamps = {}
+    class Builder:
+        def __init__(self):
+            self.components = []
+        def at(self, hour: int = 9, minute: int = 30) -> TimingConfig.Builder:
+            self.components.append(float(hour*3600 + minute*60))
+            return self
+        class _Interval:
+            def __init__(self, builder: TimingConfig.Builder, start: float):
+                self._builder = builder
+                self._start = start
+            def until(self, hour: int = 16, minute: int = 0) -> TimingConfig.Builder:
+                self._builder.components.append((self._start, float(hour*3600+minute*60)))
+                return self._builder
+        def starting(self, hour: int = 9, minute: int = 30) -> TimingConfig.Builder._Interval:
+            return TimingConfig.Builder._Interval(self, float(hour*3600+minute*60))
+        def around(self, hour: int = 10, minute: int = 0, delta_minute: int = 10):
+            if not delta_minute: return self.at(hour = hour, minute = minute)
+            time = float(hour*3600 + minute*60)
+            self.components.append((time-delta_minute*60,time+delta_minute*60))
+            return self
+        def build(self) -> TimingConfig:
+            return TimingConfig(self.components)
+    def get_timestamps(self, step: float) -> list[float]:
+        if step in self._timestamps: return self._timestamps[step]
+        result = []
+        for component in self.components:
+            if isinstance(component, tuple):
+                cur = component[1]
+                start = component[0]
+                while cur > start:
+                    result.append(cur)
+                    cur -= step
+            else: result.append(component)
+        result = sorted(result)
+        self._timestamps[step] = result
+        return result
+    def get_next_datetime(self, date: datetime, step: float) -> datetime:
+        date = skip_weekend_datetime(date)
+        daysecs = datetime_to_daysecs(date)
+        timestamps = self.get_timestamps(step)
+        if not timestamps: raise Exception(f"No timestamps")
+        index = binary_search(timestamps, daysecs, edge=BinarySearchEdge.LOW) + 1
+        if index < len(timestamps): return set_datetime_daysecs(date, timestamps[index])
+        date = skip_weekend_datetime(date+timedelta(days=1))
+        return set_datetime_daysecs(date, timestamps[0])
+    def get_next_unix(self, unix_time: float, step: float, tz = ET) -> datetime:
+        return self.get_next_datetime(unix_to_datetime(unix_time, tz=tz), step).timestamp()
+    
+    def __contains__(self, unix_or_date: float|datetime) -> bool:
+        if isinstance(unix_or_date, datetime): date = unix_or_date
+        else: date = unix_to_datetime(unix_or_date)
+        if date.weekday() >= 5: return False
+        time = datetime_to_daysecs(date)
+        for it in self.components:
+            if isinstance(it, tuple) and time > it[0] and time <= it[1]: return True
+            if isinstance(it, float) and time == it: return True
+        return False
+    def contains(self, unix_time: float, tz=ET) -> bool:
+        return unix_to_datetime(unix_time, tz=tz) in self
+    
+    def to_list(self) -> list:
+        return self.components
+    @staticmethod
+    def from_list(obj: list) -> TimingConfig:
+        return TimingConfig([(it[0], it[1]) if isinstance(it, list) else float(it) for it in obj])
+    
+    def __eq__(self, other):
+        if not isinstance(other, TimingConfig): return False
+        return self.components == other.components

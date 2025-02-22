@@ -1,7 +1,8 @@
 import unittest
 import random
+from . import dateutils, jsonutils
+from .dateutils import TimingConfig
 from .common import Interval
-from . import dateutils
 
 class TestDates(unittest.TestCase):
 
@@ -40,23 +41,6 @@ class TestDates(unittest.TestCase):
             expect = dateutils.str_to_unix(expect, tz=dateutils.ET)
             result = dateutils.add_intervals_unix(date, Interval.H1, count, tz=dateutils.ET)
             self.assertEqual(expect, result)
-
-    def test_get_next_working_time(self):
-        input = dateutils.str_to_unix('2025-01-23 02:12:22', tz=dateutils.ET)
-        expect = dateutils.str_to_unix('2025-01-23 11:00:00', tz=dateutils.ET)
-        self.assertEqual(expect, dateutils.get_next_working_time_unix(input, hour=11))
-
-        input = dateutils.str_to_unix('2025-01-17 15:01:12', tz=dateutils.ET)
-        expect = dateutils.str_to_unix('2025-01-20 15:00:00', tz=dateutils.ET)
-        self.assertEqual(expect, dateutils.get_next_working_time_unix(input, hour=15))
-
-        input = dateutils.str_to_unix('2025-01-20 11:00:00', tz=dateutils.ET)
-        expect = dateutils.str_to_unix('2025-01-20 13:00:00', tz=dateutils.ET)
-        self.assertEqual(expect, dateutils.get_next_working_time_unix(input, hour=13))
-
-        input = dateutils.str_to_unix('2025-01-24 11:00:00', tz=dateutils.ET)
-        expect = dateutils.str_to_unix('2025-01-27 11:00:00', tz=dateutils.ET)
-        self.assertEqual(expect, dateutils.get_next_working_time_unix(input, hour=11))
 
     def test_datetime_to_daysecs(self):
         date = dateutils.str_to_datetime('2020-05-05 10:12:13')
@@ -142,3 +126,76 @@ class TestDates(unittest.TestCase):
             '2024-03-11 14:30:00', '2024-03-11 15:30:00', '2024-03-11 16:00:00'
         ]]
         self.assertEqual(expect, times)
+
+    def test_skip_weekend(self):
+        examples = [
+            ('2025-02-22 01:22:33', '2025-02-24 00:00:00'),
+            ('2025-02-21 23:59:59', '2025-02-21 23:59:59'),
+            ('2025-02-23 20:00:00', '2025-02-24 00:00:00'),
+            ('2025-02-18 23:45:12', '2025-02-18 23:45:12')
+        ]
+
+        for input, expect in examples:
+            input = dateutils.str_to_datetime(input)
+            expect = dateutils.str_to_datetime(expect)
+            if random.random() < 0.5:
+                self.assertEqual(expect.timestamp(), dateutils.skip_weekend_unix(input.timestamp(), tz=dateutils.ET))
+            else:
+                self.assertEqual(expect, dateutils.skip_weekend_datetime(input))
+        
+    def test_timing_config(self):
+        config = TimingConfig.Builder()\
+            .at(hour = 11, minute = 0)\
+            .around(hour = 14, minute = 30, delta_minute=20)\
+            .starting(hour = 15, minute = 0).until(hour = 16, minute = 0)\
+            .build()
+        config_ = jsonutils.deserialize(jsonutils.serialize(config), TimingConfig)
+        self.assertEqual(config, config_)
+        
+        examples = [(it, True) for it in ['2025-02-21 11:00:00', '2025-02-21 14:30:00', '2025-02-21 14:50:00',
+            '2025-02-21 15:00:01', '2025-02-21 16:00:00', '2025-02-21 14:11:00']]
+        examples.extend((it, False) for it in ['2025-02-21 11:00:01', '2025-02-21 14:10:00', '2025-02-21 14:50:01',
+            '2025-02-21 15:00:00', '2025-02-22 11:00:00', '2025-02-22 14:30:00'])
+        
+        for input, expect in examples:
+            if random.random() < 0.5: self.assertEqual(expect, dateutils.str_to_datetime(input) in config)
+            else: self.assertEqual(expect, dateutils.str_to_unix(input) in config)
+
+    def test_timing_config_next(self):
+        config = TimingConfig.Builder()\
+            .at(hour = 11, minute = 0)\
+            .around(hour = 14, minute = 30, delta_minute=20)\
+            .starting(hour = 15, minute = 0).until(hour = 16, minute = 0)\
+            .build()
+        config_ = jsonutils.deserialize(jsonutils.serialize(config), TimingConfig)
+        self.assertEqual(config, config_)
+        
+        expect = [dateutils.str_to_datetime(it, tz=dateutils.ET) for it in 
+            ['2025-02-21 11:00:00', '2025-02-21 14:50:00', '2025-02-21 16:00:00', '2025-02-24 11:00:00']]
+        result = []
+        cur = dateutils.str_to_datetime('2025-02-21 10:00:00', tz=dateutils.ET)
+        for i in range(len(expect)):
+            if random.random() < 0.5:
+                cur = config.get_next_datetime(cur, step=3600)
+                result.append(cur)
+            else:
+                cur = dateutils.unix_to_datetime(config.get_next_unix(cur.timestamp(), step=3600), tz=dateutils.ET)
+                result.append(cur)
+        self.assertEqual(expect, result)
+
+        config = TimingConfig.Builder()\
+            .around(hour = 11, minute = 0, delta_minute = 30)\
+            .build()
+        
+        expect = [dateutils.str_to_datetime(it, tz=dateutils.ET) for it in 
+            ['2025-02-21 10:31:00', '2025-02-21 10:32:00', '2025-02-21 10:33:00', '2025-02-21 10:34:00']]
+        result = []
+        cur = dateutils.str_to_datetime('2025-02-21 10:00:00', tz=dateutils.ET)
+        for i in range(len(expect)):
+            if random.random() < 0.5:
+                cur = config.get_next_datetime(cur, step=60)
+                result.append(cur)
+            else:
+                cur = dateutils.unix_to_datetime(config.get_next_unix(cur.timestamp(), step=60), tz=dateutils.ET)
+                result.append(cur)
+        self.assertEqual(expect, result)

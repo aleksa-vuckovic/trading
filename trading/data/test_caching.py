@@ -66,7 +66,7 @@ class TestCaching(unittest.TestCase):
         def get_series(unix_from: float,  unix_to: float):
             nonlocal invocations
             invocations += 1
-            return [{"time": unix_from+1}, {"time": unix_to}]
+            return [{"time": unix_from+0.1}, {"time": unix_to-0.1}]
         
         unix_to = time.time()
         unix_from = unix_to - 1000
@@ -87,7 +87,7 @@ class TestCaching(unittest.TestCase):
         series = get_series(unix_from, new_unix_to)
         self.assertEqual(3, len(series)) #now get_series will be invoked with the previous upper border
         self.assertGreaterEqual(series[2]["time"], unix_to)
-        self.assertEqual(series[0]["time"] + 1, series[1]["time"])
+        self.assertAlmostEqual(series[0]["time"] + 0.2, series[1]["time"], places=6)
         self.assertEqual(2, invocations)
         self.assertEqual(4, len(json.loads(livepath.read_text()))) #Make sure previous data is not deleted 
 

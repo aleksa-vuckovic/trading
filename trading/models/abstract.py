@@ -1,7 +1,9 @@
+from __future__ import annotations
 import logging
 import json
 import torch
 import config
+import re
 from torch import Tensor
 from pathlib import Path
 from tqdm import tqdm
@@ -108,28 +110,6 @@ class ExampleGenerator:
                 break
             current.clear()
 
-
-class ModelMetadata(NamedTuple):
-    """
-    Args:
-        projection_period: The projected period length in business days.
-        description: Short description of what the model is trained to do.
-    """
-    projection_period: int
-    description: str
-
-
-class AbstractModel(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-    def extract_tensors(self, example: dict[str, Tensor]) -> tuple[Tensor, ...]:
-        pass
-    def print_summary(self, merge: int = 10):
-        pass
-    def get_metadata(self) -> ModelMetadata:
-        pass
-
-
 class Aggregation(Enum):
     FIRST = 'first'
     LAST = 'last'
@@ -154,32 +134,54 @@ class PriceEstimator:
         self,
         quote: str,
         interval: Interval,
-        slice: slice,
-        agg: Aggregation
+        index: slice,
+        agg: Aggregation,
+        max_fill_ratio: float = 1
     ):
         self.quote = quote
-        self.index = QUOTE_I[quote[0].lower()]
+        self.quote_index = QUOTE_I[quote[0].lower()]
         self.interval = interval
-        self.slice = slice
+        self.index = index
         self.agg = agg
+        self.max_fill_ratio = max_fill_ratio
 
     def estimate_tensor(self, tensor: Tensor) -> Tensor:
         dims = len(tensor.shape)
-        index = tuple(slice(None,None) if it < dims-2 else self.slice if it < dims - 1 else self.index for it in range(dims))
+        index = tuple(slice(None,None) if it < dims-2 else self.slice if it < dims - 1 else self.quote_index for it in range(dims))
         return self.agg.apply_tensor(tensor[index])
 
-    def estimate(self, ticker: nasdaq.NasdaqListedEntry, unix_time: float) -> float:
-        end_time = dateutils.add_intervals_unix
-        end_time = dateutils.add_business_days_unix(unix_time, model.get_metadata().projection_period, tz=dateutils.ET)
-        prices, = aggregate.get_pricing(ticker, unix_time, end_time, self.interval, return_quotes=[self.quote])
-        if not prices:
-            raise Exception(f"Got empty after prices for {ticker.symbol} at {unix_time}")
-        if self.min_count and len(prices) < self.min_count:
-            raise Exception(f"Not enough after prices for {ticker.symbol} at {unix_time}. Got {len(prices)}, expecting at least {self.min_count}.")
-        if self.last_count: prices = prices[-self.last_count:]
-        if self.quote == 'h': return max(prices)
-        if self.quote == 'l': return min(prices)
-        if self.quote == 'o': return prices[0]
-        if self.quote == 'c': return prices[-1]
-        raise Exception(f"Unsupported quote {self.quote}")
-   
+    def estimate(self, ticker: nasdaq.NasdaqListedEntry, unix_time: float, tz=dateutils.ET) -> float:
+        end_time = dateutils.add_intervals_unix(unix_time, self.interval, self.index.stop, tz=tz)
+        prices, = aggregate.get_interpolated_pricing(ticker, unix_time, end_time, self.interval, return_quotes=[self.quote], max_fill_ratio=self.max_fill_ratio)
+        tensor = torch.tensor(prices, dtype=torch.float64)
+        self.agg.apply_tensor(tensor, dim=-1).item()
+    
+    def to_str(self) -> str:
+        return f"quote{self.quote}_interval{self.interval.name}_{self.index}_agg{self.agg.name}_mfr{int(self.max_fill_ratio*100)}"
+    
+    @staticmethod
+    def from_str(value: str):
+        data = re.match(r"quote([^_]+)_interval([^_])_(slice[^_]+)_agg([^_]+)_mfr(\d+)", value)
+        if not data: raise Exception(f"Can't parse PriceEstimator string '{value}'")
+        quote = data.group(1)
+        interval = Interval[data.group(2)]
+        slice = eval(data.group(3))
+        agg = Aggregation[data.group(4)]
+
+
+class ModelConfig:
+    """
+    Args:
+        projection_period: The projected period length in business days.
+        description: Short description of what the model is trained to do.
+    """
+    def __init__(self, estimator: PriceEstimator):
+        pass
+        
+class AbstractModel(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+    def extract_tensors(self, example: dict[str, Tensor]) -> tuple[Tensor, ...]:
+        pass
+    def print_summary(self, merge: int = 10):
+        pass
