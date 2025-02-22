@@ -6,13 +6,32 @@ from .common import get_full_classname, get_class_by_full_classname
 
 _TYPE = '$$type'
 
-def serializable(cls: type):
-    try:
-        cls()
-    except TypeError:
-        raise Exception(f"Only classes with no-args constructor can be marked serializable.")
-    cls._jsonutils_serializable = True
-    return cls
+_SKIP_KEYS = '_serializable_skip_keys'
+def serializable(skip_keys: list[str] = []):
+    def decorate(cls):
+        try:
+            cls()
+            create = cls
+        except TypeError:
+            create = lambda: object.__new__(cls)
+        skips = skip_keys[:]
+        for base in cls.__bases__:
+            if hasattr(base, _SKIP_KEYS): skips.extend(getattr(base, _SKIP_KEYS))
+        setattr(cls, _SKIP_KEYS, skips)
+        if not skips:
+            def to_dict(self) -> dict:
+                return self.__dict__
+        else:
+            def to_dict(self) -> dict:
+                return {key:self.__dict__[key] for key in self.__dict__ if key not in skips}
+        def from_dict(obj:dict) -> object:
+            result = create()
+            result.__dict__.update(obj)
+            return result
+        cls.to_dict = to_dict
+        cls.from_dict = from_dict
+        return cls
+    return decorate
 def _is_serializable(obj_or_cls: object) -> bool:
     hasattr(obj_or_cls, '_jsonutils_serializable')
 
@@ -28,7 +47,8 @@ def serialize(obj: object, indent:int|str|None=None) -> str:
 
 def deserialize(data: str) -> str:
     return _deserialize(json.loads(data))
-def _deserialize(obj: dict|list|str|int|float|bool) -> object:
+def _deserialize(obj: dict|list|str|int|float|bool|None) -> object:
+    if obj is None: return None
     if isinstance(obj, (bool, int, float, str)): return obj
     if isinstance(obj, list):
         return [_deserialize(it) for it in obj]
@@ -38,6 +58,7 @@ def _deserialize(obj: dict|list|str|int|float|bool) -> object:
             obj[key] = _deserialize(obj[key])
         if _TYPE not in obj: return obj
         cls = get_class_by_full_classname(obj[_TYPE])
+        del obj[_TYPE]
         if hasattr(cls, 'from_dict'): return cls.from_dict(obj)
         if issubclass(cls, Enum): return cls[obj['name']]
         if cls.__module__ == 'builtins': return eval(obj['value'])

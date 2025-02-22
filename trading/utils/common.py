@@ -35,7 +35,7 @@ class Interval(Enum):
         raise ValueError(f"Unknown interval {self}.")
 
 def equatable(skip_keys: list[str] = []):
-    def decorate(cls: type):
+    def decorate(cls):
         def __eq__(self, other: object) -> bool:
             if not isinstance(other, cls): return False
             for key in self.__dict__:
