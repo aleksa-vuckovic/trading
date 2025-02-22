@@ -183,11 +183,11 @@ class TimingConfig:
     def contains(self, unix_time: float, tz=ET) -> bool:
         return unix_to_datetime(unix_time, tz=tz) in self
     
-    def to_list(self) -> list:
-        return self.components
+    def to_dict(self) -> dict:
+        return {'components': self.components}
     @staticmethod
-    def from_list(obj: list) -> TimingConfig:
-        return TimingConfig([(it[0], it[1]) if isinstance(it, list) else float(it) for it in obj])
+    def from_dict(obj: dict) -> TimingConfig:
+        return TimingConfig([(it[0], it[1]) if isinstance(it, list) else float(it) for it in obj['components']])
     
     def __eq__(self, other):
         if not isinstance(other, TimingConfig): return False

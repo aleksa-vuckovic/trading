@@ -149,7 +149,7 @@ class TestDates(unittest.TestCase):
             .around(hour = 14, minute = 30, delta_minute=20)\
             .starting(hour = 15, minute = 0).until(hour = 16, minute = 0)\
             .build()
-        config_ = jsonutils.deserialize(jsonutils.serialize(config), TimingConfig)
+        config_ = jsonutils.deserialize(jsonutils.serialize(config))
         self.assertEqual(config, config_)
         
         examples = [(it, True) for it in ['2025-02-21 11:00:00', '2025-02-21 14:30:00', '2025-02-21 14:50:00',
@@ -167,7 +167,7 @@ class TestDates(unittest.TestCase):
             .around(hour = 14, minute = 30, delta_minute=20)\
             .starting(hour = 15, minute = 0).until(hour = 16, minute = 0)\
             .build()
-        config_ = jsonutils.deserialize(jsonutils.serialize(config), TimingConfig)
+        config_ = jsonutils.deserialize(jsonutils.serialize(config))
         self.assertEqual(config, config_)
         
         expect = [dateutils.str_to_datetime(it, tz=dateutils.ET) for it in 

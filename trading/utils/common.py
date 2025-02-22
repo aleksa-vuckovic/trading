@@ -1,13 +1,8 @@
-import time
-import requests
-from http import HTTPStatus
-import re
-from pathlib import Path
+from __future__ import annotations
 import logging
-from enum import Enum
-import json
+import importlib
 from typing import Callable, Any
-from enum import Enum, Flag, auto
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +46,10 @@ def escape_filename(name: str):
 
 def get_full_classname(obj: object) -> str:
     return f"{type(obj).__module__}.{type(obj).__name__}"
+def get_class_by_full_classname(full_classname: str) -> type:
+    module_name, class_name = full_classname.rsplit('.', 1) 
+    module = importlib.import_module(module_name)
+    return getattr(module, class_name)
 
 def shorter(text: str):
     if len(text) > 500: return f"{text[:497]}..."

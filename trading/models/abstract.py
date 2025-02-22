@@ -11,6 +11,7 @@ from typing import NamedTuple
 from enum import Enum, auto
 from ..data import nasdaq, aggregate
 from ..utils import dateutils
+from ..utils.dateutils import TimingConfig
 from ..utils.common import Interval
 
 logger = logging.getLogger(__name__)
@@ -160,7 +161,7 @@ class PriceEstimator:
         return f"quote{self.quote}_interval{self.interval.name}_{self.index}_agg{self.agg.name}_mfr{int(self.max_fill_ratio*100)}"
     
     @staticmethod
-    def from_str(value: str):
+    def from_str(value: str) -> PriceEstimator:
         data = re.match(r"quote([^_]+)_interval([^_])_(slice[^_]+)_agg([^_]+)_mfr(\d+)", value)
         if not data: raise Exception(f"Can't parse PriceEstimator string '{value}'")
         quote = data.group(1)
@@ -175,8 +176,10 @@ class ModelConfig:
         projection_period: The projected period length in business days.
         description: Short description of what the model is trained to do.
     """
-    def __init__(self, estimator: PriceEstimator):
-        pass
+    def __init__(self, estimator: PriceEstimator, timing: TimingConfig):
+        self.estimator = estimator
+        self.timing = timing
+
         
 class AbstractModel(torch.nn.Module):
     def __init__(self):
