@@ -6,8 +6,9 @@ from pathlib import Path
 from typing import Callable, NamedTuple
 from matplotlib import pyplot as plt
 from ..utils import plotutils, common
+from ..utils.dateutils import TimingConfig
 from .stats import StatContainer
-from .utils import Batches, get_batch_files
+from .utils import Batches, BatchFile
 from .abstract import AbstractModel
 
 logger = logging.getLogger(__name__)
@@ -350,14 +351,14 @@ def add_train_val_test_batches(
     builder: TrainingPlan.Builder,
     examples_folder: Path,
     make_stats: Callable[[str], StatContainer],
-    merge:int=1,
-    hour: int|None = 11
+    timing: TimingConfig|None = None,
+    merge:int=1
 ) -> TrainingPlan.Builder:
-    all_files = [it for it in get_batch_files(examples_folder) if not hour or it['hour'] == hour]
+    all_files = [it for it in BatchFile.load(examples_folder) if not timing or it.unix_time in timing]
     test_i = int(len(all_files)*0.05)
-    train_files = [it['path'] for it in all_files[:-test_i] if it['batch'] % 6]
-    val_files = [it['path'] for it in all_files[:-test_i] if it['batch'] % 6 == 0]
-    test_files = [it['path'] for it in all_files[-test_i:]]
+    val_files = all_files[:-test_i:6]
+    train_files = [it for it in all_files[:-test_i] if it not in val_files]
+    test_files = all_files[-test_i:]
     return builder.with_batches(name='train', batches=Batches(train_files, merge=merge), stats=make_stats('train'), backward=True)\
         .with_batches(name='val', batches=Batches(val_files, merge=merge), stats=make_stats('val'), backward=False)\
         .with_batches(name='test', batches=Batches(test_files, merge=merge), stats=make_stats('train'), backward=False)

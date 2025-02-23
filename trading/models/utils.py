@@ -20,12 +20,6 @@ def get_model_dtype(model: torch.nn.Module) -> torch.dtype:
 def get_model_name(model: torch.nn.Module) -> str:
     return get_full_classname(model).split(".")[-3]
 
-def get_batch_files(path: Path) -> list[dict]:
-    pattern = re.compile(r"hour(\d+)_time(\d+)_entry(\d+)_batch(\d+).pt")
-    files = [ pattern.fullmatch(it) for it in os.listdir(path)]
-    files = [ {'path': path / it.group(0), 'hour': int(it.group(1)), 'time': int(it.group(2)), 'entry': int(it.group(3)), 'batch': int(it.group(4))} for it in files if it ]
-    return sorted(files, key=lambda it: (it['time'], it['entry'], it['hour']))
-
 def check_tensors(tensors: list[Tensor] | tuple[Tensor] | dict[object, Tensor], allow_zeros=True):
     if isinstance(tensors, (list, tuple)):
         for tensor in tensors: check_tensor(tensor)
@@ -154,8 +148,21 @@ class ModelOutput(Enum):
     SIGMOID = torch.nn.Sigmoid()
     TANH = torch.nn.Tanh()
 
+class BatchFile:
+    PATTERN = re.compile(r"time(\d+)_entry(\d+)_iter(\d+).pt")
+    def __init__(self, path: Path):
+        match = BatchFile.PATTERN.fullmatch(path.name)
+        if not match: raise Exception(f"File {path.name} does not match the batch file pattern.")
+        self.path = path
+        self.unix_time = int(match.group(1))
+        self.entry = int(match.group(2))
+        self.iter = int(match.group(3))
+    @staticmethod
+    def load(root: Path) -> list[BatchFile]:
+        return sorted([BatchFile(root/it) for it in os.listdir(root) if it.endswith('.pt')], key=lambda it: (it.unix_time, it.entry))
+
 class Batches:
-    def __init__(self, files: list[str | Path], merge: int = 1, device: str = "cpu", dtype = torch.float32):
+    def __init__(self, files: list[BatchFile], merge: int = 1, device: str = "cpu", dtype = torch.float32):
         self.files = files
         self.merge = merge
         self.device = device
@@ -178,13 +185,13 @@ class Batches:
             if self.i >= len(self.batches.files):
                 raise StopIteration()
             files = self.batches.files[self.i:self.i+self.batches.merge]
-            data = [torch.load(it, weights_only=True) for it in files]
+            data = [torch.load(it.path, weights_only=True) for it in files]
             if isinstance(data[0], dict):
                 data = {key:torch.cat([it[key] for it in data], dim=0).to(device=self.batches.device, dtype=self.batches.dtype) for key in data[0].keys()}
                 shapes = {key:data[key].shape for key in data.keys()}
                 logger.debug(f"Loaded batch with shape {shapes}")
             else:
-                data = torch.cat([torch.load(it, weights_only=True) for it in files], dim=0).to(device = self.batches.device, dtype=self.batches.dtype)
+                data = torch.cat(data, dim=0).to(device = self.batches.device, dtype=self.batches.dtype)
                 logger.debug(f"Loaded batch with shape {data.shape}")
             self.i += len(files)
             return data

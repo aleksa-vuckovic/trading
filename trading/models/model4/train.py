@@ -30,10 +30,10 @@ def get_plan(config: ModelConfig) -> TrainingPlan:
     model = Model(config)
     plan = TrainingPlan.Builder(model)
     plan.with_optimizer(torch.optim.Adam(model.parameters()))
-    add_train_val_test_batches(plan, examples_folder=generator.FOLDER, make_stats=make_stats, hour=hour, merge=5)
+    add_train_val_test_batches(plan, examples_folder=generator.FOLDER, make_stats=make_stats, timing=config.timing, merge=5)
     add_triggers(
         plan,
-        checkpoints_folder=Path(__file__).parent / f"checkpoints_{hour}",
+        checkpoints_folder=Path(__file__).parent / f"checkpoints_{None}",
         initial_lr=initial_lr,
         lr_steps=[(100, 1), (0.7, 0.8), (0.6, 0.6), (0.5, 0.4), (0.4, 0.2), (0.35, 0.1), (0.3, 0.05), (0.25, 0.01), (0.2, 0.01), (0.15, 0.01), (0.1, 0.01)]
     )
