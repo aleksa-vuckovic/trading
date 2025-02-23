@@ -3,17 +3,16 @@ import logging
 import json
 import torch
 import config
-import re
 from torch import Tensor
 from pathlib import Path
 from tqdm import tqdm
-from typing import NamedTuple
-from enum import Enum, auto
+from enum import Enum
 from ..data import nasdaq, aggregate
-from ..utils import dateutils
+from ..utils import dateutils, jsonutils
 from ..utils.dateutils import TimingConfig
-from ..utils.common import Interval
+from ..utils.common import Interval, equatable
 from ..utils.jsonutils import serializable
+from .utils import PriceTarget, ModelOutput
 
 logger = logging.getLogger(__name__)
 
@@ -35,20 +34,15 @@ class ExampleGenerator:
         with_output: bool = True
     ) -> dict[str, Tensor]:
         pass
-    def run_loop(self, hour: int):
-        pass
     def plot_statistics(self, **kwargs):
         pass
-    def run(self):
-        """
-        Run loop for all hours
-        """
-        for hour in range(11, 17):
-            self.run_loop(hour)
+    def run(self, timing: TimingConfig):
+        pass
     def _run_loop(
         self,
         folder: Path,
-        hour: int = 16,
+        timing: TimingConfig,
+        step: float,
         tickers: list[nasdaq.NasdaqListedEntry]|None = None,
         time_frame_start: float = dateutils.str_to_unix(config.time_frame_start),
         time_frame_end: float = dateutils.str_to_unix(config.time_frame_end),
@@ -58,59 +52,55 @@ class ExampleGenerator:
         if not folder.exists(): folder.mkdir(parents=True, exist_ok=True)
         state_path = folder / ExampleGenerator.STATE_FILE
         if not state_path.exists(): state_path.write_text('{}')
-        total_state = json.loads(state_path.read_text())
-        if str(hour) not in total_state: state = {'iter': 0, 'unix_time': time_frame_start + start_time_offset, 'entry': -1}
-        else: state = total_state[str(hour)]
-        iter: int = state['iter']
-        unix_time: float = state['unix_time']
-        entry: int = state['entry']
         tickers = tickers or aggregate.get_sorted_tickers()
 
         current: list[dict[str, Tensor]] = []
+        unix_time = time_frame_start
+        entry = len(tickers)
+        iter = 0
 
+        msg = f"----Generating examples for timing config: {jsonutils.serialize(timing, typed=False)}"
+        logger.info(msg)
+        print(msg)
         while True:
-            with tqdm(total=batch_size, desc=f'Generating batch {iter+1} ({hour})', leave=True) as bar:
-                while len(current) < batch_size:
-                    if entry >= len(tickers) - 1 or entry < 0:
-                        new_time = dateutils.get_next_working_time_unix(unix_time, hour=hour)
-                        if new_time > time_frame_end:
-                            logger.info(f"Finished. (new time is now bigger than end time)")
-                            break
-                        entry = 0
-                        unix_time = new_time
-                    else:
-                        entry += 1
+            with tqdm(total=batch_size, desc=f'Generating for {unix_time} iter {iter}', leave=True) as bar:
+                while len(current) < batch_size and entry < len(tickers):
                     try:
                         ticker = tickers[entry]
                         first_trade_time = aggregate.get_first_trade_time(ticker)
                         start_time = max(first_trade_time+start_time_offset, time_frame_start+start_time_offset)
                         if start_time > unix_time:
                             logger.info(f"Skipping {ticker.symbol} at index {entry} for time {dateutils.unix_to_datetime(unix_time)} because of first trade time.")
-                            entry = len(tickers) - 1
+                            entry = len(tickers)
                             continue
-                        current.append(self.generate_example(ticker, unix_time+1))
+                        current.append(self.generate_example(ticker, unix_time))
                         logger.info(f'Generated example for {ticker.symbol} for end time {str(dateutils.unix_to_datetime(unix_time+1))}')
                         bar.update(1)
+                        entry += 1
                     except KeyboardInterrupt:
                         raise
                     except:
                         logger.error(f"Failed to generate example for {ticker.symbol} for {unix_time}", exc_info=True)
-            if not current:
-                break
-            data = {key:torch.stack([it[key] for it in current], dim=0) for key in current[0].keys()}
-            iter += 1
-            batch_file = folder / f"hour{hour}_time{int(unix_time)}_entry{entry}_batch{iter}.pt"
-            if batch_file.exists():
-                raise Exception(f"Batch file {batch_file} already exists.")
-            torch.save(data, batch_file)
-            state = {'iter': iter, 'unix_time': unix_time, 'entry': entry}
-            total_state = json.loads(state_path.read_text())
-            total_state[str(hour)] = state
-            state_path.write_text(json.dumps(total_state))
-            logger.info(f"Wrote batch number {iter}({hour}).")
-            if len(current) < config.batch_size:
-                break
-            current.clear()
+            if current:
+                data = {key:torch.stack([it[key] for it in current], dim=0) for key in current[0].keys()}
+                batch_file = folder / f"time{int(unix_time)}_entry{entry}_iter{iter}.pt"
+                if batch_file.exists(): raise Exception(f"Batch file {batch_file} already exists.")
+                torch.save(data, batch_file)
+                state = {'entry': entry, 'iter': iter}
+                total_state = json.loads(state_path.read_text())
+                key = str(int(unix_time))
+                total_state[key] = state
+                state_path.write_text(json.dumps(total_state))
+                logger.info(f"Wrote batch number {iter} for timestamp {unix_time}.")
+                iter += 1
+                current.clear()
+            
+            if entry >= len(tickers):
+                unix_time = timing.get_next_unix(unix_time, step)
+                if unix_time > time_frame_end:
+                    logger.info(f"Stopping generation, time {unix_time} is now bigger than end time {time_frame_end}.")
+                    break
+                entry = 0
 
 class Aggregation(Enum):
     FIRST = 'first'
@@ -131,6 +121,8 @@ class Aggregation(Enum):
         tensor = torch.tensor(data, dtype=torch.float64)
         return self.apply_tensor(tensor, dim=dim).tolist()
 
+@serializable()
+@equatable()
 class PriceEstimator:
     def __init__(
         self,
@@ -149,7 +141,7 @@ class PriceEstimator:
 
     def estimate_tensor(self, tensor: Tensor) -> Tensor:
         dims = len(tensor.shape)
-        index = tuple(slice(None,None) if it < dims-2 else self.slice if it < dims - 1 else self.quote_index for it in range(dims))
+        index = tuple(slice(None,None) if it < dims-2 else self.index if it < dims - 1 else self.quote_index for it in range(dims))
         return self.agg.apply_tensor(tensor[index])
 
     def estimate(self, ticker: nasdaq.NasdaqListedEntry, unix_time: float, tz=dateutils.ET) -> float:
@@ -157,38 +149,38 @@ class PriceEstimator:
         prices, = aggregate.get_interpolated_pricing(ticker, unix_time, end_time, self.interval, return_quotes=[self.quote], max_fill_ratio=self.max_fill_ratio)
         tensor = torch.tensor(prices, dtype=torch.float64)
         self.agg.apply_tensor(tensor, dim=-1).item()
-    
-    def to_dict(self) -> dict:
-        return {
-            'quote': self.quote,
-            'interval': self.interval,
-            'index': self.inde
-        }
-    
-    @staticmethod
-    def from_dict(value: dict) -> PriceEstimator:
-        data = re.match(r"quote([^_]+)_interval([^_])_(slice[^_]+)_agg([^_]+)_mfr(\d+)", value)
-        if not data: raise Exception(f"Can't parse PriceEstimator string '{value}'")
-        quote = data.group(1)
-        interval = Interval[data.group(2)]
-        slice = eval(data.group(3))
-        agg = Aggregation[data.group(4)]
 
 
+@serializable()
+@equatable()
 class ModelConfig:
-    """
-    Args:
-        projection_period: The projected period length in business days.
-        description: Short description of what the model is trained to do.
-    """
-    def __init__(self, estimator: PriceEstimator, timing: TimingConfig):
+    def __init__(self, 
+        estimator: PriceEstimator,
+        target:  PriceTarget,
+        output: ModelOutput,
+        timing: TimingConfig,
+        data: dict = {}
+    ):
         self.estimator = estimator
+        self.target = target
+        self.output = output
         self.timing = timing
+        self.data = data
+    
+    def __str__(self) -> str:
+        return f"""
+estimator = {jsonutils.serialize(self.estimator, typed=False, indent=2)}
+target = {self.target.name}
+output = {self.output.name}
+timing = {jsonutils.serialize(self.timing, typed=False, indent=2)}
+data = {self.data}
+"""
 
         
 class AbstractModel(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, config: ModelConfig):
         super().__init__()
+        self.config = config
     def extract_tensors(self, example: dict[str, Tensor]) -> tuple[Tensor, ...]:
         pass
     def print_summary(self, merge: int = 10):

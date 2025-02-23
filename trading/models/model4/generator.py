@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Callable
 from matplotlib import pyplot as plt
 from ...utils import dateutils
+from ...utils.dateutils import TimingConfig
 from ...utils.common import Interval
 from ...data import nasdaq, aggregate
 from ..abstract import ExampleGenerator, QUOTES, CLOSE_I
@@ -29,14 +30,14 @@ AFTER_H1_DATA = 'after_h1_data'
 
 FOLDER = Path(__file__).parent / 'examples'
 
-
 class Generator(ExampleGenerator):
     def run(self):
         for hour in [11, 15, 13, 14]:
             logger.info(f"-------------Starting loop for {hour}----------------")
             self._run_loop(
                 folder = FOLDER,
-                hour = hour,
+                timing = TimingConfig.Builder().at(hour=hour, minute=0).build(),
+                step = 3600,
                 start_time_offset=30*25*3600
             )
     def generate_example(
@@ -59,10 +60,10 @@ class Generator(ExampleGenerator):
         check_tensors([d1_data, h1_data], allow_zeros=False)
         if not with_output: return {D1_DATA: d1_data, H1_DATA: h1_data}
 
-        after_d1_data = aggregate.get_interpolated_pricing(ticker, end_time, dateutils.add_business_days_unix(end_time, 10, tz=dateutils.ET), Interval.D1, return_quotes=QUOTES, max_fill_ratio=1/5)
+        after_d1_data = aggregate.get_interpolated_pricing(ticker, end_time, dateutils.add_intervals_unix(end_time, Interval.D1, 10, tz=dateutils.ET), Interval.D1, return_quotes=QUOTES, max_fill_ratio=1/5)
         if len(after_d1_data[0]) != AFTER_D1_DATA_POINTS:
             raise Exception(f"Unexpected number of after d1 data points {len(after_d1_data[0])}")
-        after_h1_data = aggregate.get_interpolated_pricing(ticker, end_time, dateutils.add_business_days_unix(end_time, 3, tz=dateutils.ET), Interval.H1, return_quotes=QUOTES, max_fill_ratio=2/7)
+        after_h1_data = aggregate.get_interpolated_pricing(ticker, end_time, dateutils.add_intervals_unix(end_time, Interval.D1, 3, tz=dateutils.ET), Interval.H1, return_quotes=QUOTES, max_fill_ratio=2/7)
         if len(after_h1_data[0]) != AFTER_H1_DATA_POINTS:
             raise Exception(f"Unexpected number of after h1 data points {len(after_h1_data[0])}")
         after_d1_data = torch.stack([torch.tensor(it, dtype=torch.float64) for it in after_d1_data], dim=1)

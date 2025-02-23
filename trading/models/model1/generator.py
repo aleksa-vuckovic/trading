@@ -4,6 +4,7 @@ from torch import Tensor
 from pathlib import Path
 from transformers import BertTokenizer, BertModel
 from ...utils import dateutils
+from ...utils.dateutils import TimingConfig
 from ...utils.common import Interval
 from ...data import aggregate, nasdaq
 from ..utils import get_normalized_by_largest, check_tensor
@@ -35,7 +36,8 @@ class Generator(ExampleGenerator):
     def run(self):
         return self._run_loop(
             folder = FOLDER,
-            hour = 16
+            step=3600,
+            timing=TimingConfig.Builder().at(hour=16,minute=0).build()
         )
 
     def generate_example(
@@ -81,8 +83,8 @@ class Generator(ExampleGenerator):
         
         data = torch.cat([d1_prices, d1_volumes, h1_prices, h1_volumes, *text_inputs, market_cap], dim=0)
         if with_output:
-            h_after_prices, = aggregate.get_pricing(ticker, end_time, dateutils.add_business_days_unix(end_time, 3, tz=dateutils.ET), Interval.H1, return_quotes=['close'])
-            d_after_prices, = aggregate.get_pricing(ticker, end_time, dateutils.add_business_days_unix(end_time, 5, tz=dateutils.ET), Interval.D1, return_quotes=['close'])
+            h_after_prices, = aggregate.get_pricing(ticker, end_time, dateutils.add_intervals_unix(end_time, Interval.D1, 3, tz=dateutils.ET), Interval.H1, return_quotes=['close'])
+            d_after_prices, = aggregate.get_pricing(ticker, end_time, dateutils.add_intervals_unix(end_time, Interval.D1, 5, tz=dateutils.ET), Interval.D1, return_quotes=['close'])
             if len(h_after_prices) < 7:
                 raise Exception(f"Failed to fetch enough hourly after prices for {ticker.symbol}. Got {len(h_after_prices)}.")
             if len(d_after_prices) < 3:

@@ -1,6 +1,7 @@
 import torch
 from torch import Tensor
 from typing import Callable
+from .utils import PriceTarget
 
 class StatCollector:
     def __init__(self, name: str):
@@ -104,3 +105,23 @@ class Precision(StatCollector):
         hits = torch.logical_and(output, expect).sum().item()
         expect_n = expect.sum().item()
         return hits / expect_n if expect_n else 1
+    
+class TanhLoss(StatCollector):
+    def __init__(self):
+        super().__init__('loss')
+    def _calculate(self, expect, output):
+        eps = 1e-5
+        loss = -torch.log(1 + eps - torch.abs(output - expect) / (1+torch.abs(expect)))
+        return loss.mean()
+    
+class SigmoidLoss(StatCollector):
+    def __init__(self):
+        super().__init__('loss')
+    def _calculate(self, expect, output):
+        return -torch.log(torch.abs(expect - output)).mean()
+    
+class LinearLoss(StatCollector):
+    def __init__(self):
+        super().__init__('loss')
+    def _calculate(self, expect, output):
+        return torch.nn.functional.mse_loss(expect, output)

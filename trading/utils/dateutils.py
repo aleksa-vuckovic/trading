@@ -1,7 +1,8 @@
 from __future__ import annotations
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from .common import Interval, binary_search, BinarySearchEdge
+from .common import Interval, binary_search, BinarySearchEdge, equatable
+from .jsonutils import serializable
 
 """
 datetime stores the date components and an optional timezone (if unset, treated as the local timezone)
@@ -118,9 +119,11 @@ def skip_weekend_unix(unix_time: float, tz = ET) -> float:
     date = unix_to_datetime(unix_time, tz=tz)
     return skip_weekend_datetime(date).timestamp()
 
+@serializable(skip_keys=['_timestamps'])
+@equatable(skip_keys=['_timestamps'])
 class TimingConfig:
     _timestamps: dict[Interval, list[float]]
-    def __init__(self, components: list[float|tuple[float,float]]):
+    def __init__(self, components: list[float|list[float]]):
         self.components = components
         self._timestamps = {}
     class Builder:
@@ -134,14 +137,14 @@ class TimingConfig:
                 self._builder = builder
                 self._start = start
             def until(self, hour: int = 16, minute: int = 0) -> TimingConfig.Builder:
-                self._builder.components.append((self._start, float(hour*3600+minute*60)))
+                self._builder.components.append([self._start, float(hour*3600+minute*60)])
                 return self._builder
         def starting(self, hour: int = 9, minute: int = 30) -> TimingConfig.Builder._Interval:
             return TimingConfig.Builder._Interval(self, float(hour*3600+minute*60))
         def around(self, hour: int = 10, minute: int = 0, delta_minute: int = 10):
             if not delta_minute: return self.at(hour = hour, minute = minute)
             time = float(hour*3600 + minute*60)
-            self.components.append((time-delta_minute*60,time+delta_minute*60))
+            self.components.append([time-delta_minute*60,time+delta_minute*60])
             return self
         def build(self) -> TimingConfig:
             return TimingConfig(self.components)
@@ -149,7 +152,7 @@ class TimingConfig:
         if step in self._timestamps: return self._timestamps[step]
         result = []
         for component in self.components:
-            if isinstance(component, tuple):
+            if isinstance(component, list):
                 cur = component[1]
                 start = component[0]
                 while cur > start:
@@ -168,7 +171,7 @@ class TimingConfig:
         if index < len(timestamps): return set_datetime_daysecs(date, timestamps[index])
         date = skip_weekend_datetime(date+timedelta(days=1))
         return set_datetime_daysecs(date, timestamps[0])
-    def get_next_unix(self, unix_time: float, step: float, tz = ET) -> datetime:
+    def get_next_unix(self, unix_time: float, step: float, tz = ET) -> float:
         return self.get_next_datetime(unix_to_datetime(unix_time, tz=tz), step).timestamp()
     
     def __contains__(self, unix_or_date: float|datetime) -> bool:
@@ -177,18 +180,11 @@ class TimingConfig:
         if date.weekday() >= 5: return False
         time = datetime_to_daysecs(date)
         for it in self.components:
-            if isinstance(it, tuple) and time > it[0] and time <= it[1]: return True
-            if isinstance(it, float) and time == it: return True
+            if isinstance(it, list):
+                if time > it[0] and time <= it[1]: return True
+            else:
+                if time == it: return True
         return False
     def contains(self, unix_time: float, tz=ET) -> bool:
         return unix_to_datetime(unix_time, tz=tz) in self
-    
-    def to_dict(self) -> dict:
-        return {'components': self.components}
-    @staticmethod
-    def from_dict(obj: dict) -> TimingConfig:
-        return TimingConfig([(it[0], it[1]) if isinstance(it, list) else float(it) for it in obj['components']])
-    
-    def __eq__(self, other):
-        if not isinstance(other, TimingConfig): return False
-        return self.components == other.components
+

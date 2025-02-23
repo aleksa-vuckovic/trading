@@ -149,6 +149,11 @@ class PriceTarget(Enum):
         [plt.figure(it).tight_layout() for it in plt.get_fignums()]
         plt.show()
 
+class ModelOutput(Enum):
+    LINEAR = torch.nn.Identity()
+    SIGMOID = torch.nn.Sigmoid()
+    TANH = torch.nn.Tanh()
+
 class Batches:
     def __init__(self, files: list[str | Path], merge: int = 1, device: str = "cpu", dtype = torch.float32):
         self.files = files

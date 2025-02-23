@@ -2,7 +2,7 @@ import torch
 import logging
 from pathlib import Path
 from typing import Callable
-from ..stats import StatCollector, StatContainer, Accuracy, Precision
+from ..stats import StatContainer, Accuracy, Precision, TanhLoss
 from ..training_plan import TrainingPlan, add_train_val_test_batches, add_triggers
 from .network import Model
 from . import generator
@@ -11,18 +11,10 @@ logger = logging.getLogger(__name__)
 checkpoints_folder = Path(__file__).parent / 'checkpoints'
 initial_lr = 10e-7
     
-class CustomLoss(StatCollector):
-    def __init__(self):
-        super().__init__('loss')
-    
-    def _calculate(self, expect, output):
-        eps = 1e-5
-        loss = -torch.log(1 + eps - torch.abs(output - expect) / (1+torch.abs(expect)))
-        return loss.mean()
 
 def make_stats(name: str) -> StatContainer:
     return StatContainer(
-        CustomLoss(),
+        TanhLoss(),
         Accuracy(name='accuracy', to_bool_output=lambda it: it > 0.5),
         Precision(name='precision', to_bool_output=lambda it: it > 0.5),
         Accuracy(name='miss', to_bool_output=lambda it: it>0.2, to_bool_expect=lambda it: it<0),

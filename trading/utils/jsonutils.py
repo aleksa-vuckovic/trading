@@ -35,15 +35,16 @@ def serializable(skip_keys: list[str] = []):
 def _is_serializable(obj_or_cls: object) -> bool:
     hasattr(obj_or_cls, '_jsonutils_serializable')
 
-def _serialize_default(obj: object) -> dict:
+def _serialize_default(obj: object, typed:bool) -> dict:
     if hasattr(obj, 'to_dict'): result = obj.to_dict()
     elif isinstance(obj, Enum): result = {'name': obj.name}
     elif type(obj).__module__ == 'builtins': result = {'value': repr(obj)}
     elif _is_serializable(obj): result = obj.__dict__
     else: raise Exception(f"Can't serialize {obj} of type {type(obj)}.")
-    return {_TYPE: get_full_classname(obj), **result}
-def serialize(obj: object, indent:int|str|None=None) -> str:
-    return json.dumps(obj, default=_serialize_default, indent=indent)
+    if typed: return {_TYPE: get_full_classname(obj), **result}
+    else: return result
+def serialize(obj: object, typed:bool = True, indent:int|str|None=None) -> str:
+    return json.dumps(obj, default=lambda it: _serialize_default(it,typed), indent=indent)
 
 def deserialize(data: str) -> str:
     return _deserialize(json.loads(data))

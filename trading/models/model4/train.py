@@ -1,24 +1,21 @@
 import logging
 import torch
 from pathlib import Path
-from .. import model2
 from ..training_plan import TrainingPlan, add_train_val_test_batches, add_triggers
-from ..stats import StatCollector, StatContainer, Accuracy, Precision
+from ..stats import StatContainer, Accuracy, Precision, TanhLoss
+from ..abstract import ModelConfig
+from . import generator
 from .network import Model
+
 
 logger = logging.getLogger(__name__)
 initial_lr = 10e-6
 
-class CustomLoss(StatCollector):
-    def __init__(self):
-        super().__init__('loss')
-    
-    def _calculate(self, expect, output):
-        return -torch.log(torch.abs(expect - output)).mean()
+
 
 def make_stats(name: str) -> StatContainer:
     return StatContainer(
-        CustomLoss(),
+        TanhLoss(),
         Accuracy(name='accuracy', to_bool_output=lambda it: it > 0.7),
         Precision(name='precision', to_bool_output=lambda it: it > 0.7),
         Accuracy(name='miss', to_bool_output=lambda it: it>0.7, to_bool_expect=lambda it: it<0.005),
@@ -29,11 +26,11 @@ def make_stats(name: str) -> StatContainer:
 Different from model2 in that it has 10 features, with moving averages.
 Data up to 13:30
 """
-def get_plan(hour: int) -> TrainingPlan:
-    model = Model()
+def get_plan(config: ModelConfig) -> TrainingPlan:
+    model = Model(config)
     plan = TrainingPlan.Builder(model)
     plan.with_optimizer(torch.optim.Adam(model.parameters()))
-    add_train_val_test_batches(plan, examples_folder=model2.generator.FOLDER, make_stats=make_stats, hour=hour, merge=5)
+    add_train_val_test_batches(plan, examples_folder=generator.FOLDER, make_stats=make_stats, hour=hour, merge=5)
     add_triggers(
         plan,
         checkpoints_folder=Path(__file__).parent / f"checkpoints_{hour}",

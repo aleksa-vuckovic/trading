@@ -169,7 +169,11 @@ class SeriesLayer(torch.nn.Module):
         return torch.concat(results, dim=1)
 
 class Model(AbstractModel):
-    """64 layers"""
+    """
+    Predict price change on a tanh scale for the next business day,
+    based on closing price time series, and textual data -
+    headlines, general market sentiment and company description.
+    """
     def __init__(self, individual_text_features: int = 40, final_text_features: int = 100, series_features: int = 100):
         super().__init__()
         self.text_layer = TextLayer(individual_features=individual_text_features, out_features=final_text_features)
@@ -222,10 +226,3 @@ class Model(AbstractModel):
         input += [(config.batch_size*merge, generator.H1_PRICES)]*2
         input += [(config.batch_size*merge, generator.TEXT_EMBEDDING_SIZE)]*3
         torchinfo.summary(model, input_size=input)
-
-    #def get_metadata(self):
-    #    return ModelMetadata(projection_period=1, description="""
-    #        Predict price change on a tanh scale for the next business day,
-    #        based on closing price time series, and textual data -
-    #        headlines, general market sentiment and company description.
-    #    """)
