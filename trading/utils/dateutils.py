@@ -17,7 +17,7 @@ def str_to_datetime(time_string: str, format: str = "%Y-%m-%d %H:%M:%S", tz = ET
     return datetime.strptime(time_string, format).replace(tzinfo=tz)
 def str_to_unix(time_string: str, format: str = "%Y-%m-%d %H:%M:%S", tz = ET) -> float:
     return str_to_datetime(time_string, format=format, tz=tz).timestamp()
-def unix_to_datetime(unix: float, tz = ET) -> datetime:
+def unix_to_datetime(unix: float|int, tz = ET) -> datetime:
     return datetime.fromtimestamp(unix, tz = tz)
 def now(tz = ET) -> datetime:
     return datetime.now(tz = tz)

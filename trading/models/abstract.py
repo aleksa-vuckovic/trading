@@ -55,9 +55,9 @@ class ExampleGenerator:
         tickers = tickers or aggregate.get_sorted_tickers()
 
         current: list[dict[str, Tensor]] = []
-        unix_time = time_frame_start
-        entry = len(tickers)
-        iter = 0
+        unix_time:int = round(time_frame_start)
+        entry:int = len(tickers)
+        iter:int = 0
 
         msg = f"----Generating examples for timing config: {jsonutils.serialize(timing, typed=False)}"
         logger.info(msg)
@@ -73,34 +73,42 @@ class ExampleGenerator:
                             logger.info(f"Skipping {ticker.symbol} at index {entry} for time {dateutils.unix_to_datetime(unix_time)} because of first trade time.")
                             entry = len(tickers)
                             continue
-                        current.append(self.generate_example(ticker, unix_time))
-                        logger.info(f'Generated example for {ticker.symbol} for end time {str(dateutils.unix_to_datetime(unix_time+1))}')
+                        current.append(self.generate_example(ticker, float(unix_time)))
+                        logger.info(f'Generated example for {ticker.symbol} for end time {str(dateutils.unix_to_datetime(unix_time))}')
                         bar.update(1)
                         entry += 1
                     except KeyboardInterrupt:
                         raise
                     except:
                         logger.error(f"Failed to generate example for {ticker.symbol} for {unix_time}", exc_info=True)
+            
+            total_state = json.loads(state_path.read_text())
             if current:
                 data = {key:torch.stack([it[key] for it in current], dim=0) for key in current[0].keys()}
-                batch_file = folder / f"time{int(unix_time)}_entry{entry}_iter{iter}.pt"
+                batch_file = folder / f"time{unix_time}_entry{entry}_iter{iter}.pt"
                 if batch_file.exists(): raise Exception(f"Batch file {batch_file} already exists.")
                 torch.save(data, batch_file)
-                state = {'entry': entry, 'iter': iter}
-                total_state = json.loads(state_path.read_text())
-                key = str(int(unix_time))
-                total_state[key] = state
-                state_path.write_text(json.dumps(total_state))
                 logger.info(f"Wrote batch number {iter} for timestamp {unix_time}.")
                 iter += 1
+                state = {'entry': entry, 'iter': iter}
+                key = str(unix_time)
+                total_state[key] = state
+                state_path.write_text(json.dumps(total_state))
                 current.clear()
             
             if entry >= len(tickers):
-                unix_time = timing.get_next_unix(unix_time, step)
+                unix_time = round(timing.get_next_unix(unix_time, step))
                 if unix_time > time_frame_end:
                     logger.info(f"Stopping generation, time {unix_time} is now bigger than end time {time_frame_end}.")
                     break
-                entry = 0
+                key = str(unix_time)
+                if key in total_state:
+                    entry = total_state[key]['entry']
+                    iter = total_state[key]['iter']
+                else:
+                    entry = 0
+                    iter = 0
+                
 
 class Aggregation(Enum):
     FIRST = 'first'
