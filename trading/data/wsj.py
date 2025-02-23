@@ -2,7 +2,7 @@ import json
 import logging
 from ..utils.common import Interval
 from ..utils import httputils, dateutils, common
-from .utils import combine_series, fix_daily_timestamps, filter_by_timestamp, separate_quotes
+from .utils import combine_series, fix_long_timestamps, filter_by_timestamp, separate_quotes
 from .caching import cached_scalar, cached_series, CACHE_ROOT
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ _CACHE = CACHE_ROOT / _MODULE
 
 
 """
-WSJ timestamps represent the end of the relevant interval!
+WSJ timestamps represent the start of the relevant interval!
 """
 def _get_pricing_raw(key: str, step: str, time_frame: str):
     url = "https://api.wsj.net/api/michelangelo/timeseries/history"
@@ -77,25 +77,21 @@ def _merge_data_1h(data):
 
 def _fix_timestamps(timestamps: list[float|int|None], interval: Interval) -> list[float|None]:
     timestamps = [it//1000 if it else None for it in timestamps]
-    if interval == Interval.D1: return fix_daily_timestamps(timestamps)
-    if interval == Interval.H1:
-        lower_bound = 10*3600
-        upper_bound = 16*3600
+    if interval >= Interval.D1: return fix_long_timestamps(timestamps)
+    else:
+        size = interval.time() if interval != Interval.H1 else 1800
         result = []
         for it in timestamps:
             if not it:
                 result.append(None)
                 continue
-            it+=1800
-            date = dateutils.unix_to_datetime(it, tz=dateutils.ET)
-            daysecs = dateutils.datetime_to_daysecs(date)
-            if daysecs < lower_bound or daysecs > upper_bound or it %1800:
-                logger.warning(f"Unexpected timestamp {date}. Skipping entry.")
+            it+=size
+            if not dateutils.is_interval_time_unix(it, interval, tz=dateutils.ET):
+                logger.warning(f"Unexpected timestamp {dateutils.unix_to_datetime(it)}. Skipping entry.")
                 result.append(None)
             else:
                 result.append(it)
         return result
-    else: raise Exception(f"Unknown interval {Interval}")
 
 @cached_series(
     unix_from_arg=1,
@@ -111,8 +107,11 @@ def _fix_timestamps(timestamps: list[float|int|None], interval: Interval) -> lis
 )
 @httputils.backup_timeout()
 def _get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interval) -> dict:
-    if interval == Interval.H1: step = 'PT30M'
-    elif interval == Interval.D1: step = 'P1D'
+    if interval > Interval.D1: raise Exception(f"Interval {interval} not supported for wsj.")
+    if interval == Interval.D1: step = 'P1D'
+    elif interval == Interval.H1: step = 'PT30M'
+    elif interval == Interval.M30: step = 'PT30M'
+    elif interval == Interval.M5: step = 'PT5M'
     else: raise ValueError(f"Unknown interval {interval}")
     data = _get_pricing_raw(f"STOCK/US/XNAS/{symbol.upper()}", step, 'D5')
     def extract_data_points(series: dict) -> dict:

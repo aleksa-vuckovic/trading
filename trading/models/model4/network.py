@@ -5,7 +5,6 @@ from torch import Tensor
 from ...utils.common import Interval
 from ..abstract import AbstractModel, ModelConfig, OPEN_I, HIGH_I, LOW_I, CLOSE_I, VOLUME_I
 from ..utils import get_moving_average, get_time_relativized, check_tensors
-from .generator import D1_DATA, H1_DATA, AFTER_D1_DATA, AFTER_H1_DATA
 
 INPUT_FEATURES = 'input_features'
 D1_DATA_POINTS = 'd1_data_points'
@@ -83,10 +82,10 @@ class Model(AbstractModel):
         return self.dense(output)
 
     def extract_tensors(self, example: dict[str, Tensor]):
-        if len(example[D1_DATA].shape) < 3:
+        if len(example[Interval.D1.name].shape) < 3:
             example = {key: example[key].unsqueeze(dim=0) for key in example}
-        daily_raw = example[D1_DATA]
-        hourly_raw = example[H1_DATA]
+        daily_raw = example[Interval.D1.name]
+        hourly_raw = example[Interval.H1.name]
 
         def process(tensor: Tensor, data_points: int):
             tensor = tensor[:,-data_points-self.config.data[MVG_WINDOW]:,:]
@@ -104,11 +103,10 @@ class Model(AbstractModel):
         hourly = process(hourly_raw, self.config.data[H1_DATA_POINTS])
         result = (daily, hourly)
 
-        if AFTER_D1_DATA in example and AFTER_H1_DATA in example:
-            self.config.estimator
-            data = example[AFTER_D1_DATA if self.config.estimator.interval == Interval.D1 else AFTER_H1_DATA]
-            after = self.config.estimator.estimate_tensor(data)
-            after = (after[:,-1] - hourly_raw[:,-1,CLOSE_I]) / hourly_raw[:,-1,CLOSE_I]
+        if len(example) > 2:
+            after = self.config.estimator.estimate_example(example)
+            close = hourly_raw[:,-1,CLOSE_I]
+            after = (after[:,-1] - close) / close
             after = self.config.target.get_price(after)
             result += (after,)
 
@@ -116,5 +114,8 @@ class Model(AbstractModel):
         return result
 
     def print_summary(self, merge:int = 10):
-        input = [(config.batch_size*merge, self.input_features, self.data_points)]*2
+        input = [
+            (config.batch_size*merge, self.config.data[INPUT_FEATURES], self.config.data[D1_DATA_POINTS]),
+            (config.batch_size*merge, self.config.data[INPUT_FEATURES], self.config.data[H1_DATA_POINTS])
+        ]
         torchinfo.summary(self, input_size=input)

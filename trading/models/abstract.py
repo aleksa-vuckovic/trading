@@ -25,6 +25,8 @@ VOLUME_I = 4
 QUOTES = ['open', 'high', 'low', 'close', 'volume']
 QUOTE_I = {it[0]:i for i,it in enumerate(QUOTES)}
 
+OUTPUT_KEY_PREFIX = "OUTPUT"
+
 class ExampleGenerator:
     STATE_FILE = '_loop_state.json'
     def generate_example(
@@ -36,7 +38,7 @@ class ExampleGenerator:
         pass
     def plot_statistics(self, **kwargs):
         pass
-    def run(self, timing: TimingConfig):
+    def run(self):
         pass
     def _run_loop(
         self,
@@ -151,6 +153,11 @@ class PriceEstimator:
         dims = len(tensor.shape)
         index = tuple(slice(None,None) if it < dims-2 else self.index if it < dims - 1 else self.quote_index for it in range(dims))
         return self.agg.apply_tensor(tensor[index])
+    
+    def estimate_example(self, example: dict[str, Tensor]) -> Tensor:
+        key = f"{OUTPUT_KEY_PREFIX}_{self.interval.name}"
+        if key not in example: raise Exception(f"Can't estimate without {key}.")
+        return self.estimate_tensor(example[key])
 
     def estimate(self, ticker: nasdaq.NasdaqListedEntry, unix_time: float, tz=dateutils.ET) -> float:
         end_time = dateutils.add_intervals_unix(unix_time, self.interval, self.index.stop, tz=tz)
@@ -161,18 +168,28 @@ class PriceEstimator:
 
 @serializable()
 @equatable()
+class SizeConfig:
+    def __init__(self, interval: Interval, count: int):
+        self.interval = interval
+        self.count = count
+
+@serializable()
+@equatable()
 class ModelConfig:
-    def __init__(self, 
+    def __init__(
+        self, 
         estimator: PriceEstimator,
         target:  PriceTarget,
         output: ModelOutput,
         timing: TimingConfig,
+        inputs: list[SizeConfig],
         data: dict = {}
     ):
         self.estimator = estimator
         self.target = target
         self.output = output
         self.timing = timing
+        self.inputs = inputs
         self.data = data
     
     def __str__(self) -> str:
@@ -181,6 +198,7 @@ estimator = {jsonutils.serialize(self.estimator, typed=False, indent=2)}
 target = {self.target.name}
 output = {self.output.name}
 timing = {jsonutils.serialize(self.timing, typed=False, indent=2)}
+inputs = {jsonutils.serialize(self.inputs, typed=False, indent=2)}
 data = {self.data}
 """
 

@@ -1,5 +1,8 @@
 import logging
+import calendar
+from datetime import timedelta
 from ..utils import dateutils
+from ..utils.common import Interval
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +48,9 @@ def separate_quotes(data: list[dict], quotes: list[str]) -> tuple[list[float], .
 def filter_by_timestamp(data: list[dict|list], unix_from: float, unix_to: float, timestamp_field: str | int = 't') -> list[dict]:
     return [it for it in data if it[timestamp_field] > unix_from and it[timestamp_field] <= unix_to]
 
-def fix_daily_timestamps(timestamps: list[float|int|None]) -> list[float]:
+def fix_long_timestamps(timestamps: list[float|int|None], interval: Interval) -> list[float]:
     result = []
+    if interval < Interval.D1: raise Exception(f"Interval {interval} is not long.")
     for it in timestamps:
         if not it:
             result.append(None)
@@ -56,7 +60,9 @@ def fix_daily_timestamps(timestamps: list[float|int|None]) -> list[float]:
         # For timestamps returned as 00:00 UTC this will cross into the proper ET date.
         # For timestamps at the opening or closing in ET it will remain in the same day.
         if date.hour != 2 and date.hour != 3 and date.hour != 17 and date.hour != 23:
-            logger.warning(f"Unexpected daily timestamp {date}")
+            logger.warning(f"Unexpected {interval} timestamp {date}.")
         date = date.replace(hour = 16, minute=0, second=0, microsecond=0)
+        if interval == Interval.W1: date += timedelta(days = 5-date.weekday())
+        if interval == Interval.L1: date = date.replace(day=calendar.monthrange(date.year, date.month)[1])
         result.append(date.timestamp())
     return result

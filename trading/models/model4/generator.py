@@ -12,7 +12,7 @@ from ...utils import dateutils
 from ...utils.dateutils import TimingConfig
 from ...utils.common import Interval
 from ...data import nasdaq, aggregate
-from ..abstract import ExampleGenerator, QUOTES, CLOSE_I
+from ..abstract import ExampleGenerator, PriceEstimator, QUOTES, CLOSE_I, OUTPUT_KEY_PREFIX
 from ..utils import check_tensors, PriceTarget
 
 
@@ -23,14 +23,18 @@ H1_DATA_POINTS = 150
 AFTER_D1_DATA_POINTS = 10
 AFTER_H1_DATA_POINTS = 21
 
-D1_DATA = 'd1_data'
-H1_DATA = 'h1_data'
-AFTER_D1_DATA = 'after_d1_data'
-AFTER_H1_DATA = 'after_h1_data'
-
 FOLDER = Path(__file__).parent / 'examples'
 
 class Generator(ExampleGenerator):
+    def __init__(self,
+        min_interval: Interval,
+        timing: TimingConfig
+    ):
+        self.min_interval = min_interval
+        self.timing = timing
+        self.intervals = sorted([it for it in Interval if it >= min_interval], reverse=True)
+        self.folder = Path(__file__).parent / f"examples_{min_interval.name}"
+
     def run(self):
         for hour in [11, 15, 13, 14]:
             logger.info(f"-------------Starting loop for {hour}----------------")
@@ -58,7 +62,8 @@ class Generator(ExampleGenerator):
         d1_data = torch.stack([torch.tensor(it[-D1_DATA_POINTS:], dtype=torch.float64) for it in d1_data], dim=1)
         h1_data = torch.stack([torch.tensor(it[-H1_DATA_POINTS:], dtype=torch.float64) for it in h1_data], dim=1)
         check_tensors([d1_data, h1_data], allow_zeros=False)
-        if not with_output: return {D1_DATA: d1_data, H1_DATA: h1_data}
+        result = {Interval.D1.name: d1_data, Interval.H1.name: h1_data}
+        if not with_output: return result
 
         after_d1_data = aggregate.get_interpolated_pricing(ticker, end_time, dateutils.add_intervals_unix(end_time, Interval.D1, 10, tz=dateutils.ET), Interval.D1, return_quotes=QUOTES, max_fill_ratio=1/5)
         if len(after_d1_data[0]) != AFTER_D1_DATA_POINTS:
@@ -69,11 +74,16 @@ class Generator(ExampleGenerator):
         after_d1_data = torch.stack([torch.tensor(it, dtype=torch.float64) for it in after_d1_data], dim=1)
         after_h1_data = torch.stack([torch.tensor(it, dtype=torch.float64) for it in after_h1_data], dim=1)
         check_tensors([after_d1_data, after_h1_data], allow_zeros=False)
-        return {D1_DATA: d1_data, H1_DATA: h1_data, AFTER_D1_DATA: after_d1_data, AFTER_H1_DATA: after_h1_data}
+        return {
+            **result,
+            f"{OUTPUT_KEY_PREFIX}_{Interval.D1.name}": after_d1_data,
+            f"{OUTPUT_KEY_PREFIX}_{Interval.H1.name}": after_h1_data
+        }
 
-    def plot_statistics(self,
+    def plot_statistics(
+        self,
+        estimator: PriceEstimator,
         target: PriceTarget = PriceTarget.TANH_10_10,
-        price_selector: Callable[[dict[str, Tensor]], Tensor] = lambda batch: batch[AFTER_H1_DATA][:,-1,CLOSE_I],
         title: str = ""
     ):
         #Bin distribution of after values
@@ -82,7 +92,8 @@ class Generator(ExampleGenerator):
         random.shuffle(files)
         for file in files[:20]:
             batch = torch.load(file, weights_only=True)
-            data = (price_selector(batch) - batch[H1_DATA][:,-1:,CLOSE_I])/(batch[H1_DATA][:,-1:,CLOSE_I])
+            close = batch[Interval.H1.name][:,-1:,CLOSE_I]
+            data = (estimator.estimate_example(batch) - close)/close
             temp.append(data)
         data = torch.concat(temp, dim=0)
         fig, axes = plt.subplots(1, 2, figsize=(5,6))

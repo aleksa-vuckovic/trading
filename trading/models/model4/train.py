@@ -11,8 +11,6 @@ from .network import Model
 logger = logging.getLogger(__name__)
 initial_lr = 10e-6
 
-
-
 def make_stats(name: str) -> StatContainer:
     return StatContainer(
         TanhLoss(),

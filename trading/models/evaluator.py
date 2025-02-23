@@ -13,9 +13,10 @@ from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 from ..data import nasdaq, aggregate
 from ..utils import dateutils, plotutils
+from ..utils.dateutils import TimingConfig
 from ..utils.common import Interval, get_full_classname
 from .utils import get_model_device, get_model_dtype, get_model_name
-from .abstract import ExampleGenerator, AbstractModel
+from .abstract import ExampleGenerator, AbstractModel, PriceEstimator
 
 logger = logging.getLogger()
 
@@ -87,34 +88,6 @@ class FirstTradeTimeSelector(SelectionStrategy):
         return super().insert(result)
     def get_selected(self):
         return sorted(self.results[:self.top_count], key=lambda it: it.data['first_trade_time'])
-    
-class PriceEstimator:
-    def __init__(self, interval: Interval, quote:str='high', last_count: int|None = None, min_count: int|None = None):
-        self.interval = interval
-        self.quote = quote[0].lower()
-        self.last_count = last_count
-        self.min_count = min_count
-    def estimate_price(self, model: AbstractModel, ticker: nasdaq.NasdaqListedEntry, unix_time: float) -> float:
-        end_time = dateutils.add_business_days_unix(unix_time, model.get_metadata().projection_period, tz=dateutils.ET)
-        prices, = aggregate.get_pricing(ticker, unix_time, end_time, self.interval, return_quotes=[self.quote])
-        if not prices:
-            raise Exception(f"Got empty after prices for {ticker.symbol} at {unix_time}")
-        if self.min_count and len(prices) < self.min_count:
-            raise Exception(f"Not enough after prices for {ticker.symbol} at {unix_time}. Got {len(prices)}, expecting at least {self.min_count}.")
-        if self.last_count: prices = prices[-self.last_count:]
-        if self.quote == 'h': return max(prices)
-        if self.quote == 'l': return min(prices)
-        if self.quote == 'o': return prices[0]
-        if self.quote == 'c': return prices[-1]
-        raise Exception(f"Unsupported quote {self.quote}")
-
-    def to_dict(self) -> dict:
-        return {
-            'interval': self.interval.name,
-            'quote': self.quote,
-            'last_count': self.last_count,
-            'min_count': self.min_count
-        }
 
 class Evaluator:
     def __init__(self, generator: ExampleGenerator, model: AbstractModel):
@@ -161,10 +134,10 @@ class Evaluator:
         self,
         unix_from: float,
         unix_to: float,
-        hour: int = 14,
-        commission: float = 0.0035,
+        timing: TimingConfig,
+        estimator: PriceEstimator,
         selector: SelectionStrategy = SelectionStrategy(),
-        estimator: PriceEstimator = PriceEstimator(interval=Interval.H1, min_count=2),
+        commission: float = 0.0035,
         tickers: list[nasdaq.NasdaqListedEntry]|None = None
     ) -> float:
         """
@@ -198,7 +171,7 @@ class Evaluator:
         plotutils.refresh_interactive_figures(fig1, fig2)
         
         while True:
-            unix_time = dateutils.get_next_working_time_unix(unix_time, hour=hour)
+            unix_time = timing.get_next_unix(unix_time, step=)
             if unix_time >= unix_to:
                 break
             try:

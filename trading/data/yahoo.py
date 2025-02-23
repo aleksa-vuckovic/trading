@@ -7,7 +7,7 @@ from enum import Enum
 from pathlib import Path
 from ..utils import httputils, common, dateutils
 from ..utils.common import Interval
-from .utils import combine_series, fix_daily_timestamps, separate_quotes
+from .utils import combine_series, fix_long_timestamps, separate_quotes
 from .caching import cached_scalar, cached_series, CACHE_ROOT
 
 """
@@ -23,8 +23,12 @@ _MIN_AFTER_FIRST_TRADE = 14*24*3600 # The minimum time after the first trade tim
 _MIN_ADJUSTMENT_PERIOD = 10*24*3600
 
 def _interval_to_str(interval: Interval) -> str:
+    if interval == Interval.L1: return '1mo'
+    if interval == Interval.W1: return '5d'
     if interval == Interval.H1: return '1h'
     if interval == Interval.D1: return '1d'
+    if interval == Interval.M30: return 'm30'
+    if interval == Interval.M5: return 'm5'
     raise Exception(f"Unknown interval {interval}.")
 
 class Event(Enum):
@@ -48,34 +52,30 @@ def _get_pricing_raw(
     return json.loads(resp.text)
 
 def _fix_timestamps(timestamps: list[float], interval: Interval):
-    if interval == Interval.D1: return fix_daily_timestamps(timestamps)
-    if interval == Interval.H1:
-        #Move everything an hour later, except 15:30
-        lower_bound = 9*3600+30*60
-        upper_bound = 15*3600+30*60
-        result = []
-        for it in timestamps:
-            if not it:
-                result.append(None)
-                continue
+    if interval >= Interval.D1: return fix_long_timestamps(timestamps)
+    size = interval.time() if interval != Interval.H1 else 1800
+    result = []
+    for it in timestamps:
+        if not it:
+            result.append(None)
+            continue
+        if interval == Interval.H1:
             date = dateutils.unix_to_datetime(it, tz=dateutils.ET)
-            daysecs = dateutils.datetime_to_daysecs(date)
-            if daysecs < lower_bound or daysecs > upper_bound or it%1800:
-                logger.warning(f"Unexpected timestamp {date}. Skipping entry.")
-                result.append(None)
-            elif date.hour == 15 and date.minute == 30:
-                result.append(it + 1800)
-            else:
-                result.append(it + 3600)
-        return result
-    raise Exception(f"Unknown interval {interval}")
+            if date.hour == 15: it += 1800
+            else: it += 3600
+        else: it += size
+        if not dateutils.is_interval_time_unix(it, interval, tz=dateutils.ET):
+            logger.warning(f"Unexpected timestamp {date}. Skipping entry.")
+            result.append(None)
+        else: result.append(it)
+    return result
 
 @cached_series(
     unix_from_arg=1,
     unix_to_arg=2,
     include_args=[0,3],
     cache_root=_CACHE,
-    time_step_fn= lambda args: 10000000 if args[1] == Interval.H1 else 50000000,
+    time_step_fn= lambda args: 5000000 if args[1] < Interval.H1 else 10000000 if args[1] == Interval.H1 else 50000000,
     series_field="data",
     timestamp_field="t",
     live_delay_fn=5*60,
@@ -92,7 +92,7 @@ def _get_pricing(
     first_trade_time = get_first_trade_time(ticker)
     now = time.time()
     query_from = max(unix_from - interval.time(), first_trade_time + _MIN_AFTER_FIRST_TRADE)
-    if interval == Interval.H1: query_from = max(query_from, now - 729*24*3600)
+    query_from = max(query_from, interval.start_unix())
     query_to = unix_to
     if query_to <= query_from:
         return {"meta": {}, "events": {}, "data": []}
@@ -139,7 +139,7 @@ def _get_pricing(
     series = get_series(data)
     meta = get_meta(data)
     events = get_events(data)
-    if interval == Interval.H1 and unix_to < now - 15*24*3600:
+    if interval <= Interval.H1 and unix_to < now - 15*24*3600:
         try_adjust(series)
     """
     Rearrange data to be comaptible with series caching by moving everything to one array.

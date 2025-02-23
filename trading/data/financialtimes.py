@@ -5,7 +5,7 @@ import math
 from pathlib import Path
 from ..utils.common import Interval
 from ..utils import httputils, dateutils, common
-from .utils import combine_series, fix_daily_timestamps, separate_quotes
+from .utils import combine_series, fix_long_timestamps, separate_quotes
 from .caching import cached_scalar, cached_series, CACHE_ROOT
 
 logger = logging.getLogger(__name__)
@@ -67,11 +67,15 @@ def _get_pricing_raw(symbol: str, days: int, data_period: str, data_interval: in
 
     
 def _get_period_for_interval(interval: Interval) -> tuple[str, int]:
+    if interval > Interval.D1: raise Exception(f"Unsupported interval {interval}.")
     if interval == Interval.D1: return 'Day', 1
     if interval == Interval.H1: return 'Hour', 1
+    if interval == Interval.M30: return 'Minute', 30
+    if interval == Interval.M5: return 'Minute', 5
     raise Exception(f"Unknown interval {interval}")
 def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
-    if interval == Interval.H1:
+    if interval >= Interval.D1: return fix_long_timestamps(timestamps, interval)
+    else:
         result = []
         for it in timestamps:
             if not it:
@@ -83,10 +87,6 @@ def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
                 result.append(None)
             result.append(it)
         return result
-    elif interval == Interval.D1:
-        return fix_daily_timestamps(timestamps)
-    else:
-        raise Exception(f"Unknown interval {interval}")
 
 @cached_series(
     unix_from_arg=1,
