@@ -14,6 +14,7 @@ ET =  ZoneInfo('US/Eastern')
 UTC = ZoneInfo('UTC')
 CET = ZoneInfo('CET')
 
+#region Basics
 def str_to_datetime(time_string: str, format: str = "%Y-%m-%d %H:%M:%S", tz = ET) -> datetime:
     return datetime.strptime(time_string, format).replace(tzinfo=tz)
 def str_to_unix(time_string: str, format: str = "%Y-%m-%d %H:%M:%S", tz = ET) -> float:
@@ -22,22 +23,70 @@ def unix_to_datetime(unix: float|int, tz = ET) -> datetime:
     return datetime.fromtimestamp(unix, tz = tz)
 def now(tz = ET) -> datetime:
     return datetime.now(tz = tz)
+#endregion
 
+#region Utils
 def get_last_workday_of_month(date: datetime) -> int:
     range = calendar.monthrange(date.year, date.month)
     last_day_weekday = (range[0].value + range[1] - 1)%7
     return range[1] - max(last_day_weekday-4, 0)
-
 def set_open(date: datetime):
     return date.replace(hour=9, minute=30, second=0, microsecond=0)
 def set_close(date: datetime):
     return date.replace(hour=16, minute=0, second=0, microsecond=0)
 def slide_to_working(date: datetime, negative: bool) -> datetime:
     daysecs = datetime_to_daysecs(date)
-    if daysecs > 16*3600: date = set_open(date+timedelta(days=1)) if negative else set_close(date)
-    elif daysecs <= 9.5*3600: date = set_open(date) if negative else set_close(date-timedelta(days=1))
-    if date.weekday() < 5: return date
-    return set_open(date + timedelta(days = 7-date.weekday())) if negative else set_close(date - timedelta(days=max(date.weekday()-4, 0)))
+    if negative:
+        if daysecs >= 16*3600: date = set_open(date+timedelta(days=1))
+        if daysecs < 9.5*3600: date = set_open(date)
+        if date.weekday() < 5: return date
+        return set_open(date + timedelta(days = 7-date.weekday()))
+    else:
+        if daysecs > 16*3600: date = set_close(date)
+        elif daysecs <= 9.5*3600: date = set_close(date-timedelta(days=1))
+        if date.weekday() < 5: return date
+        return set_close(date - timedelta(days=max(date.weekday()-4, 0)))
+def datetime_to_daysecs(date: datetime) -> float:
+    return date.hour*3600 + date.minute*60 + date.second + date.microsecond/1_000_000
+def str_to_daysecs(date: str) -> float:
+    return datetime_to_daysecs(str_to_datetime(date))
+def unix_to_daysecs(unix_time: float, tz=ET) -> float:
+    date = unix_to_datetime(unix_time, tz=tz)
+    return datetime_to_daysecs(date)
+def set_datetime_daysecs(date: datetime, daysecs: float) -> datetime:
+    hour = daysecs//3600
+    minute = daysecs%3600//60
+    second = daysecs%60//1
+    microsecond = daysecs%1
+    return date.replace(hour = round(hour), minute = round(minute), second = round(second), microsecond=round(microsecond))
+def skip_weekend_datetime(date: datetime) -> datetime:
+    if date.weekday() >= 5: return date.replace(hour=0,minute=0,second=0,microsecond=0) + timedelta(7-date.weekday())
+    return date
+def skip_weekend_unix(unix_time: float, tz = ET) -> float:
+    date = unix_to_datetime(unix_time, tz=tz)
+    return skip_weekend_datetime(date).timestamp()
+#endregion
+
+#region Intervals
+def is_interval_time_datetime(date: datetime, interval: Interval):
+    if date.weekday()>=5: return False
+    if interval == Interval.L1:
+        return date.day == get_last_workday_of_month(date) and set_close(date) == date
+    if interval == Interval.W1:
+        return date.weekday() == 4 and set_close(date) == date
+    if interval == Interval.D1:
+        return date.hour == 16 and date.minute == 0 and date.second == 0 and date.microsecond == 0
+    daysecs = datetime_to_daysecs(date)
+    if daysecs <= 9.5*3600 or daysecs > 16*3600: return False
+    if interval == Interval.H1:
+        return (daysecs < 16*3600 and daysecs%3600 == 1800) or daysecs == 16*3600
+    if interval == Interval.M15:
+        return not (date.minute % 15) and not date.second and not date.microsecond
+    if interval == Interval.M5:
+        return not (date.minute % 5) and not date.second and not date.microsecond
+    raise Exception(f"Unknown interval {interval}")
+def is_interval_time_unix(unix_time: float, interval: Interval, tz=ET):
+    return is_interval_time_datetime(unix_to_datetime(unix_time, tz=tz), interval)
 def add_intervals_datetime(date: datetime, interval: Interval, count: int) -> datetime:
     """
     Add count trading intervals to date.
@@ -51,7 +100,7 @@ def add_intervals_datetime(date: datetime, interval: Interval, count: int) -> da
     negative = count < 0
     if interval == Interval.L1:
         original_date = date
-        set_last = date.day == get_last_workday_of_month(date) and date.hour >= 16
+        set_last = is_interval_time_datetime(original_date, Interval.L1)
         count += date.month-1
         date = date.replace(year=date.year+count//12,month=1,day=1)
         date = date.replace(month=1+count%12)
@@ -60,6 +109,7 @@ def add_intervals_datetime(date: datetime, interval: Interval, count: int) -> da
         return slide_to_working(date, negative)
     if interval == Interval.W1:
         date += timedelta(days=7*count)
+        if is_interval_time_datetime(date, Interval.W1): return date
         return slide_to_working(date, negative)
     if interval == Interval.D1:
         if date.weekday() >= 5: date = set_open(date + timedelta(days=7-date.weekday()))
@@ -68,8 +118,8 @@ def add_intervals_datetime(date: datetime, interval: Interval, count: int) -> da
         date += timedelta(days=7*(count//5)+count%5)
         return slide_to_working(date, negative)
     if interval == Interval.H1:
-        if count >= 7: date = add_intervals_datetime(date, Interval.D1, count//7)
-        else: date = slide_to_working(date, negative)
+        if count//7: date = add_intervals_datetime(date, Interval.D1, count//7)
+        else: date = slide_to_working(date, not negative)
         count %= 7
         # Get total work seconds from start of date to desired time
         total = datetime_to_daysecs(date)-9.5*3600
@@ -79,22 +129,25 @@ def add_intervals_datetime(date: datetime, interval: Interval, count: int) -> da
         if total > 7*3600:
             date = date + timedelta(days = 1 if date.weekday() != 4 else 3)
             total -= 7*3600
-        return set_datetime_daysecs(date, 9.5*3600+total-max((total-6*3600)/2, 0))
-    if interval == Interval.M15 or Interval.M5:
+        result = set_datetime_daysecs(date, 9.5*3600+total-max((total-6*3600)/2,0))
+        return slide_to_working(result, negative)
+    if interval == Interval.M15 or interval == Interval.M5:
         day_count = (6.5*3600)//interval.time()
-        if count >= day_count: date = add_intervals_datetime(date, Interval.D1, count//day_count)
-        else: date = slide_to_working(date)
+        if count//day_count: date = add_intervals_datetime(date, Interval.D1, count//day_count)
+        else: date = slide_to_working(date, not negative)
         count %= day_count
         total = datetime_to_daysecs(date) - 9.5*3600 + count*interval.time()
         date = set_open(date)
         if total > 6.5*3600:
             date = date + timedelta(days = 1 if date.weekday() != 4 else 3)
             total -= 6.5*3600
-        return set_datetime_daysecs(date, 9.5*3600+total, 0)
+        return slide_to_working(set_datetime_daysecs(date, 9.5*3600+total), negative)
     raise Exception(f"Unknown interval {interval}")
 def add_intervals_unix(unix_time: float, interval: Interval, count: int, tz=ET) -> float:
     return add_intervals_datetime(unix_to_datetime(unix_time, tz=tz), interval, count).timestamp()
+#endregion
 
+#region Timestamp arrays
 def get_next_interval_time_datetime(date: datetime, interval: Interval) -> datetime:
     if interval == Interval.L1:
         last = get_last_workday_of_month(date)
@@ -122,58 +175,18 @@ def get_next_interval_time_datetime(date: datetime, interval: Interval) -> datet
     raise Exception(f"Unknown interval {interval}")
 def get_next_interval_time_unix(unix_time: float, interval: Interval, tz = ET) -> float:
     return get_next_interval_time_datetime(unix_to_datetime(unix_time, tz = tz), interval).timestamp()
-
-def is_interval_time_datetime(date: datetime, interval: Interval):
-    if date.weekday()>=5: return False
-    if interval == Interval.L1:
-        return date.day == get_last_workday_of_month(date) and set_close(date) == date
-    if interval == Interval.W1:
-        return date.weekday() == 4 and set_close(date) == date
-    if interval == Interval.D1:
-        return date.hour == 16 and date.minute == 0 and date.second == 0 and date.microsecond == 0
-    daysecs = datetime_to_daysecs(date)
-    if daysecs <= 9.5*3600 or daysecs > 16*3600: return False
-    if interval == Interval.H1:
-        return (daysecs < 16*3600 and daysecs%3600 == 1800) or daysecs == 16*3600
-    if interval == Interval.M15:
-        return not (date.minute % 15) and not date.second and not date.microsecond
-    if interval == Interval.M5:
-        return not (date.minute % 5) and not date.second and not date.microsecond
-    raise Exception(f"Unknown interval {interval}")
-def is_interval_time_unix(unix_time: float, interval: Interval, tz=ET):
-    return is_interval_time_datetime(unix_to_datetime(unix_time, tz=tz), interval)
-
 def get_interval_timestamps(unix_from: float, unix_to: float, interval: Interval, tz=ET) -> list[float]:
     cur = unix_to_datetime(unix_from, tz=tz)
-    cur = cur if is_interval_time_datetime(cur, interval) else get_next_interval_time_datetime(cur, interval)
+    cur = get_next_interval_time_datetime(cur, interval)
     date_to = unix_to_datetime(unix_to, tz=tz)
     result = []
-    while cur < date_to:
+    while cur <= date_to:
         result.append(cur.timestamp())
         cur = get_next_interval_time_datetime(cur, interval)
     return result
+#endregion
 
-def datetime_to_daysecs(date: datetime) -> float:
-    return date.hour*3600 + date.minute*60 + date.second + date.microsecond/1_000_000
-def str_to_daysecs(date: str) -> float:
-    return datetime_to_daysecs(str_to_datetime(date))
-def unix_to_daysecs(unix_time: float, tz=ET) -> float:
-    date = unix_to_datetime(unix_time, tz=tz)
-    return datetime_to_daysecs(date)
-def set_datetime_daysecs(date: datetime, daysecs: float) -> datetime:
-    hour = daysecs//3600
-    minute = daysecs%3600//60
-    second = daysecs%60//1
-    microsecond =daysecs%1
-    return date.replace(hour = round(hour), minute = round(minute), second = round(second), microsecond=round(microsecond))
-
-def skip_weekend_datetime(date: datetime) -> datetime:
-    if date.weekday() >= 5: return date.replace(hour=0,minute=0,second=0,microsecond=0) + timedelta(7-date.weekday())
-    return date
-def skip_weekend_unix(unix_time: float, tz = ET) -> float:
-    date = unix_to_datetime(unix_time, tz=tz)
-    return skip_weekend_datetime(date).timestamp()
-
+#region TimingConfig
 @serializable(skip_keys=['_timestamps'])
 @equatable(skip_keys=['_timestamps'])
 class TimingConfig:
@@ -242,4 +255,4 @@ class TimingConfig:
         return False
     def contains(self, unix_time: float, tz=ET) -> bool:
         return unix_to_datetime(unix_time, tz=tz) in self
-
+#endregion

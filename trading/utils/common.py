@@ -31,7 +31,7 @@ class Interval(Enum):
     """
     M15 covers 30 minutes of trading. The timestamp corresponds to the end of a 15 minute period.
     """
-    M15 = '30 minutes'
+    M15 = '15 minutes'
     """
     M5 covers 5 minutes of trading. The timestamp corresponds to the end of a 5 minute period.
     """
