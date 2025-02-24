@@ -40,7 +40,7 @@ def get_sorted_tickers() -> list[nasdaq.NasdaqListedEntry]:
 
 def get_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, interval: Interval, return_quotes=['close','volume']) -> tuple[list[float], ...]:
     now = time.time()
-    if now-unix_to < 2*24*3600:
+    if now-unix_to < 2*24*3600 and interval <= Interval.D1:
         #Live. Use alternatives for recent prices.
         sep = max(now - 3*24*3600, unix_from)
         if unix_from < sep:

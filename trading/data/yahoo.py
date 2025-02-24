@@ -27,8 +27,8 @@ def _interval_to_str(interval: Interval) -> str:
     if interval == Interval.W1: return '5d'
     if interval == Interval.H1: return '1h'
     if interval == Interval.D1: return '1d'
-    if interval == Interval.M30: return 'm30'
-    if interval == Interval.M5: return 'm5'
+    if interval == Interval.M15: return '15m'
+    if interval == Interval.M5: return '5m'
     raise Exception(f"Unknown interval {interval}.")
 
 class Event(Enum):

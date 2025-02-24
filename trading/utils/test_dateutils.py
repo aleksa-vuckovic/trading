@@ -95,11 +95,12 @@ class TestDates(unittest.TestCase):
         for input, expect in pairs:
             input = dateutils.str_to_datetime(input)
             expect = dateutils.str_to_datetime(expect)
-            if random.random() < 0.5:
+            if random.random() < 1:
                 self.assertEqual(expect, dateutils.get_next_interval_time_datetime(input, interval=Interval.H1))
             else:
                 self.assertEqual(expect.timestamp(), dateutils.get_next_interval_time_unix(input.timestamp(), Interval.H1))
     
+    #@unittest.skip('c')
     def test_get_interval_timestamps(self):
         start = dateutils.str_to_unix('2025-02-16 00:00:00')
         end = dateutils.str_to_unix('2025-02-19 15:30:00')

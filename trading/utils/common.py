@@ -29,9 +29,9 @@ class Interval(Enum):
     """
     H1 = '1 hour'
     """
-    M30 covers 30 minutes of trading. The timestamp corresponds to the end of a 30 minute period.
+    M15 covers 30 minutes of trading. The timestamp corresponds to the end of a 15 minute period.
     """
-    M30 = '30 minutes'
+    M15 = '30 minutes'
     """
     M5 covers 5 minutes of trading. The timestamp corresponds to the end of a 5 minute period.
     """
@@ -53,7 +53,7 @@ class Interval(Enum):
         if self == Interval.W1: return 7*24*3600
         if self == Interval.D1: return 24*3600
         if self == Interval.H1: return 3600
-        if self == Interval.M30: return 1800
+        if self == Interval.M15: return 900
         if self == Interval.M5: return 300
         raise ValueError(f"Unknown interval {self}.")
     def __lt__(self, other):
@@ -69,7 +69,7 @@ class Interval(Enum):
         now = time.time()
         if self >= Interval.D1: return now - 10*365*24*3600
         if self == Interval.H1: return now - 729*24*3600
-        if self == Interval.M30: return now - 60*24*3600
+        if self == Interval.M15: return now - 60*24*3600
         if self == Interval.M5: return now - 60*24*3600
         raise Exception(f"Unsupported interval {self}.")
 

@@ -70,7 +70,7 @@ def _get_period_for_interval(interval: Interval) -> tuple[str, int]:
     if interval > Interval.D1: raise Exception(f"Unsupported interval {interval}.")
     if interval == Interval.D1: return 'Day', 1
     if interval == Interval.H1: return 'Hour', 1
-    if interval == Interval.M30: return 'Minute', 30
+    if interval == Interval.M15: return 'Minute', 15
     if interval == Interval.M5: return 'Minute', 5
     raise Exception(f"Unknown interval {interval}")
 def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:

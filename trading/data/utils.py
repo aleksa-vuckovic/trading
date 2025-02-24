@@ -61,8 +61,8 @@ def fix_long_timestamps(timestamps: list[float|int|None], interval: Interval) ->
         # For timestamps at the opening or closing in ET it will remain in the same day.
         if date.hour != 2 and date.hour != 3 and date.hour != 17 and date.hour != 23:
             logger.warning(f"Unexpected {interval} timestamp {date}.")
-        date = date.replace(hour = 16, minute=0, second=0, microsecond=0)
+        date = dateutils.set_close(date)
         if interval == Interval.W1: date += timedelta(days = 5-date.weekday())
-        if interval == Interval.L1: date = date.replace(day=calendar.monthrange(date.year, date.month)[1])
+        if interval == Interval.L1: date = date.replace(day=dateutils.get_last_workday_of_month(date))
         result.append(date.timestamp())
     return result

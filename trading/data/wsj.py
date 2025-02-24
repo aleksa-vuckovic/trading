@@ -110,7 +110,7 @@ def _get_pricing(symbol: str, unix_from: float, unix_to: float, interval: Interv
     if interval > Interval.D1: raise Exception(f"Interval {interval} not supported for wsj.")
     if interval == Interval.D1: step = 'P1D'
     elif interval == Interval.H1: step = 'PT30M'
-    elif interval == Interval.M30: step = 'PT30M'
+    elif interval == Interval.M15: step = 'PT15M'
     elif interval == Interval.M5: step = 'PT5M'
     else: raise ValueError(f"Unknown interval {interval}")
     data = _get_pricing_raw(f"STOCK/US/XNAS/{symbol.upper()}", step, 'D5')
