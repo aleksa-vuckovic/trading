@@ -42,13 +42,13 @@ class ExampleGenerator:
         pass
     def _run_loop(
         self,
+        *,
         folder: Path,
         timing: TimingConfig,
         step: float,
         tickers: list[nasdaq.NasdaqListedEntry]|None = None,
-        time_frame_start: float = dateutils.str_to_unix(config.time_frame_start),
-        time_frame_end: float = dateutils.str_to_unix(config.time_frame_end),
-        start_time_offset: float = 75*24*3600,
+        time_frame: tuple[float, float],
+        start_time_offset: float,
         batch_size: int = config.batch_size
     ):
         if not folder.exists(): folder.mkdir(parents=True, exist_ok=True)

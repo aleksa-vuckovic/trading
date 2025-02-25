@@ -191,6 +191,7 @@ def get_interval_timestamps(unix_from: float, unix_to: float, interval: Interval
 @equatable(skip_keys=['_timestamps'])
 class TimingConfig:
     _timestamps: dict[Interval, list[float]]
+    interval: Interval
     def __init__(self, components: list[float|list[float]]):
         self.components = components
         self._timestamps = {}
@@ -216,31 +217,13 @@ class TimingConfig:
             return self
         def build(self) -> TimingConfig:
             return TimingConfig(self.components)
-    def get_timestamps(self, step: float) -> list[float]:
-        if step in self._timestamps: return self._timestamps[step]
-        result = []
-        for component in self.components:
-            if isinstance(component, list):
-                cur = component[1]
-                start = component[0]
-                while cur > start:
-                    result.append(cur)
-                    cur -= step
-            else: result.append(component)
-        result = sorted(result)
-        self._timestamps[step] = result
-        return result
-    def get_next_datetime(self, date: datetime, step: float) -> datetime:
-        date = skip_weekend_datetime(date)
-        daysecs = datetime_to_daysecs(date)
-        timestamps = self.get_timestamps(step)
-        if not timestamps: raise Exception(f"No timestamps")
-        index = binary_search(timestamps, daysecs, edge=BinarySearchEdge.LOW) + 1
-        if index < len(timestamps): return set_datetime_daysecs(date, timestamps[index])
-        date = skip_weekend_datetime(date+timedelta(days=1))
-        return set_datetime_daysecs(date, timestamps[0])
-    def get_next_unix(self, unix_time: float, step: float, tz = ET) -> float:
-        return self.get_next_datetime(unix_to_datetime(unix_time, tz=tz), step).timestamp()
+    def get_next_datetime(self, date: datetime, interval: Interval) -> datetime:
+        interval = interval or self.interval or Interval.ascending[0]
+        cur = get_next_interval_time_datetime(date, interval)
+        while cur not in self: cur = get_next_interval_time_datetime(cur, interval)
+        return cur
+    def get_next_unix(self, unix_time: float, interval: Interval, tz = ET) -> float:
+        return self.get_next_datetime(unix_to_datetime(unix_time, tz=tz), interval).timestamp()
     
     def __contains__(self, unix_or_date: float|datetime) -> bool:
         if isinstance(unix_or_date, datetime): date = unix_or_date

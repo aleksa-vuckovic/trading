@@ -72,6 +72,10 @@ class Interval(Enum):
         if self == Interval.M15: return now - 59*24*3600
         if self == Interval.M5: return now - 59*24*3600
         raise Exception(f"Unsupported interval {self}.")
+    ascending: list[Interval]
+    descending: list[Interval]
+Interval.ascending = sorted(Interval, reverse=False)
+Interval.descending = sorted(Interval, reverse=True)
 
 def equatable(skip_keys: list[str] = []):
     def decorate(cls):

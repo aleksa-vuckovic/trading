@@ -301,39 +301,31 @@ class TestDates(unittest.TestCase):
 
     def test_timing_config_next(self):
         config = TimingConfig.Builder()\
-            .at(hour = 11, minute = 0)\
+            .at(hour = 11, minute = 30)\
             .around(hour = 14, minute = 30, delta_minute=20)\
             .starting(hour = 15, minute = 0).until(hour = 16, minute = 0)\
             .build()
         config_ = jsonutils.deserialize(jsonutils.serialize(config))
         self.assertEqual(config, config_)
         
-        expect = [dateutils.str_to_datetime(it, tz=dateutils.ET) for it in 
-            ['2025-02-21 11:00:00', '2025-02-21 14:50:00', '2025-02-21 16:00:00', '2025-02-24 11:00:00']]
+        expect = [dateutils.str_to_unix(it, tz=dateutils.ET) for it in 
+            ['2025-02-21 11:30:00', '2025-02-21 14:30:00', '2025-02-21 15:30:00', '2025-02-21 16:00:00', '2025-02-24 11:30:00']]
         result = []
-        cur = dateutils.str_to_datetime('2025-02-21 10:00:00', tz=dateutils.ET)
+        cur = dateutils.str_to_unix('2025-02-21 10:00:00', tz=dateutils.ET)
         for i in range(len(expect)):
-            if random.random() < 0.5:
-                cur = config.get_next_datetime(cur, step=3600)
-                result.append(cur)
-            else:
-                cur = dateutils.unix_to_datetime(config.get_next_unix(cur.timestamp(), step=3600), tz=dateutils.ET)
-                result.append(cur)
+            cur = config.get_next_unix(cur, Interval.H1)
+            result.append(cur)
         self.assertEqual(expect, result)
 
         config = TimingConfig.Builder()\
             .around(hour = 11, minute = 0, delta_minute = 30)\
             .build()
         
-        expect = [dateutils.str_to_datetime(it, tz=dateutils.ET) for it in 
-            ['2025-02-21 10:31:00', '2025-02-21 10:32:00', '2025-02-21 10:33:00', '2025-02-21 10:34:00']]
+        expect = [dateutils.str_to_unix(it, tz=dateutils.ET) for it in 
+            ['2025-02-21 10:35:00', '2025-02-21 10:40:00', '2025-02-21 10:45:00', '2025-02-21 10:50:00']]
         result = []
-        cur = dateutils.str_to_datetime('2025-02-21 10:00:00', tz=dateutils.ET)
+        cur = dateutils.str_to_unix('2025-02-21 10:00:00', tz=dateutils.ET)
         for i in range(len(expect)):
-            if random.random() < 0.5:
-                cur = config.get_next_datetime(cur, step=60)
-                result.append(cur)
-            else:
-                cur = dateutils.unix_to_datetime(config.get_next_unix(cur.timestamp(), step=60), tz=dateutils.ET)
-                result.append(cur)
+            cur = config.get_next_unix(cur, Interval.M5)
+            result.append(cur)
         self.assertEqual(expect, result)
