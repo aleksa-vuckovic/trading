@@ -6,29 +6,36 @@ from . import yahoo
 
 
 class TestQuery(unittest.TestCase):
-    def test_yahoo_pricing_h1(self):
+
+    def test_pricing_l1(self):
         prices, volume, low, high, open, times = yahoo.get_pricing(
             'nvda',
-            dateutils.str_to_unix("2023-12-01 00:00:00", tz = dateutils.ET),
-            dateutils.str_to_unix("2024-01-15 00:00:00", tz = dateutils.ET),
-            Interval.H1,
-            return_quotes=['close', 'volume', 'low', 'high', 'open', 'timestamp'],
+            dateutils.str_to_unix("2021-11-26 16:00:00", tz = dateutils.ET),
+            dateutils.str_to_unix("2023-05-13 16:00:00", tz = dateutils.ET),
+            Interval.L1,
+            return_quotes=['close', 'volume', 'low', 'open', 'high', 'timestamp'],
             skip_cache=config.test.skip_cache
         )
-        self.assertEqual(dateutils.str_to_unix('2023-12-01 10:30:00'), times[0])
-        self.assertEqual(dateutils.str_to_unix('2024-01-12 16:00:00'), times[-1])
-        self.assertTrue(prices and volume and low and high and open)
-        self.assertGreater(prices[0], 46)
-        self.assertLess(prices[0], 47)
-        self.assertGreater(sum(volume[:7]), 340000000)
-        self.assertLess(sum(volume[:7]), 380000000)
-        self.assertEqual(len(prices), len(volume))
-        self.assertEqual(len(prices), len(low))
-        self.assertEqual(len(prices), len(high))
-        self.assertEqual(len(prices), len(open))
-        self.assertTrue(len(prices)> 150 and len(prices) < 300)
-    
-    def test_yahoo_pricing_d1(self):
+        self.assertTrue(prices and volume and low and high and open and times)
+        self.assertEqual(18, len(prices))
+        self.assertTrue(all(dateutils.is_interval_time_unix(it, Interval.L1) for it in times))
+        self.assertAlmostEqual(prices[0], 32.67599868774414)
+
+    def test_pricing_w1(self):
+        prices, volume, low, high, open, times = yahoo.get_pricing(
+            'nvda',
+            dateutils.str_to_unix("2021-11-26 16:00:00", tz = dateutils.ET),
+            dateutils.str_to_unix("2022-05-13 16:00:00", tz = dateutils.ET),
+            Interval.W1,
+            return_quotes=['close', 'volume', 'low', 'open', 'high', 'timestamp'],
+            skip_cache=config.test.skip_cache
+        )
+        self.assertTrue(prices and volume and low and high and open and times)
+        self.assertEqual(24, len(prices))
+        self.assertTrue(all(dateutils.is_interval_time_unix(it, Interval.W1) for it in times))
+        self.assertAlmostEqual(prices[0], 32.67599868774414)
+
+    def test_pricing_d1(self):
         prices, volume, low, high, open, times = yahoo.get_pricing(
             'nvda',
             dateutils.str_to_unix("2021-11-30 16:00:00", tz = dateutils.ET),
@@ -49,6 +56,56 @@ class TestQuery(unittest.TestCase):
         self.assertEqual(len(prices), len(open))
         self.assertEqual(32, len(prices))
 
+    def test_pricing_h1(self):
+        prices, volume, low, high, open, times = yahoo.get_pricing(
+            'nvda',
+            dateutils.str_to_unix("2023-12-01 00:00:00", tz = dateutils.ET),
+            dateutils.str_to_unix("2024-01-15 00:00:00", tz = dateutils.ET),
+            Interval.H1,
+            return_quotes=['close', 'volume', 'low', 'high', 'open', 'timestamp'],
+            skip_cache=config.test.skip_cache
+        )
+        self.assertEqual(dateutils.str_to_unix('2023-12-01 10:30:00'), times[0])
+        self.assertEqual(dateutils.str_to_unix('2024-01-12 16:00:00'), times[-1])
+        self.assertTrue(prices and volume and low and high and open)
+        self.assertGreater(prices[0], 46)
+        self.assertLess(prices[0], 47)
+        self.assertGreater(sum(volume[:7]), 340000000)
+        self.assertLess(sum(volume[:7]), 380000000)
+        self.assertEqual(len(prices), len(volume))
+        self.assertEqual(len(prices), len(low))
+        self.assertEqual(len(prices), len(high))
+        self.assertEqual(len(prices), len(open))
+        self.assertTrue(len(prices)> 150 and len(prices) < 300)
+
+    def test_pricing_m15(self):
+        prices, volume, low, high, open, times = yahoo.get_pricing(
+            'nvda',
+            dateutils.str_to_unix("2025-02-10 16:00:00", tz = dateutils.ET),
+            dateutils.str_to_unix("2025-02-12 16:00:00", tz = dateutils.ET),
+            Interval.M15,
+            return_quotes=['close', 'volume', 'low', 'open', 'high', 'timestamp'],
+            skip_cache=config.test.skip_cache
+        )
+        self.assertTrue(prices and volume and low and high and open and times)
+        self.assertEqual(52, len(prices))
+        self.assertTrue(all(dateutils.is_interval_time_unix(it, Interval.M15) for it in times))
+        self.assertAlmostEqual(prices[0], 133.92999267578125)
+
+    def test_pricing_m5(self):
+        prices, volume, low, high, open, times = yahoo.get_pricing(
+            'nvda',
+            dateutils.str_to_unix("2025-02-11 15:00:00", tz = dateutils.ET),
+            dateutils.str_to_unix("2025-02-12 10:00:00", tz = dateutils.ET),
+            Interval.M5,
+            return_quotes=['close', 'volume', 'low', 'open', 'high', 'timestamp'],
+            skip_cache=config.test.skip_cache
+        )
+        self.assertTrue(prices and volume and low and high and open and times)
+        self.assertEqual(18, len(prices))
+        self.assertTrue(all(dateutils.is_interval_time_unix(it, Interval.M5) for it in times))
+        self.assertAlmostEqual(prices[0], 133.5915985107422)
+    
     def test_get_info(self):
         info = yahoo.get_first_trade_time('tnya')
         self.assertEqual(1627651800, info)

@@ -77,7 +77,7 @@ def _merge_data_1h(data):
 
 def _fix_timestamps(timestamps: list[float|int|None], interval: Interval) -> list[float|None]:
     timestamps = [it//1000 if it else None for it in timestamps]
-    if interval >= Interval.D1: return fix_long_timestamps(timestamps)
+    if interval >= Interval.D1: return fix_long_timestamps(timestamps, interval)
     else:
         size = interval.time() if interval != Interval.H1 else 1800
         result = []

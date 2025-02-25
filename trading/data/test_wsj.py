@@ -26,20 +26,33 @@ class TestWsj(unittest.TestCase):
         result =wsj._merge_data_1h(input)
         self.assertEqual(expect, result)
 
-    def test_pricing_hourly(self):
+    def test_pricing_d1(self):
+        now = time.time()
+        lows, highs, vols, times = wsj.get_pricing('bhat', now - 5*24*3600, now, interval=Interval.D1, return_quotes=['low', 'high', 'volume', 'timestamp'], skip_cache=config.test.skip_cache)
+        self.assertTrue(lows and highs and vols and times)
+        self.assertTrue(all(highs[i] >= lows[i] and vols[i] for i in range(len(lows))))
+        self.assertTrue(all(dateutils.is_interval_time_unix(it, Interval.D1) for it in times))
+
+    def test_pricing_h1(self):
         now = time.time()
         lows, highs, vols, times = wsj.get_pricing('bhat', now - 5*24*3600, now, interval=Interval.H1, return_quotes=['low', 'high', 'volume', 'timestamp'], skip_cache=config.test.skip_cache)
         self.assertTrue(lows and highs and vols and times)
         self.assertGreater(len(lows), 8)
         self.assertTrue(all(highs[i] >= lows[i] and vols[i] for i in range(len(lows))))
-        dates = [dateutils.unix_to_datetime(time, tz=dateutils.ET) for time in times]
-        self.assertTrue(all(date.minute == 30 and date.hour < 16 and date.hour >= 9 or date.minute == 0 and date.hour == 16 for date in dates))
+        self.assertTrue(all(dateutils.is_interval_time_unix(it, Interval.H1) for it in times))
 
-    def test_pricing_daily(self):
+    def test_pricing_m15(self):
         now = time.time()
-        lows, highs, vols, times = wsj.get_pricing('bhat', now - 5*24*3600, now, interval=Interval.D1, return_quotes=['low', 'high', 'volume', 'timestamp'], skip_cache=config.test.skip_cache)
+        lows, highs, vols, times = wsj.get_pricing('bhat', now - 3*24*3600, now, Interval.M15, return_quotes=['low', 'high', 'volume', 'timestamp'], skip_cache=config.test.skip_cache)
         self.assertTrue(lows and highs and vols and times)
+        self.assertGreater(len(lows), 24)
         self.assertTrue(all(highs[i] >= lows[i] and vols[i] for i in range(len(lows))))
-        dates = [dateutils.unix_to_datetime(time, tz=dateutils.ET) for time in times]
-        self.assertTrue(all(date.hour == 16 and date.minute == 0 and not date.second and not date.microsecond for date in dates))
-        
+        self.assertTrue(all(dateutils.is_interval_time_unix(it, Interval.M15) for it in times))
+
+    def test_pricing_m5(self):
+        now = time.time()
+        lows, highs, vols, times = wsj.get_pricing('bhat', now - 3*24*3600, now, Interval.M5, return_quotes=['low', 'high', 'volume', 'timestamp'], skip_cache=config.test.skip_cache)
+        self.assertTrue(lows and highs and vols and times)
+        self.assertGreater(len(lows), 70)
+        self.assertTrue(all(highs[i] >= lows[i] and vols[i] for i in range(len(lows))))
+        self.assertTrue(all(dateutils.is_interval_time_unix(it, Interval.M5) for it in times))

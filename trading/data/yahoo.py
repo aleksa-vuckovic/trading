@@ -52,7 +52,7 @@ def _get_pricing_raw(
     return json.loads(resp.text)
 
 def _fix_timestamps(timestamps: list[float], interval: Interval):
-    if interval >= Interval.D1: return fix_long_timestamps(timestamps)
+    if interval >= Interval.D1: return fix_long_timestamps(timestamps, interval)
     size = interval.time() if interval != Interval.H1 else 1800
     result = []
     for it in timestamps:
@@ -65,7 +65,7 @@ def _fix_timestamps(timestamps: list[float], interval: Interval):
             else: it += 3600
         else: it += size
         if not dateutils.is_interval_time_unix(it, interval, tz=dateutils.ET):
-            logger.warning(f"Unexpected timestamp {date}. Skipping entry.")
+            logger.warning(f"Unexpected timestamp {dateutils.unix_to_datetime(it, tz=dateutils.ET)}. Skipping entry.")
             result.append(None)
         else: result.append(it)
     return result
@@ -75,7 +75,7 @@ def _fix_timestamps(timestamps: list[float], interval: Interval):
     unix_to_arg=2,
     include_args=[0,3],
     cache_root=_CACHE,
-    time_step_fn= lambda args: 5000000 if args[1] < Interval.H1 else 10000000 if args[1] == Interval.H1 else 50000000,
+    time_step_fn= lambda args: 5000000 if args[1] < Interval.H1 else 10000000 if args[1] == Interval.H1 else 100000000,
     series_field="data",
     timestamp_field="t",
     live_delay_fn=5*60,

@@ -58,11 +58,11 @@ def fix_long_timestamps(timestamps: list[float|int|None], interval: Interval) ->
         # Usually returned as 00:00 in UTC
         date = dateutils.unix_to_datetime(it + 7.5*3600, dateutils.ET)
         # For timestamps returned as 00:00 UTC this will cross into the proper ET date.
-        # For timestamps at the opening or closing in ET it will remain in the same day.
-        if date.hour != 2 and date.hour != 3 and date.hour != 17 and date.hour != 23:
+        # For timestamps at the 00:00, market open or market close in ET it will remain in the same day.
+        if date.hour not in [2,3,7,17,23]:
             logger.warning(f"Unexpected {interval} timestamp {date}.")
         date = dateutils.set_close(date)
-        if interval == Interval.W1: date += timedelta(days = 5-date.weekday())
+        if interval == Interval.W1: date += timedelta(days = 4-date.weekday())
         if interval == Interval.L1: date = date.replace(day=dateutils.get_last_workday_of_month(date))
         result.append(date.timestamp())
     return result

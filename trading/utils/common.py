@@ -69,8 +69,8 @@ class Interval(Enum):
         now = time.time()
         if self >= Interval.D1: return now - 10*365*24*3600
         if self == Interval.H1: return now - 729*24*3600
-        if self == Interval.M15: return now - 60*24*3600
-        if self == Interval.M5: return now - 60*24*3600
+        if self == Interval.M15: return now - 59*24*3600
+        if self == Interval.M5: return now - 59*24*3600
         raise Exception(f"Unsupported interval {self}.")
 
 def equatable(skip_keys: list[str] = []):
