@@ -1,3 +1,4 @@
+from __future__ import annotations
 import logging
 import re
 from enum import Enum
@@ -28,7 +29,7 @@ class NasdaqListedEntry:
     lot_size: int
     etf: bool
     next_shares: bool
-    _line: str
+    line: str
 
     def is_warrant(self) -> bool:
         warrant_pattern = r'.*warrant.*'
@@ -104,16 +105,19 @@ class NasdaqListedEntry:
         ret.lot_size = int(data[5])
         ret.etf = NasdaqListedEntry.yn_to_bool(data[6])
         ret.next_shares = NasdaqListedEntry.yn_to_bool(data[7])
-        ret._line = line
+        ret.line = line
         return ret
     
-    def to_line(self) -> str:
-        return self._line
+    def to_dict(self) -> dict:
+        return { 'line': self.line }
+    @staticmethod
+    def from_dict(data: dict) -> NasdaqListedEntry:
+        return NasdaqListedEntry.from_line(data['line'])
     
     def __str__(self):
         return repr(self)
     def __repr__(self):
-        return self._line
+        return self.line
 
 @cached_scalar(
     cache_root=_CACHE/"entries" 

@@ -14,7 +14,7 @@ class RecursiveLayer(torch.nn.Module):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.layer = torch.nn.GRU(input_size =in_features, hidden_size=out_features, num_layers=3, batch_first=True)
+        self.layer = torch.nn.GRU(input_size =in_features, hidden_size=out_features, num_layers=2, batch_first=True)
 
     def forward(self, series: torch.Tensor):
         return self.layer(series.transpose(1,2))[1][-1]
@@ -64,23 +64,34 @@ class Model(AbstractModel):
         total_features = 20*input_features*len(self.config.data_config)
         self.dense = torch.nn.Sequential(
             torch.nn.BatchNorm1d(num_features=total_features),
-            torch.nn.Linear(in_features=total_features, out_features=total_features/5),
+            torch.nn.Linear(in_features=total_features, out_features=total_features//5),
             torch.nn.Sigmoid(),
-            torch.nn.Linear(in_features=total_features/5, out_features=total_features/20),
+            torch.nn.Linear(in_features=total_features//5, out_features=total_features//20),
             torch.nn.Sigmoid(),
-            torch.nn.BatchNorm1d(num_features=total_features/20),
-            torch.nn.Linear(in_features=total_features/20, out_features=1),
+            torch.nn.BatchNorm1d(num_features=total_features//20),
+            torch.nn.Linear(in_features=total_features//20, out_features=1),
             self.config.target.get_layer()
         )
 
-    def forward(self, data: dict[str, Tensor]):
-        output = torch.cat(
-            [
-                *(self.conv_layers[interval](data[interval]) for interval in data),
-                *(self.layers[interval](data[interval]) for interval in data)
-            ],
-            dim=1
-        )
+    def forward(self, *args: Tensor | dict[str, Tensor]):
+        if len(args) == 1:
+            data: dict[str, Tensor] = args[0]
+            output = torch.cat(
+                [
+                    *(self.conv_layers[interval](data[interval]) for interval in data),
+                    *(self.layers[interval](data[interval]) for interval in data)
+                ],
+                dim=1
+            )
+        else:
+            output = torch.cat(
+                [
+                    *(self.conv_layers[interval.name](tensor) for interval, tensor in zip(self.config.data_config.intervals(), args)),
+                    *(self.layers[interval.name](tensor) for interval, tensor in zip(self.config.data_config.intervals(), args))
+                ],
+                dim=1
+            )
+                
         return self.dense(output)
 
     def extract_tensors(self, example: dict[str, Tensor], with_output: bool = True):

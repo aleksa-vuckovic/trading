@@ -9,16 +9,8 @@ from pathlib import Path
 from enum import Enum
 from pathlib import Path
 from matplotlib import pyplot as plt
-from ..utils.common import get_full_classname
 
 logger = logging.getLogger(__name__)
-
-def get_model_device(model: torch.nn.Module) -> torch.device:
-    return next(model.parameters()).device
-def get_model_dtype(model: torch.nn.Module) -> torch.dtype:
-    return next(model.parameters()).dtype
-def get_model_name(model: torch.nn.Module) -> str:
-    return get_full_classname(model).split(".")[-3]
 
 def check_tensors(tensors: list[Tensor] | tuple[Tensor] | dict[object, Tensor], allow_zeros=True):
     if isinstance(tensors, (list, tuple)):

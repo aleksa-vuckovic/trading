@@ -97,7 +97,7 @@ class DataConfig:
     class Iterator:
         def __init__(self, data_config: DataConfig):
             self.data_config = data_config
-            self.intervals = list(data_config.counts.keys())
+            self.intervals = list(data_config.intervals())
             self.i = 0
         def __next__(self) -> tuple[Interval, int]:
             if self.i >= len(self.intervals):
@@ -126,7 +126,7 @@ class DataConfig:
         return False
     
     def intervals(self):
-        return self.counts.keys()
+        return sorted(self.counts.keys())
 
     @staticmethod
     def from_dict(data: dict) -> DataConfig:
@@ -172,3 +172,10 @@ class AbstractModel(torch.nn.Module):
         pass
     def print_summary(self, merge: int = 10):
         pass
+
+    def get_device(self) -> torch.device:
+        return next(self.parameters()).device
+    def get_dtype(self) -> torch.dtype:
+        return next(self.parameters()).dtype
+    def get_name(self) -> str:
+        return __name__.split(".")[-2]

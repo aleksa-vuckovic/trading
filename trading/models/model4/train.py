@@ -4,7 +4,7 @@ from pathlib import Path
 from ..training_plan import TrainingPlan, add_train_val_test_batches, add_triggers
 from ..stats import StatContainer, Accuracy, Precision, TanhLoss
 from ..abstract import ModelConfig
-from . import generator
+from ..generators import generator
 from .network import Model
 
 
