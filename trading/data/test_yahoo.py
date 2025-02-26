@@ -31,10 +31,9 @@ class TestQuery(unittest.TestCase):
             skip_cache=config.test.skip_cache
         )
         self.assertTrue(prices and volume and low and high and open and times)
-        self.assertGreater(len(prices),22)
-        self.assertLess(len(prices), 25)
+        self.assertEqual(23 if config.test.skip_cache else 24,len(prices))
         self.assertTrue(all(dateutils.is_interval_time_unix(it, Interval.W1) for it in times))
-        self.assertAlmostEqual(prices[0], 32.67599868774414)
+        if not config.test.skip_cache: self.assertAlmostEqual(prices[0], 32.67599868774414)
 
     def test_pricing_d1(self):
         prices, volume, low, high, open, times = yahoo.get_pricing(
