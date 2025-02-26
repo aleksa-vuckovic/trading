@@ -4,24 +4,21 @@ import torch
 import matplotlib
 import random
 import time
-import os
 from torch import Tensor
 from pathlib import Path
-from typing import Callable
 from matplotlib import pyplot as plt
 from ...utils import dateutils
 from ...utils.dateutils import TimingConfig
 from ...utils.common import Interval
 from ...data import nasdaq, aggregate
-from ..abstract import ExampleGenerator, PriceEstimator, QUOTES, CLOSE_I, OUTPUT_KEY_PREFIX
-from ..utils import check_tensors, PriceTarget
+from ..abstract import PriceEstimator, QUOTES, CLOSE_I, OUTPUT_KEY_PREFIX
+from ..utils import check_tensors, PriceTarget, BatchFile
+from .abstract import AbstractGenerator
 
 
 logger = logging.getLogger(__name__)
 
-FOLDER = Path(__file__).parent / 'examples'
-
-class Generator(ExampleGenerator):
+class Generator(AbstractGenerator):
     def __init__(self,
         data_points: dict[Interval, int],
         after_data_points: dict[Interval, int],
@@ -33,24 +30,25 @@ class Generator(ExampleGenerator):
         self.timing = timing
         self.folder = folder
 
-        max_interval = sorted(data_points.keys())[-1]
-        min_interval = sorted(data_points.keys())[0]
-        after_max_interval = sorted(after_data_points.keys())[-1]
+        self.max_interval = sorted(data_points.keys())[-1]
+        self.min_interval = sorted(data_points.keys())[0]
+        self.after_max_interval = sorted(after_data_points.keys())[-1]
+        self.after_min_interval = sorted(after_data_points.keys())[0]
 
         self.tickers = [
             (
                 it,
                 dateutils.add_intervals_unix(
                     aggregate.get_first_trade_time(it),
-                    max_interval,
-                    data_points[max_interval]
+                    self.max_interval,
+                    data_points[self.max_interval]
                 )
             )
             for it in aggregate.get_sorted_tickers()
         ]
         self.time_frame = (
-            dateutils.add_intervals_unix(min_interval.start_unix(), min_interval, data_points[min_interval]),
-            dateutils.add_intervals_unix(time.time(), after_max_interval, -after_data_points[after_max_interval])
+            dateutils.add_intervals_unix(self.min_interval.start_unix(), self.min_interval, data_points[self.min_interval]),
+            dateutils.add_intervals_unix(time.time(), self.after_max_interval, -after_data_points[self.after_max_interval])
         )
 
     def run(self):
@@ -91,20 +89,20 @@ class Generator(ExampleGenerator):
     def plot_statistics(
         self,
         estimator: PriceEstimator,
-        target: PriceTarget = PriceTarget.TANH_10_10,
+        targets: list[PriceTarget] = list(PriceTarget),
         title: str = ""
     ):
         #Bin distribution of after values
         temp = []
-        files = [FOLDER/it for it in os.listdir(FOLDER)]
+        files = [it.path for it in BatchFile.load(self.folder) if it.unix_time in self.timing]
         random.shuffle(files)
         for file in files[:20]:
-            batch = torch.load(file, weights_only=True)
-            close = batch[Interval.H1.name][:,-1:,CLOSE_I]
-            data = (estimator.estimate_example(batch) - close)/close
+            example = torch.load(file, weights_only=True)
+            close = example[self.min_interval.name][:,-1:,CLOSE_I]
+            data = (estimator.estimate_example(example) - close)/close
             temp.append(data)
         data = torch.concat(temp, dim=0)
-        fig, axes = plt.subplots(1, 2, figsize=(5,6))
+        fig, axes = plt.subplots(1, 1+len(targets), figsize=(5,3+3*len(targets)))
         fig.suptitle(title)
         axes: list[matplotlib.axes.Axes] = axes
         
@@ -112,9 +110,10 @@ class Generator(ExampleGenerator):
         axes[0].set_xlabel('Percentage change')
         axes[0].hist(data*100, bins=range(-20,21,1), edgecolor='black')
 
-        axes[1].set_title(f"{target.name}")
-        axes[1].set_xlabel('Expected output')
-        axes[1].hist(target.get_price(data), bins=20, edgecolor='black')
+        for i, target in enumerate(targets):
+            axes[i].set_title(f"{target.name}")
+            axes[i].set_xlabel('Expected output')
+            axes[i].hist(target.get_price(data), bins=20, edgecolor='black')
         fig.tight_layout()
         plt.show()
 
