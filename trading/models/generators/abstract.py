@@ -55,7 +55,7 @@ class AbstractGenerator:
                 while len(current) < batch_size and entry < len(tickers):
                     try:
                         ticker = tickers[entry]
-                        current.append(self.generate_example(ticker, float(unix_time)))
+                        current.append(self.generate_example(ticker, float(unix_time), with_output=True))
                         logger.info(f"Generated example for {ticker.symbol} for end time {str(dateutils.unix_to_datetime(unix_time))}")
                         bar.update(1)
                         entry += 1

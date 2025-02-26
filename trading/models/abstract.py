@@ -13,7 +13,7 @@ from ..utils import dateutils, jsonutils
 from ..utils.dateutils import TimingConfig
 from ..utils.common import Interval, equatable
 from ..utils.jsonutils import serializable
-from .utils import PriceTarget, ModelOutput
+from .utils import PriceTarget
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ VOLUME_I = 4
 QUOTES = ['open', 'high', 'low', 'close', 'volume']
 QUOTE_I = {it[0]:i for i,it in enumerate(QUOTES)}
 
-OUTPUT_KEY_PREFIX = "OUTPUT"
+AFTER_KEY_PREFIX = "OUTPUT"
 
 class Aggregation(Enum):
     FIRST = 'first'
@@ -71,7 +71,7 @@ class PriceEstimator:
         return self.agg.apply_tensor(tensor[index])
     
     def estimate_example(self, example: dict[str, Tensor]) -> Tensor:
-        key = f"{OUTPUT_KEY_PREFIX}_{self.interval.name}"
+        key = f"{AFTER_KEY_PREFIX}_{self.interval.name}"
         if key not in example: raise Exception(f"Can't estimate without {key}.")
         return self.estimate_tensor(example[key])
 
@@ -82,31 +82,76 @@ class PriceEstimator:
         self.agg.apply_tensor(tensor, dim=-1).item()
 
 
-@serializable()
 @equatable()
-class SizeConfig:
-    def __init__(self, interval: Interval, count: int):
-        self.interval = interval
-        self.count = count
+class DataConfig:
+    def __init__(self, counts: dict[Interval, int]):
+        self.counts = counts
+        self.max_interval = sorted(counts.keys())[-1]
+        self.min_interval = sorted(counts.keys())[0]
+        self.max_interval_count = counts[self.max_interval]
+        self.min_Interval_count = counts[self.min_interval]
 
-@serializable()
-@equatable()
+    def to_dict(self) -> dict:
+        return {interval.name:count for interval, count in self.counts.items()}
+    
+    class Iterator:
+        def __init__(self, data_config: DataConfig):
+            self.data_config = data_config
+            self.intervals = list(data_config.counts.keys())
+            self.i = 0
+        def __next__(self) -> tuple[Interval, int]:
+            if self.i >= len(self.intervals):
+                raise StopIteration()
+            self.i += 1
+            return self.intervals[self.i-1], self.data_config.counts[self.intervals[self.i-1]]
+
+    def __iter__(self):
+        return DataConfig.Iterator(self)
+    
+    def __len__(self):
+        return len(self.counts)
+    
+    def __getitem__(self, key: Interval|str):
+        if isinstance(key, Interval):
+            return self.counts[key]
+        if isinstance(key, str) and any(it for it in Interval if it.name == key):
+            return self.counts[Interval[key]]
+        raise IndexError(f"Key {key} does not exist in this DataConfig.")
+    
+    def __contains__(self, key: Interval|str):
+        if isinstance(key, Interval):
+            return key in self.counts
+        if isinstance(key, str) and any(it for it in Interval if it.name == key):
+            return Interval[key] in self.counts
+        return False
+    
+    def intervals(self):
+        return self.counts.keys()
+
+    @staticmethod
+    def from_dict(data: dict) -> DataConfig:
+        data_points = {Interval[interval]:count for interval, count in data.items()}
+        return DataConfig(data_points)
+
+
+@serializable(skip_keys=['examples_folder'])
+@equatable(skip_keys=['examples_folder'])
 class ModelConfig:
     def __init__(
         self, 
         estimator: PriceEstimator,
         target:  PriceTarget,
-        output: ModelOutput,
         timing: TimingConfig,
-        inputs: list[SizeConfig],
-        data: dict = {}
+        data_config: DataConfig,
+        examples_folder: Path,
+        other: dict = {}
     ):
         self.estimator = estimator
         self.target = target
-        self.output = output
         self.timing = timing
-        self.inputs = inputs
-        self.data = data
+        self.data_config = data_config
+        self.examples_folder = examples_folder
+        self.other = other
     
     def __str__(self) -> str:
         return f"""
@@ -115,7 +160,7 @@ target = {self.target.name}
 output = {self.output.name}
 timing = {jsonutils.serialize(self.timing, typed=False, indent=2)}
 inputs = {jsonutils.serialize(self.inputs, typed=False, indent=2)}
-data = {self.data}
+data = {self.other}
 """
 
         
@@ -123,7 +168,7 @@ class AbstractModel(torch.nn.Module):
     def __init__(self, config: ModelConfig):
         super().__init__()
         self.config = config
-    def extract_tensors(self, example: dict[str, Tensor]) -> tuple[Tensor, ...]:
+    def extract_tensors(self, example: dict[str, Tensor], with_output: bool = True) -> tuple[dict[str, Tensor]]|tuple[dict[str,Tensor],Tensor]:
         pass
     def print_summary(self, merge: int = 10):
         pass

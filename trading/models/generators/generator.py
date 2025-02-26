@@ -11,7 +11,7 @@ from ...utils import dateutils
 from ...utils.dateutils import TimingConfig
 from ...utils.common import Interval
 from ...data import nasdaq, aggregate
-from ..abstract import PriceEstimator, QUOTES, CLOSE_I, OUTPUT_KEY_PREFIX
+from ..abstract import PriceEstimator, DataConfig, QUOTES, CLOSE_I, AFTER_KEY_PREFIX
 from ..utils import check_tensors, PriceTarget, BatchFile
 from .abstract import AbstractGenerator
 
@@ -20,35 +20,38 @@ logger = logging.getLogger(__name__)
 
 class Generator(AbstractGenerator):
     def __init__(self,
-        data_points: dict[Interval, int],
-        after_data_points: dict[Interval, int],
+        data_config: DataConfig,
+        after_data: DataConfig,
         timing: TimingConfig,
         folder: Path
     ):
-        self.data_points = data_points
-        self.after_data_points = after_data_points
+        self.data_config = data_config
+        self.after_data_config = after_data
         self.timing = timing
         self.folder = folder
-
-        self.max_interval = sorted(data_points.keys())[-1]
-        self.min_interval = sorted(data_points.keys())[0]
-        self.after_max_interval = sorted(after_data_points.keys())[-1]
-        self.after_min_interval = sorted(after_data_points.keys())[0]
 
         self.tickers = [
             (
                 it,
                 dateutils.add_intervals_unix(
                     aggregate.get_first_trade_time(it),
-                    self.max_interval,
-                    data_points[self.max_interval]
+                    self.data_config.max_interval,
+                    self.data_config.max_interval_count
                 )
             )
             for it in aggregate.get_sorted_tickers()
         ]
         self.time_frame = (
-            dateutils.add_intervals_unix(self.min_interval.start_unix(), self.min_interval, data_points[self.min_interval]),
-            dateutils.add_intervals_unix(time.time(), self.after_max_interval, -after_data_points[self.after_max_interval])
+            dateutils.add_intervals_unix(
+                self.data_config.min_interval.start_unix(), 
+                self.data_config.min_interval, 
+                self.data_config.min_Interval_count
+            ),
+            dateutils.add_intervals_unix(
+                time.time(), 
+                self.after_data_config.max_interval,
+                -self.after_data_config.max_interval_count
+            )
         )
 
     def run(self):
@@ -67,7 +70,7 @@ class Generator(AbstractGenerator):
     ) -> dict[str, Tensor]:
         #1. Get the prices
         data = {}
-        for interval, count in self.data_points:
+        for interval, count in self.data_config:
             start_time = dateutils.add_intervals_unix(end_time, interval, -count)
             pricing = aggregate.get_interpolated_pricing(ticker, start_time, end_time, interval, return_quotes=QUOTES, max_fill_ratio=0.2)
             if len(pricing[0]) != count:
@@ -77,12 +80,12 @@ class Generator(AbstractGenerator):
         if not with_output: return data
 
         after_data = {}
-        for interval, count in self.after_data_points:
+        for interval, count in self.after_data_config:
             start_time = dateutils.add_intervals_unix(end_time, interval, count)
             pricing = aggregate.get_interpolated_pricing(ticker, start_time, end_time, interval, return_quotes=QUOTES, max_fill_ratio=0.2)
             if len(pricing[0]) != count:
                 raise Exception(f"Unexpected number of timestamps for start_time {start_time} end time {end_time} interval {interval} count {count}. Got {len(data[interval])}.")
-            after_data[f"{OUTPUT_KEY_PREFIX}_{interval.name}"] = torch.stack([torch.tensor(it, dtype=torch.float64) for it in data], dim=1)
+            after_data[f"{AFTER_KEY_PREFIX}_{interval.name}"] = torch.stack([torch.tensor(it, dtype=torch.float64) for it in data], dim=1)
         check_tensors(list(after_data.values()), allow_zeros=False)
         return {**data, **after_data}
 

@@ -129,6 +129,15 @@ class PriceTarget(Enum):
             return (1-x)/(1+x)
         raise Exception("Unknown price target type")
     
+    def get_layer(self):
+        if self in [PriceTarget.LINEAR_0_10, PriceTarget.LINEAR_0_5, PriceTarget.LINEAR_10_10, PriceTarget.LINEAR_5_5]:
+            return torch.nn.Identity()
+        if self in [PriceTarget.SIGMOID_0_10, PriceTarget.SIGMOID_0_5]:
+            return torch.nn.Sigmoid()
+        if self in [PriceTarget.TANH_10_10, PriceTarget.TANH_5_5]:
+            return torch.nn.Tanh()
+        raise Exception(f"Unknown PriceTarget {self}.")
+    
     @staticmethod
     def plot():
         x = torch.linspace(-0.15, 0.15, 100, dtype=torch.float32)
@@ -142,11 +151,6 @@ class PriceTarget(Enum):
 
         [plt.figure(it).tight_layout() for it in plt.get_fignums()]
         plt.show()
-
-class ModelOutput(Enum):
-    LINEAR = torch.nn.Identity()
-    SIGMOID = torch.nn.Sigmoid()
-    TANH = torch.nn.Tanh()
 
 class BatchFile:
     PATTERN = re.compile(r"time(\d+)_entry(\d+)_iter(\d+).pt")

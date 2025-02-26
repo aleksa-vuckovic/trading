@@ -3,12 +3,10 @@ import torchinfo
 import config
 from torch import Tensor
 from ...utils.common import Interval
-from ..abstract import AbstractModel, ModelConfig, OPEN_I, HIGH_I, LOW_I, CLOSE_I, VOLUME_I
-from ..utils import get_moving_average, get_time_relativized, check_tensors
+from ..abstract import AbstractModel, ModelConfig, OPEN_I, HIGH_I, LOW_I, CLOSE_I
+from ..utils import get_moving_average, get_time_relativized, check_tensors, check_tensor
 
 INPUT_FEATURES = 'input_features'
-D1_DATA_POINTS = 'd1_data_points'
-H1_DATA_POINTS = 'h1_data_points'
 MVG_WINDOW = 'mvg_window'
 
 class RecursiveLayer(torch.nn.Module):
@@ -42,80 +40,83 @@ class Model(AbstractModel):
     Configurable with regards to the prediction interval, timing and output.
     """
     def __init__(self, config: ModelConfig):
-        config.data.setdefault(INPUT_FEATURES, 10)
-        config.data.setdefault(D1_DATA_POINTS, 50)
-        config.data.setdefault(H1_DATA_POINTS, 100)
-        config.data.setdefault(MVG_WINDOW, 10)
+        config.other.setdefault(INPUT_FEATURES, 10)
+        config.other.setdefault(MVG_WINDOW, 10)
         super().__init__(config)
-        input_features = self.data[INPUT_FEATURES]
-        self.daily_conv = torch.nn.Sequential(
-            ConvolutionalLayer(input_features=input_features, output_features=10*input_features),
-            torch.nn.BatchNorm1d(num_features=10*input_features),
-            RecursiveLayer(in_features=10*input_features, out_features=10*input_features)
-        )
-        self.hourly_conv = torch.nn.Sequential(
-            ConvolutionalLayer(input_features=input_features, output_features=10*input_features),
-            torch.nn.BatchNorm1d(num_features=10*input_features),
-            RecursiveLayer(in_features=10*input_features, out_features=10*input_features)
-        )
-        self.daily = RecursiveLayer(in_features=input_features, out_features=10*input_features)
-        self.hourly = RecursiveLayer(in_features=input_features, out_features=10*input_features)
+        input_features = self.config.other[INPUT_FEATURES]
 
+        self.conv_layers = torch.nn.ModuleDict(
+            {
+                interval.name : torch.nn.Sequential(
+                    ConvolutionalLayer(input_features=input_features, output_features=10*input_features),
+                    torch.nn.BatchNorm1d(num_features=10*input_features),
+                    RecursiveLayer(in_features=10*input_features, out_features=10*input_features)
+                ) for interval, count in self.config.data_config 
+            }
+        )
+        self.layers = torch.nn.ModuleDict(
+            {
+                interval.name : RecursiveLayer(in_features=input_features, out_features=10*input_features)
+                for interval, count in self.config.data_config
+            }
+        )
+
+        total_features = 20*input_features*len(self.config.data_config)
         self.dense = torch.nn.Sequential(
-            torch.nn.BatchNorm1d(num_features=40*input_features),
-            torch.nn.Linear(in_features=40*input_features, out_features=10*input_features),
+            torch.nn.BatchNorm1d(num_features=total_features),
+            torch.nn.Linear(in_features=total_features, out_features=total_features/5),
             torch.nn.Sigmoid(),
-            torch.nn.Linear(in_features=10*input_features, out_features=3*input_features),
+            torch.nn.Linear(in_features=total_features/5, out_features=total_features/20),
             torch.nn.Sigmoid(),
-            torch.nn.BatchNorm1d(num_features=3*input_features),
-            torch.nn.Linear(in_features=3*input_features, out_features=1),
-            self.config.output.value
+            torch.nn.BatchNorm1d(num_features=total_features/20),
+            torch.nn.Linear(in_features=total_features/20, out_features=1),
+            self.config.target.get_layer()
         )
 
-    def forward(self, daily, hourly):
-        output = torch.cat([
-          self.daily_conv(daily),
-          self.daily(daily),
-          self.hourly_conv(hourly),
-          self.hourly(hourly)  
-        ], dim=1)
+    def forward(self, data: dict[str, Tensor]):
+        output = torch.cat(
+            [
+                *(self.conv_layers[interval](data[interval]) for interval in data),
+                *(self.layers[interval](data[interval]) for interval in data)
+            ],
+            dim=1
+        )
         return self.dense(output)
 
-    def extract_tensors(self, example: dict[str, Tensor]):
-        if len(example[Interval.D1.name].shape) < 3:
-            example = {key: example[key].unsqueeze(dim=0) for key in example}
-        daily_raw = example[Interval.D1.name]
-        hourly_raw = example[Interval.H1.name]
+    def extract_tensors(self, example: dict[str, Tensor], with_output: bool = True):
+        if len(next(example.values()).shape) < 3:
+            example = { key: example[key].unsqueeze(dim=0) for key in example }
 
         def process(tensor: Tensor, data_points: int):
-            tensor = tensor[:,-data_points-self.config.data[MVG_WINDOW]:,:]
+            tensor = tensor[:,-data_points-self.config.other[MVG_WINDOW]:,:]
             #1 Get high-low relative to low (relative span)
             tensor[:,:,OPEN_I] = (tensor[:,:,HIGH_I] - tensor[:,:,LOW_I]) / tensor[:,:,LOW_I]
             #2 Get moving averages for everything
-            mvg = get_moving_average(tensor, dim=1, window=self.config.data[MVG_WINDOW])
+            mvg = get_moving_average(tensor, dim=1, window=self.config.other[MVG_WINDOW])
             #3 Concat everything
             tensor = torch.concat([tensor, mvg], dim=2)
             #4 Relativize all except relative span
             tensor[:,:,1:5] = get_time_relativized(tensor[:,:,1:5], dim=1)
             tensor[:,:,6:10] = get_time_relativized(tensor[:,:,6:10], dim=1)
             return tensor[:,-data_points:,:].transpose(1,2)
-        daily = process(daily_raw, self.config.data[D1_DATA_POINTS])
-        hourly = process(hourly_raw, self.config.data[H1_DATA_POINTS])
-        result = (daily, hourly)
-
-        if len(example) > 2:
+        
+        tensors = { 
+            key : process(example[key], self.config.data_config[key])
+            for key in example if key in self.config.data_config
+        }
+        check_tensors(tensors)
+        if with_output:
             after = self.config.estimator.estimate_example(example)
-            close = hourly_raw[:,-1,CLOSE_I]
+            close = example[self.config.data_config.min_interval.name][:,-1,CLOSE_I]
             after = (after[:,-1] - close) / close
             after = self.config.target.get_price(after)
-            result += (after,)
-
-        check_tensors(result)
-        return result
+            check_tensor(after)
+            return tensors, after
+        return tensors
 
     def print_summary(self, merge:int = 10):
         input = [
-            (config.batch_size*merge, self.config.data[INPUT_FEATURES], self.config.data[D1_DATA_POINTS]),
-            (config.batch_size*merge, self.config.data[INPUT_FEATURES], self.config.data[H1_DATA_POINTS])
+            (config.batch_size*merge, self.config.other[INPUT_FEATURES], count)
+            for interval, count in self.config.data_config
         ]
         torchinfo.summary(self, input_size=input)
