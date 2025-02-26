@@ -187,14 +187,13 @@ def get_interval_timestamps(unix_from: float, unix_to: float, interval: Interval
 #endregion
 
 #region TimingConfig
-@serializable(skip_keys=['_timestamps'])
-@equatable(skip_keys=['_timestamps'])
+@serializable(skip_keys=['interval'])
+@equatable(skip_keys=['interval'])
 class TimingConfig:
-    _timestamps: dict[Interval, list[float]]
-    interval: Interval
+    interval: Interval|None
     def __init__(self, components: list[float|list[float]]):
         self.components = components
-        self._timestamps = {}
+        self.interval = None
     class Builder:
         def __init__(self):
             self.components = []
@@ -217,6 +216,10 @@ class TimingConfig:
             return self
         def build(self) -> TimingConfig:
             return TimingConfig(self.components)
+    def for_interval(self, interval: Interval) -> TimingConfig:
+        result = TimingConfig(self.components)
+        result.interval = interval
+        return result
     def get_next_datetime(self, date: datetime, interval: Interval) -> datetime:
         interval = interval or self.interval or Interval.ascending[0]
         cur = get_next_interval_time_datetime(date, interval)

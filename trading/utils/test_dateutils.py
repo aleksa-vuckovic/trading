@@ -329,3 +329,14 @@ class TestDates(unittest.TestCase):
             cur = config.get_next_unix(cur, Interval.M5)
             result.append(cur)
         self.assertEqual(expect, result)
+
+    def test_add_intervals(self):
+        dates = ['2025-02-21 13:34:12', '2025-02-21 16:00:00', '2025-02-21 18:23:23', '2025-02-22 12:12:12', '2025-02-24 07:12:13']
+        counts = range(-29,30,2)
+        
+        for unix_time in [dateutils.str_to_unix(it) for it in dates]:
+            for count in counts:
+                for interval in Interval:
+                    time = dateutils.add_intervals_unix(unix_time, interval, count)
+                    timestamps = dateutils.get_interval_timestamps(time, unix_time, interval) if count < 0 else dateutils.get_interval_timestamps(unix_time, time, interval)
+                    self.assertEqual(len(timestamps), abs(count), f"Time {dateutils.unix_to_datetime(unix_time)} count {count} interval {interval}")

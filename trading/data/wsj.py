@@ -86,7 +86,8 @@ def _fix_timestamps(timestamps: list[float|int|None], interval: Interval) -> lis
                 result.append(None)
                 continue
             it+=size
-            if not dateutils.is_interval_time_unix(it, interval, tz=dateutils.ET):
+            if not dateutils.is_interval_time_unix(it, interval, tz=dateutils.ET)\
+                and not(interval == Interval.H1 and dateutils.is_interval_time_unix(it+1800, interval, tz=dateutils.ET)):
                 logger.warning(f"Unexpected timestamp {dateutils.unix_to_datetime(it)}. Skipping entry.")
                 result.append(None)
             else:

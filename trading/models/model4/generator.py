@@ -3,6 +3,7 @@ import logging
 import torch
 import matplotlib
 import random
+import time
 import os
 from torch import Tensor
 from pathlib import Path
@@ -18,32 +19,48 @@ from ..utils import check_tensors, PriceTarget
 
 logger = logging.getLogger(__name__)
 
-D1_DATA_POINTS = 120
-H1_DATA_POINTS = 150
-AFTER_D1_DATA_POINTS = 10
-AFTER_H1_DATA_POINTS = 21
-
 FOLDER = Path(__file__).parent / 'examples'
 
 class Generator(ExampleGenerator):
     def __init__(self,
-        min_interval: Interval,
-        timing: TimingConfig
+        data_points: dict[Interval, int],
+        after_data_points: dict[Interval, int],
+        timing: TimingConfig,
+        folder: Path
     ):
-        self.min_interval = min_interval
+        self.data_points = data_points
+        self.after_data_points = after_data_points
         self.timing = timing
-        self.intervals = sorted([it for it in Interval if it >= min_interval], reverse=True)
-        self.folder = Path(__file__).parent / f"examples_{min_interval.name}"
+        self.folder = folder
+
+        max_interval = sorted(data_points.keys())[-1]
+        min_interval = sorted(data_points.keys())[0]
+        after_max_interval = sorted(after_data_points.keys())[-1]
+
+        self.tickers = [
+            (
+                it,
+                dateutils.add_intervals_unix(
+                    aggregate.get_first_trade_time(it),
+                    max_interval,
+                    data_points[max_interval]
+                )
+            )
+            for it in aggregate.get_sorted_tickers()
+        ]
+        self.time_frame = (
+            dateutils.add_intervals_unix(min_interval.start_unix(), min_interval, data_points[min_interval]),
+            dateutils.add_intervals_unix(time.time(), after_max_interval, -after_data_points[after_max_interval])
+        )
 
     def run(self):
-        for hour in [11, 15, 13, 14]:
-            logger.info(f"-------------Starting loop for {hour}----------------")
-            self._run_loop(
-                folder = FOLDER,
-                timing = TimingConfig.Builder().at(hour=hour, minute=0).build(),
-                step = 3600,
-                start_time_offset=30*25*3600
-            )
+        self._run_loop(
+            folder = self.folder,
+            timing = self.timing,
+            tickers_fn=lambda unix_time: [it[0] for it in self.tickers if it[1] <= unix_time],
+            time_frame=self.time_frame
+        )
+
     def generate_example(
         self,
         ticker: nasdaq.NasdaqListedEntry,
@@ -51,34 +68,25 @@ class Generator(ExampleGenerator):
         with_output: bool = True
     ) -> dict[str, Tensor]:
         #1. Get the prices
-        d1_start_time = (end_time-(D1_DATA_POINTS/5*7+20)*24*3600)
-        h1_start_time = (end_time-(H1_DATA_POINTS/7/5*7+20)*24*3600)
-        d1_data = aggregate.get_interpolated_pricing(ticker, d1_start_time, end_time, Interval.D1, return_quotes=QUOTES, max_fill_ratio=1/5)
-        if len(d1_data[0]) < D1_DATA_POINTS:
-            raise Exception(f'Failed to fetch enough daily prices for {ticker.symbol}. Got {len(d1_data[0])}')
-        h1_data = aggregate.get_interpolated_pricing(ticker, h1_start_time, end_time, Interval.H1, return_quotes=QUOTES, max_fill_ratio=2/7)
-        if len(h1_data[0]) < H1_DATA_POINTS:
-            raise Exception(f'Failed to fetch enough hourly prices for {ticker.symbol}. Got {len(h1_data[0])}')
-        d1_data = torch.stack([torch.tensor(it[-D1_DATA_POINTS:], dtype=torch.float64) for it in d1_data], dim=1)
-        h1_data = torch.stack([torch.tensor(it[-H1_DATA_POINTS:], dtype=torch.float64) for it in h1_data], dim=1)
-        check_tensors([d1_data, h1_data], allow_zeros=False)
-        result = {Interval.D1.name: d1_data, Interval.H1.name: h1_data}
-        if not with_output: return result
+        data = {}
+        for interval, count in self.data_points:
+            start_time = dateutils.add_intervals_unix(end_time, interval, -count)
+            pricing = aggregate.get_interpolated_pricing(ticker, start_time, end_time, interval, return_quotes=QUOTES, max_fill_ratio=0.2)
+            if len(pricing[0]) != count:
+                raise Exception(f"Unexpected number of timestamps for start_time {start_time} end time {end_time} interval {interval} count {count}. Got {len(data[interval])}.")
+            data[interval.name] = torch.stack([torch.tensor(it, dtype=torch.float64) for it in data], dim=1)
+        check_tensors(list(data.values()), allow_zeros=False)
+        if not with_output: return data
 
-        after_d1_data = aggregate.get_interpolated_pricing(ticker, end_time, dateutils.add_intervals_unix(end_time, Interval.D1, 10, tz=dateutils.ET), Interval.D1, return_quotes=QUOTES, max_fill_ratio=1/5)
-        if len(after_d1_data[0]) != AFTER_D1_DATA_POINTS:
-            raise Exception(f"Unexpected number of after d1 data points {len(after_d1_data[0])}")
-        after_h1_data = aggregate.get_interpolated_pricing(ticker, end_time, dateutils.add_intervals_unix(end_time, Interval.D1, 3, tz=dateutils.ET), Interval.H1, return_quotes=QUOTES, max_fill_ratio=2/7)
-        if len(after_h1_data[0]) != AFTER_H1_DATA_POINTS:
-            raise Exception(f"Unexpected number of after h1 data points {len(after_h1_data[0])}")
-        after_d1_data = torch.stack([torch.tensor(it, dtype=torch.float64) for it in after_d1_data], dim=1)
-        after_h1_data = torch.stack([torch.tensor(it, dtype=torch.float64) for it in after_h1_data], dim=1)
-        check_tensors([after_d1_data, after_h1_data], allow_zeros=False)
-        return {
-            **result,
-            f"{OUTPUT_KEY_PREFIX}_{Interval.D1.name}": after_d1_data,
-            f"{OUTPUT_KEY_PREFIX}_{Interval.H1.name}": after_h1_data
-        }
+        after_data = {}
+        for interval, count in self.after_data_points:
+            start_time = dateutils.add_intervals_unix(end_time, interval, count)
+            pricing = aggregate.get_interpolated_pricing(ticker, start_time, end_time, interval, return_quotes=QUOTES, max_fill_ratio=0.2)
+            if len(pricing[0]) != count:
+                raise Exception(f"Unexpected number of timestamps for start_time {start_time} end time {end_time} interval {interval} count {count}. Got {len(data[interval])}.")
+            after_data[f"{OUTPUT_KEY_PREFIX}_{interval.name}"] = torch.stack([torch.tensor(it, dtype=torch.float64) for it in data], dim=1)
+        check_tensors(list(after_data.values()), allow_zeros=False)
+        return {**data, **after_data}
 
     def plot_statistics(
         self,

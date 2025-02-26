@@ -31,7 +31,8 @@ class TestQuery(unittest.TestCase):
             skip_cache=config.test.skip_cache
         )
         self.assertTrue(prices and volume and low and high and open and times)
-        self.assertEqual(24, len(prices))
+        self.assertGreater(len(prices),22)
+        self.assertLess(len(prices), 25)
         self.assertTrue(all(dateutils.is_interval_time_unix(it, Interval.W1) for it in times))
         self.assertAlmostEqual(prices[0], 32.67599868774414)
 

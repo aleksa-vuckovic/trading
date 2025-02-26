@@ -7,6 +7,7 @@ from torch import Tensor
 from pathlib import Path
 from tqdm import tqdm
 from enum import Enum
+from typing import Callable
 from ..data import nasdaq, aggregate
 from ..utils import dateutils, jsonutils
 from ..utils.dateutils import TimingConfig
@@ -27,6 +28,10 @@ QUOTE_I = {it[0]:i for i,it in enumerate(QUOTES)}
 
 OUTPUT_KEY_PREFIX = "OUTPUT"
 
+class EndOfTimeReached(Exception):
+    def __init__(self):
+        super().__init__()
+
 class ExampleGenerator:
     STATE_FILE = '_loop_state.json'
     def generate_example(
@@ -44,23 +49,22 @@ class ExampleGenerator:
         self,
         *,
         folder: Path,
-        timing: TimingConfig,
-        step: float,
-        tickers: list[nasdaq.NasdaqListedEntry]|None = None,
+        timing: TimingConfig, # should have a configured interval
+        tickers_fn: list[nasdaq.NasdaqListedEntry]|Callable[[float], list[nasdaq.NasdaqListedEntry]]|None = None,
         time_frame: tuple[float, float],
-        start_time_offset: float,
         batch_size: int = config.batch_size
     ):
         if not folder.exists(): folder.mkdir(parents=True, exist_ok=True)
         state_path = folder / ExampleGenerator.STATE_FILE
         if not state_path.exists(): state_path.write_text('{}')
-        tickers = tickers or aggregate.get_sorted_tickers()
+        state = json.loads(state_path.read_text())
 
+        unix_time: int = round(time_frame)
+        entry: int = len(tickers)
+        iter: int = 0
+        tickers = []
         current: list[dict[str, Tensor]] = []
-        unix_time:int = round(time_frame_start)
-        entry:int = len(tickers)
-        iter:int = 0
-
+        
         msg = f"----Generating examples for timing config: {jsonutils.serialize(timing, typed=False)}"
         logger.info(msg)
         print(msg)
@@ -69,14 +73,8 @@ class ExampleGenerator:
                 while len(current) < batch_size and entry < len(tickers):
                     try:
                         ticker = tickers[entry]
-                        first_trade_time = aggregate.get_first_trade_time(ticker)
-                        start_time = max(first_trade_time+start_time_offset, time_frame_start+start_time_offset)
-                        if start_time > unix_time:
-                            logger.info(f"Skipping {ticker.symbol} at index {entry} for time {dateutils.unix_to_datetime(unix_time)} because of first trade time.")
-                            entry = len(tickers)
-                            continue
                         current.append(self.generate_example(ticker, float(unix_time)))
-                        logger.info(f'Generated example for {ticker.symbol} for end time {str(dateutils.unix_to_datetime(unix_time))}')
+                        logger.info(f"Generated example for {ticker.symbol} for end time {str(dateutils.unix_to_datetime(unix_time))}")
                         bar.update(1)
                         entry += 1
                     except KeyboardInterrupt:
@@ -92,25 +90,28 @@ class ExampleGenerator:
                 torch.save(data, batch_file)
                 logger.info(f"Wrote batch number {iter} for timestamp {unix_time}.")
                 iter += 1
-                state = {'entry': entry, 'iter': iter}
+                state = {'entry': entry, 'iter': iter, 'finished': entry >= len(tickers)}
                 key = str(unix_time)
                 total_state[key] = state
                 state_path.write_text(json.dumps(total_state))
                 current.clear()
             
-            if entry >= len(tickers):
-                unix_time = round(timing.get_next_unix(unix_time, step))
-                if unix_time > time_frame_end:
-                    logger.info(f"Stopping generation, time {unix_time} is now bigger than end time {time_frame_end}.")
-                    break
+            if entry < len(tickers): continue
+            while True:
+                unix_time = round(timing.get_next_unix(unix_time))
+                if unix_time > time_frame[1]:
+                    logger.info(f"Stopping generation, time {unix_time} is now bigger than end time {time_frame[1]}.")
+                    return
                 key = str(unix_time)
                 if key in total_state:
+                    if total_state[key]['finished']: continue
                     entry = total_state[key]['entry']
                     iter = total_state[key]['iter']
-                else:
-                    entry = 0
-                    iter = 0
-                
+                    break
+                entry = 0
+                iter = 0
+                break
+            tickers = tickers_fn(unix_time) if callable(tickers_fn) else tickers_fn if tickers_fn else aggregate.get_sorted_tickers()
 
 class Aggregation(Enum):
     FIRST = 'first'

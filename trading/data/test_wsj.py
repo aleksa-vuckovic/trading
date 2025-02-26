@@ -28,14 +28,14 @@ class TestWsj(unittest.TestCase):
 
     def test_pricing_d1(self):
         now = time.time()
-        lows, highs, vols, times = wsj.get_pricing('bhat', now - 5*24*3600, now, interval=Interval.D1, return_quotes=['low', 'high', 'volume', 'timestamp'], skip_cache=config.test.skip_cache)
+        lows, highs, vols, times = wsj.get_pricing('nvda', now - 5*24*3600, now, interval=Interval.D1, return_quotes=['low', 'high', 'volume', 'timestamp'], skip_cache=config.test.skip_cache)
         self.assertTrue(lows and highs and vols and times)
         self.assertTrue(all(highs[i] >= lows[i] and vols[i] for i in range(len(lows))))
         self.assertTrue(all(dateutils.is_interval_time_unix(it, Interval.D1) for it in times))
 
     def test_pricing_h1(self):
         now = time.time()
-        lows, highs, vols, times = wsj.get_pricing('bhat', now - 5*24*3600, now, interval=Interval.H1, return_quotes=['low', 'high', 'volume', 'timestamp'], skip_cache=config.test.skip_cache)
+        lows, highs, vols, times = wsj.get_pricing('nvda', now - 5*24*3600, now, interval=Interval.H1, return_quotes=['low', 'high', 'volume', 'timestamp'], skip_cache=config.test.skip_cache)
         self.assertTrue(lows and highs and vols and times)
         self.assertGreater(len(lows), 8)
         self.assertTrue(all(highs[i] >= lows[i] and vols[i] for i in range(len(lows))))
@@ -43,7 +43,7 @@ class TestWsj(unittest.TestCase):
 
     def test_pricing_m15(self):
         now = time.time()
-        lows, highs, vols, times = wsj.get_pricing('bhat', now - 3*24*3600, now, Interval.M15, return_quotes=['low', 'high', 'volume', 'timestamp'], skip_cache=config.test.skip_cache)
+        lows, highs, vols, times = wsj.get_pricing('nvda', now - 3*24*3600, now, Interval.M15, return_quotes=['low', 'high', 'volume', 'timestamp'], skip_cache=config.test.skip_cache)
         self.assertTrue(lows and highs and vols and times)
         self.assertGreater(len(lows), 24)
         self.assertTrue(all(highs[i] >= lows[i] and vols[i] for i in range(len(lows))))
@@ -51,7 +51,7 @@ class TestWsj(unittest.TestCase):
 
     def test_pricing_m5(self):
         now = time.time()
-        lows, highs, vols, times = wsj.get_pricing('bhat', now - 3*24*3600, now, Interval.M5, return_quotes=['low', 'high', 'volume', 'timestamp'], skip_cache=config.test.skip_cache)
+        lows, highs, vols, times = wsj.get_pricing('nvda', now - 3*24*3600, now, Interval.M5, return_quotes=['low', 'high', 'volume', 'timestamp'], skip_cache=config.test.skip_cache)
         self.assertTrue(lows and highs and vols and times)
         self.assertGreater(len(lows), 70)
         self.assertTrue(all(highs[i] >= lows[i] and vols[i] for i in range(len(lows))))
