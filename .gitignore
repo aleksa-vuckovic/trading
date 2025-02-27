@@ -7,7 +7,7 @@ logs*
 !/test.py
 /main.py
 examples/
-examples_bin/
+examples_*/
 /ttest.py
 **/*loop_state.json
 config.py
