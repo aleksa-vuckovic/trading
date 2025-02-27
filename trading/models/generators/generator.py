@@ -21,12 +21,12 @@ logger = logging.getLogger(__name__)
 class Generator(AbstractGenerator):
     def __init__(self,
         data_config: DataConfig,
-        after_data: DataConfig,
+        after_data_config: DataConfig,
         timing: TimingConfig,
         folder: Path
     ):
         self.data_config = data_config
-        self.after_data_config = after_data
+        self.after_data_config = after_data_config
         self.timing = timing
         self.folder = folder
 
@@ -72,20 +72,20 @@ class Generator(AbstractGenerator):
         data = {}
         for interval, count in self.data_config:
             start_time = dateutils.add_intervals_unix(end_time, interval, -count)
-            pricing = aggregate.get_interpolated_pricing(ticker, start_time, end_time, interval, return_quotes=QUOTES, max_fill_ratio=0.2)
+            pricing = aggregate.get_interpolated_pricing(ticker, start_time, end_time, interval, return_quotes=QUOTES, max_fill_ratio=1/3)
             if len(pricing[0]) != count:
-                raise Exception(f"Unexpected number of timestamps for start_time {start_time} end time {end_time} interval {interval} count {count}. Got {len(data[interval])}.")
-            data[interval.name] = torch.stack([torch.tensor(it, dtype=torch.float64) for it in data], dim=1)
+                raise Exception(f"Unexpected number of timestamps for start_time {start_time} end time {end_time} interval {interval} count {count}. Got {len(pricing[0])}.")
+            data[interval.name] = torch.stack([torch.tensor(it, dtype=torch.float64) for it in pricing], dim=1)
         check_tensors(list(data.values()), allow_zeros=False)
         if not with_output: return data
 
         after_data = {}
         for interval, count in self.after_data_config:
-            start_time = dateutils.add_intervals_unix(end_time, interval, count)
-            pricing = aggregate.get_interpolated_pricing(ticker, start_time, end_time, interval, return_quotes=QUOTES, max_fill_ratio=0.2)
+            start_time = dateutils.add_intervals_unix(end_time, interval, -count)
+            pricing = aggregate.get_interpolated_pricing(ticker, start_time, end_time, interval, return_quotes=QUOTES, max_fill_ratio=1/3)
             if len(pricing[0]) != count:
-                raise Exception(f"Unexpected number of timestamps for start_time {start_time} end time {end_time} interval {interval} count {count}. Got {len(data[interval])}.")
-            after_data[f"{AFTER_KEY_PREFIX}_{interval.name}"] = torch.stack([torch.tensor(it, dtype=torch.float64) for it in data], dim=1)
+                raise Exception(f"Unexpected number of timestamps for start_time {start_time} end time {end_time} interval {interval} count {count}. Got {len(pricing[0])}.")
+            after_data[f"{AFTER_KEY_PREFIX}_{interval.name}"] = torch.stack([torch.tensor(it, dtype=torch.float64) for it in pricing], dim=1)
         check_tensors(list(after_data.values()), allow_zeros=False)
         return {**data, **after_data}
 

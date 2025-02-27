@@ -220,12 +220,12 @@ class TimingConfig:
         result = TimingConfig(self.components)
         result.interval = interval
         return result
-    def get_next_datetime(self, date: datetime, interval: Interval) -> datetime:
+    def get_next_datetime(self, date: datetime, interval: Interval|None=None) -> datetime:
         interval = interval or self.interval or Interval.ascending[0]
         cur = get_next_interval_time_datetime(date, interval)
         while cur not in self: cur = get_next_interval_time_datetime(cur, interval)
         return cur
-    def get_next_unix(self, unix_time: float, interval: Interval, tz = ET) -> float:
+    def get_next_unix(self, unix_time: float, interval: Interval|None=None, tz = ET) -> float:
         return self.get_next_datetime(unix_to_datetime(unix_time, tz=tz), interval).timestamp()
     
     def __contains__(self, unix_or_date: float|datetime) -> bool:

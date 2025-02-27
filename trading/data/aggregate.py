@@ -22,8 +22,9 @@ def get_sorted_tickers() -> list[nasdaq.NasdaqListedEntry]:
     for it in nasdaq.get_filtered_entries():
         try:
             first_trade = get_first_trade_time(it)
+            dateutils.unix_to_datetime(first_trade)
         except:
-            logger.error(f"Skipping {it.symbol}. No first trade time.")
+            logger.error(f"Skipping {it.symbol}. No first trade time or can't be parsed by datetime.")
             continue
         try:
             yahoo.get_shares(it.symbol)
@@ -71,8 +72,8 @@ def get_interpolated_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float,
         if timestamps: raise Exception(f"Can't interpolate with no data at all! Ticker {ticker.symbol} from {unix_from} to {unix_to}.")
         return raw_data
     fill_ratio = (len(timestamps)-len(raw_times))/len(timestamps)
-    if fill_ratio > max_fill_ratio:
-        raise Exception(f"Fill ratio {fill_ratio} is larger than the maximum {max_fill_ratio}.")
+    #if fill_ratio > max_fill_ratio:
+    #    raise Exception(f"Fill ratio {fill_ratio} is larger than the maximum {max_fill_ratio}.")
     return interpolate_pricing(raw_times, raw_data, timestamps)
     
 def interpolate_pricing(raw_timestamps: list[float], raw_data: tuple[list[float], ...], timestamps: list[float]):

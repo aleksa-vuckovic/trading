@@ -41,13 +41,16 @@ class AbstractGenerator:
         if not state_path.exists(): state_path.write_text('{}')
         state = json.loads(state_path.read_text())
 
-        unix_time: int = round(time_frame)
-        entry: int = len(tickers)
+        unix_time: int = round(time_frame[0])
+        entry: int = 0
         iter: int = 0
         tickers = []
         current: list[dict[str, Tensor]] = []
         
-        msg = f"----Generating examples for timing config: {jsonutils.serialize(timing, typed=False)}"
+        msg = f"""----Generating examples into {folder}
+        Timing config: {jsonutils.serialize(timing, typed=False)}
+        Start time: {dateutils.unix_to_datetime(time_frame[0])}
+        End time: {dateutils.unix_to_datetime(time_frame[1])}"""
         logger.info(msg)
         print(msg)
         while True:
@@ -58,11 +61,11 @@ class AbstractGenerator:
                         current.append(self.generate_example(ticker, float(unix_time), with_output=True))
                         logger.info(f"Generated example for {ticker.symbol} for end time {str(dateutils.unix_to_datetime(unix_time))}")
                         bar.update(1)
-                        entry += 1
                     except KeyboardInterrupt:
                         raise
                     except:
                         logger.error(f"Failed to generate example for {ticker.symbol} for {unix_time}", exc_info=True)
+                    entry += 1
             
             total_state = json.loads(state_path.read_text())
             if current:

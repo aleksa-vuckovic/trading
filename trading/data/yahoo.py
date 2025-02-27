@@ -75,7 +75,7 @@ def _fix_timestamps(timestamps: list[float], interval: Interval):
     unix_to_arg=2,
     include_args=[0,3],
     cache_root=_CACHE,
-    time_step_fn= lambda args: 5000000 if args[1] < Interval.H1 else 10000000 if args[1] == Interval.H1 else 100000000,
+    time_step_fn= lambda args: 5000000 if args[1] < Interval.H1 else 10000000 if args[1] == Interval.H1 else 50000000,
     series_field="data",
     timestamp_field="t",
     live_delay_fn=5*60,

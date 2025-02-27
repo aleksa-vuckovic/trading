@@ -127,13 +127,14 @@ def cached_series(
                     subpath = path / "live"
                     metapath = path / "meta"
                     #Check if meta exists and make sure the live id is current.
-                    if not metapath.exists():
+                    if not metapath.exists() or not subpath.exists():
                         meta = {'live': None}
                     else:
                         meta = json.loads(metapath.read_text())
-                    if meta['live'] and meta['live']["id"] != id:
+                    if meta['live'] and meta['live']['id'] != id:
                         meta['live'] = None
-                        subpath.unlink()
+                        logger.info(f"Switching to new id from {meta['live']} to {id}")
+                        if subpath.exists(): subpath.unlink()
                     if not meta['live']:
                         set_unix_args(args, kwargs, float(id*time_step), unix_now)
                         data = func(*args, **kwargs)
