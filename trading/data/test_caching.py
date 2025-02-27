@@ -61,7 +61,7 @@ class TestCaching(unittest.TestCase):
             series_field=None,
             timestamp_field="time",
             live_delay_fn=0,
-            refresh_delay_fn=1
+            live_refresh_fn=1
         )
         def get_series(unix_from: float,  unix_to: float):
             nonlocal invocations
@@ -106,7 +106,7 @@ class TestCaching(unittest.TestCase):
             series_field=None,
             timestamp_field="time",
             live_delay_fn=2,
-            refresh_delay_fn=0
+            live_refresh_fn=0
         )
         def get_series(unix_from: float,  unix_to: float):
             if now-1 > unix_from and now-1 < unix_to:
@@ -123,6 +123,40 @@ class TestCaching(unittest.TestCase):
         time.sleep(1.1)
         test2= get_series(unix_from, unix_to)
         self.assertEqual(1, len(test2))
+
+    def test_cached_series_decorator_live_refresh(self):
+        cache = Path("./_test_cache")
+        if cache.exists():
+            shutil.rmtree(cache)
+        now = time.time()
+        invocations = 0
+        @cached_series(
+            cache_root=cache,
+            unix_from_arg=0,
+            unix_to_arg=1,
+            include_args=[],
+            time_step_fn= 1000,
+            series_field=None,
+            timestamp_field="time",
+            live_delay_fn=0,
+            live_refresh_fn=lambda args,last,now: now-last>1
+        )
+        def get_series(unix_from: float,  unix_to: float):
+            nonlocal invocations
+            invocations += 1
+            return [{"time": unix_from+0.1}, {"time": unix_to-0.1}]
+        
+        unix_from = now-3
+        test = get_series(unix_from, time.time())
+        self.assertEqual(1, invocations)
+        self.assertTrue(test)
+        time.sleep(0.2)
+        test = get_series(unix_from, time.time())
+        self.assertEqual(1, invocations)
+        time.sleep(1)
+        test = get_series(unix_from, time.time())
+        self.assertEqual(2, invocations)
+        self.assertEqual(3, len(test))    
 
     def test_cache_scalar_decorator(self):
         cache = Path("./_test_cache")

@@ -66,7 +66,7 @@ def _get_news_raw(orgs: list[str], keywords: list[str], unix_from: float, unix_t
     series_field=None,
     timestamp_field="unix_time",
     live_delay_fn=3600, #let's say that news is an hour late usually
-    refresh_delay_fn=2*3600,
+    live_refresh_fn=2*3600,
     return_series_only=True
 )
 @httputils.backup_timeout()

@@ -1,7 +1,7 @@
 import math
 import json
 import logging
-from ..utils import httputils, common
+from ..utils import httputils, common, dateutils
 from ..utils.common import Interval
 from .caching import cached_scalar, cached_series, CACHE_ROOT
 
@@ -24,8 +24,8 @@ def _interval_to_str(interval: Interval) -> str:
     time_step_fn=lambda args: 10000000 if args[1] == common.Interval.H1 else 50000000,
     series_field="results",
     timestamp_field="t",
-    live_delay_fn=lambda args: common.get_delay_for_interval(args[1].value),
-    refresh_delay_fn=None,
+    live_delay_fn=0,
+    live_refresh_fn=lambda args,last,now: dateutils.get_next_interval_time_unix(last, args[1]) > now,
     return_series_only=True
 )
 @httputils.backup_timeout()

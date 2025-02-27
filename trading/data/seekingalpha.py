@@ -19,7 +19,7 @@ _CACHE: Path = CACHE_ROOT / _MODULE
     series_field=None,
     timestamp_field="unix_time",
     live_delay_fn=3600,
-    refresh_delay_fn=12*3600
+    live_refresh_fn=12*3600
 )
 @httputils.backup_timeout()
 def _get_news(ticker: str, unix_from: float, unix_to: float) -> list[dict]:

@@ -20,8 +20,8 @@ def cached_series(
     time_step_fn: int | float | Callable[[list], float] = lambda include_args: 10000000.0,
     series_field: str | None = None,
     timestamp_field: str | int = "unix_time",
-    live_delay_fn: float | int | Callable[[list], float|int] = 3600, #Difference between data at time t, and time t' when the data is actually available.
-    refresh_delay_fn: float | int | Callable[[list], float|int] | None = None, #Minimum time between 2 live fetches. Default - equal to live delay.
+    live_delay_fn: float | int | Callable[[list], float|int] = 0,
+    live_refresh_fn: float | int | Callable[[list, float, float], bool] = 0,
     return_series_only: bool = False
 ):
     """
@@ -32,13 +32,14 @@ def cached_series(
         The return of this method is guaranteed to be OPEN at the start and CLOSED at the end.
     It is also assumed to return data sorted by timestamp!
     Args:
-        include_args - Arguments to be included as time series inputs.
-        time_step - The maximum time step with which to query the underlying method.
-        time_step_fn - Determines the time step used when fetching the data. Can be a constant, or a method with one argument - the include_args list.
-        series_field - The json path to locate the time series part of the object (can be empty if it's just the series itself).
-        timestamp_field - The field within a single time series object containing the timestamp value. That field must always contain a valid value!
-        live_delay - The maximum delay allowed for recent data.
-        return_series_only - Wether to return just the series or the entire object.
+        include_args: Arguments to be included as time series inputs.
+        time_step: The maximum time step with which to query the underlying method.
+        time_step_fn: Determines the time step used when fetching the data. Can be a constant, or a method with one argument - the include_args list.
+        series_field: The json path to locate the time series part of the object (can be empty if it's just the series itself).
+        timestamp_field: The field within a single time series object containing the timestamp value. That field must always contain a valid value!
+        live_delay_fn: The (maximum) delay between a data point's timestamp and the time when it becomes available for reading.
+        live_refresh_fn: Determines when to refresh live data. Takes the included args list, last fetch time and current fetch time as parameters and should return a boolean value.
+        return_series_only: Wether to return just the series or the entire object.
     Returns:
         The time series list or the entire object as returned from the last underlying method call,
         with the proper series set.
@@ -48,7 +49,8 @@ def cached_series(
         raise Exception('At least one of cache_root or path_fn must be set.')
     series_path = [int(it) if re.fullmatch(r"\d+", it) else it for it in (series_field or "").split(".") if it]
     include_args = include_args if isinstance(include_args, list) else [include_args]
-    if refresh_delay_fn is None: refresh_delay_fn = live_delay_fn
+    get_delay = live_delay_fn if callable(live_delay_fn) else lambda args: float(live_delay_fn)
+    should_refresh = live_refresh_fn if callable(live_refresh_fn) else lambda args, last, now: now-last > float(live_refresh_fn)
     def get_series(data) -> list:
         try:
             ret = data
@@ -90,8 +92,7 @@ def cached_series(
             args = list(args)
             unix_from, unix_to = get_unix_args(args, kwargs)
             include = [args[it] if isinstance(it, int) else kwargs[it] for it in include_args]
-            live_delay = live_delay_fn(include) if callable(live_delay_fn) else live_delay_fn
-            refresh_delay = refresh_delay_fn(include) if callable(refresh_delay_fn) else refresh_delay_fn
+            live_delay = get_delay(include)
             if cache_root:
                 path = cache_root
                 if include:
@@ -127,26 +128,26 @@ def cached_series(
                     metapath = path / "meta"
                     #Check if meta exists and make sure the live id is current.
                     if not metapath.exists():
-                        meta = {"live": None}
+                        meta = {'live': None}
                     else:
                         meta = json.loads(metapath.read_text())
-                    if meta["live"] and meta["live"]["id"] != id:
-                        meta["live"] = None
+                    if meta['live'] and meta['live']["id"] != id:
+                        meta['live'] = None
                         subpath.unlink()
-                    if not meta["live"]:
+                    if not meta['live']:
                         set_unix_args(args, kwargs, float(id*time_step), unix_now)
                         data = func(*args, **kwargs)
                         subpath.write_text(json.dumps(data))
                         extend(data)
-                        meta["live"] = {"id": id, "fetch": unix_now}
-                    elif meta["live"]["fetch"] < min(unix_to, unix_now - refresh_delay):
+                        meta['live'] = {'id': id, 'fetch': unix_now}
+                    elif meta['live']['fetch'] < min(unix_to, unix_now) and should_refresh(include, meta['live']['fetch'], unix_now):
                         data = json.loads(subpath.read_text())
-                        set_unix_args(args, kwargs, meta["live"]["fetch"], unix_now)
+                        set_unix_args(args, kwargs, meta['live']['fetch'], unix_now)
                         new_data = func(*args, **kwargs)
                         get_series(data).extend(get_series(new_data))
                         extend(data)
                         subpath.write_text(json.dumps(data))
-                        meta["live"] = {"id": id, "fetch": unix_now}
+                        meta['live'] = {'id': id, 'fetch': unix_now}
                     else:
                         data = json.loads(subpath.read_text())
                         extend(data)

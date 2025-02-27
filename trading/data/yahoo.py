@@ -79,7 +79,7 @@ def _fix_timestamps(timestamps: list[float], interval: Interval):
     series_field="data",
     timestamp_field="t",
     live_delay_fn=5*60,
-    refresh_delay_fn=lambda args: args[1].refresh_time(),
+    live_refresh_fn=lambda args,last,now: dateutils.get_next_interval_time_unix(last, args[1]) < now,
     return_series_only=False
 )
 @httputils.backup_timeout()

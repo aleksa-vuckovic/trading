@@ -94,7 +94,7 @@ def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
     include_args=[0,3],
     cache_root=_CACHE,
     live_delay_fn=15*60,
-    refresh_delay_fn=lambda args: args[1].refresh_time(),
+    live_refresh_fn=lambda args,last,now: dateutils.get_next_interval_time_unix(last, args[1]) < now,
     return_series_only=False,
     series_field='data',
     time_step_fn=10000000,
