@@ -1,7 +1,6 @@
 import torch
 from torch import Tensor
 from typing import Callable
-from .utils import PriceTarget
 
 class StatCollector:
     def __init__(self, name: str):

@@ -3,8 +3,9 @@ import logging
 import time
 import math
 from pathlib import Path
+from ..utils import httputils 
 from ..utils.common import Interval
-from ..utils import httputils, dateutils, common
+from ..utils.dateutils import XNAS
 from .utils import combine_series, fix_long_timestamps, separate_quotes
 from .caching import cached_scalar, cached_series, CACHE_ROOT
 
@@ -82,8 +83,8 @@ def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
                 result.append(None)
                 continue
             it = round(it/10)*10
-            if not dateutils.is_interval_time_unix(it, interval, tz=dateutils.ET):
-                logger.error(f"Unexpected timestamp {dateutils.unix_to_datetime(it, tz=dateutils.ET)} for period H1. Skipping entry.")
+            if not XNAS.is_interval_timestamp(it, interval):
+                logger.error(f"Unexpected timestamp {XNAS.unix_to_datetime(it)} for period H1. Skipping entry.")
                 result.append(None)
             result.append(it)
         return result
@@ -94,7 +95,7 @@ def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
     include_args=[0,3],
     cache_root=_CACHE,
     live_delay_fn=15*60,
-    live_refresh_fn=lambda args,last,now: dateutils.get_next_interval_time_unix(last, args[1]) < now,
+    live_refresh_fn=lambda args,last,now: XNAS.get_next_timestamp(last, args[1]) < now,
     return_series_only=False,
     series_field='data',
     time_step_fn=10000000,

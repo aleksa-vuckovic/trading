@@ -1,7 +1,8 @@
 import logging
 from urllib import parse
 from bs4 import BeautifulSoup
-from ..utils import dateutils, httputils
+from ..utils import httputils
+from ..utils.dateutils import XNAS
 from ..data import nasdaq
 from .caching import cached_series, CACHE_ROOT
 from .utils import filter_by_timestamp
@@ -23,8 +24,8 @@ def _get_news_raw(orgs: list[str], keywords: list[str], unix_from: float, unix_t
         url += "keyword/"
         for keyword in keywords: url += f"{_format_for_url(keyword)}/"
     if unix_from and unix_to:
-        date_from = dateutils.unix_to_datetime(unix_from, tz=dateutils.ET).strftime("%Y-%m-%d")
-        date_to = dateutils.unix_to_datetime(unix_to + 24*3600 - 0.0001, tz=dateutils.ET).strftime("%Y-%m-%d")
+        date_from = XNAS.unix_to_datetime(unix_from).strftime("%Y-%m-%d")
+        date_to = XNAS.unix_to_datetime(unix_to + 24*3600 - 0.0001).strftime("%Y-%m-%d")
         url += f"date/[{date_from}%2520TO%2520{date_to}]/"
     url = url[:-1]
     result = []
@@ -42,7 +43,7 @@ def _get_news_raw(orgs: list[str], keywords: list[str], unix_from: float, unix_t
             title_link_a = div.find('a', {'data-section': 'article-url'})
             preview_span = div.find("span", class_="pagging-list-item-text-body")
             if time_span and title_link_a:
-                unix_time = dateutils.str_to_unix(time_span.text.strip(), format="%B %d, %Y %H:%M ET", tz=dateutils.ET)
+                unix_time = XNAS.str_to_unix(time_span.text.strip(), format="%B %d, %Y %H:%M ET")
                 title = title_link_a.text
                 link = title_link_a['href']
                 link = f"{_BASE_URL}{link}" if link and link.startswith("/") else link

@@ -1,7 +1,6 @@
 import logging
-import calendar
 from datetime import timedelta
-from ..utils import dateutils
+from ..utils.dateutils import XNAS
 from ..utils.common import Interval
 
 logger = logging.getLogger(__name__)
@@ -56,13 +55,16 @@ def fix_long_timestamps(timestamps: list[float|int|None], interval: Interval) ->
             result.append(None)
             continue
         # Usually returned as 00:00 in UTC
-        date = dateutils.unix_to_datetime(it + 7.5*3600, dateutils.ET)
+        date = XNAS.unix_to_datetime(it + 7.5*3600)
         # For timestamps returned as 00:00 UTC this will cross into the proper ET date.
         # For timestamps at the 00:00, market open or market close in ET it will remain in the same day.
         if date.hour not in [2,3,7,17,23]:
             logger.warning(f"Unexpected {interval} timestamp {date}.")
-        date = dateutils.set_close(date)
-        if interval == Interval.W1: date += timedelta(days = 4-date.weekday())
-        if interval == Interval.L1: date = date.replace(day=dateutils.get_last_workday_of_month(date))
-        result.append(date.timestamp())
+        date = XNAS.to_zero(date)
+        if interval == Interval.L1: date = date.replace(day=1)
+        if interval == Interval.W1: date -= timedelta(days = date.weekday())
+        time = XNAS.get_next_timestamp(date, interval).timestamp()
+        # There's a possibility of repeated timestamps
+        if result and result[-1] == time: result[-1:] = [None, time]
+        else: result.append(time)
     return result

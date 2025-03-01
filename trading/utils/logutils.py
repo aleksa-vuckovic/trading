@@ -1,13 +1,14 @@
 import logging
-from . import dateutils
+from datetime import datetime
 from pathlib import Path
+from trading.utils.dateutils import CET
 from logging.handlers import RotatingFileHandler
 
 def remove_handlers(logger: logging.Logger):
     for handler in logger.handlers[:]:
         logger.removeHandler(handler)
 def configure_logging(testing: bool = False, console: bool = False, folder: Path = Path("./logs")):
-    date = str(dateutils.now(tz = dateutils.CET).strftime("%Y-%m-%d %H-%M-%S"))
+    date = datetime.now(tz = CET).strftime("%Y-%m-%d %H-%M-%S")
     logroot = folder/"test" if testing else folder/"prod"
     logbin = folder/"bin"
     if not logroot.exists():

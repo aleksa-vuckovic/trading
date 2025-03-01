@@ -1,6 +1,5 @@
 from . import nasdaq
 import unittest
-from ..utils import logutils
 
 class NasdaqTest(unittest.TestCase):
 

@@ -1,14 +1,14 @@
 import unittest
 import config
 from . import globenewswire, nasdaq
-from ..utils import dateutils
+from ..utils.dateutils import XNAS
 
 
 class TestGlobenewswire(unittest.TestCase):
     def test_get_news(self):
         ticker = nasdaq.NasdaqListedEntry.from_line('NVDA|NVIDIA Corporation - Common Stock|Q|N|N|100|N|N')
-        start_time = dateutils.str_to_unix('2023-01-01 00:00:00', tz=dateutils.ET)
-        end_time = dateutils.str_to_unix('2024-06-01 00:00:00', tz=dateutils.ET)
+        start_time = XNAS.str_to_unix('2023-01-01 00:00:00')
+        end_time = XNAS.str_to_unix('2024-06-01 00:00:00')
         
         first_title = "NVIDIA Brings RTX 4080 to GeForce NOW"
         last_title = "NVIDIA Announces Upcoming Event for Financial Community"

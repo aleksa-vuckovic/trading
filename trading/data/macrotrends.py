@@ -2,7 +2,8 @@
 import re
 import logging
 from bs4 import BeautifulSoup
-from ..utils import httputils, dateutils
+from ..utils import httputils
+from ..utils.dateutils import XNAS
 from .caching import cached_scalar, CACHE_ROOT
 from . import nasdaq
 
@@ -38,7 +39,7 @@ def _get_shares_outstanding(ticker: str, short_name: str) -> dict[str, str]:
     res = []
     for key,value in result.items():
         try:
-            unix_time = dateutils.str_to_unix(key, format = '%Y' if len(key) == 4 else '%Y-%m-%d')
+            unix_time = XNAS.str_to_unix(key, format = '%Y' if len(key) == 4 else '%Y-%m-%d')
             shares = int(value.replace(",", ""))
             res.append({'unix_time': unix_time, 'shares': shares*1000000})
         except:

@@ -4,9 +4,11 @@ import logging
 import time
 import math
 from enum import Enum
+from requests import Response
 from pathlib import Path
-from ..utils import httputils, common, dateutils
-from ..utils.common import Interval
+from ..utils import httputils, common
+from ..utils.dateutils import XNAS
+from ..utils.common import Interval, binary_search, BinarySearchEdge
 from .utils import combine_series, fix_long_timestamps, separate_quotes
 from .caching import cached_scalar, cached_series, CACHE_ROOT
 
@@ -56,16 +58,15 @@ def _fix_timestamps(timestamps: list[float], interval: Interval):
     size = interval.time() if interval != Interval.H1 else 1800
     result = []
     for it in timestamps:
-        if not it:
+        if not it or not XNAS.is_workday(it):
             result.append(None)
             continue
         if interval == Interval.H1:
-            date = dateutils.unix_to_datetime(it, tz=dateutils.ET)
-            if date.hour == 15: it += 1800
+            if it + 1800 == XNAS.set_close(it): it += 1800
             else: it += 3600
         else: it += size
-        if not dateutils.is_interval_time_unix(it, interval, tz=dateutils.ET):
-            logger.warning(f"Unexpected timestamp {dateutils.unix_to_datetime(it, tz=dateutils.ET)}. Skipping entry.")
+        if not XNAS.is_interval_timestamp(it, interval):
+            logger.warning(f"Unexpected timestamp {XNAS.unix_to_datetime(it)}. Skipping entry.")
             result.append(None)
         else: result.append(it)
     return result
@@ -79,7 +80,7 @@ def _fix_timestamps(timestamps: list[float], interval: Interval):
     series_field="data",
     timestamp_field="t",
     live_delay_fn=5*60,
-    live_refresh_fn=lambda args,last,now: dateutils.get_next_interval_time_unix(last, args[1]) < now,
+    live_refresh_fn=lambda args,last,now: XNAS.get_next_timestamp(last, args[1]) < now,
     return_series_only=False
 )
 @httputils.backup_timeout()
@@ -108,7 +109,7 @@ def _get_pricing(
         if 'events' in data:
             return data['events']
         return {}
-    def get_series(data) -> list[dict]:
+    def get_series(data: dict, unix_from: float, unix_to: float, interval: Interval) -> list[dict]:
         data = data['chart']['result'][0]
         if 'timestamp' not in data or not data['timestamp']: return []
         arrays = data['indicators']['quote'][0]
@@ -118,29 +119,25 @@ def _get_pricing(
         except:
             pass
         return combine_series(arrays, timestamp_from=unix_from, timestamp_to=unix_to)
-    def try_adjust(series):
+    def try_adjust(series: list[dict]) -> list[dict]:
         try:
             d1data = _get_pricing_raw(ticker, unix_to - _MIN_ADJUSTMENT_PERIOD, unix_to, Interval.D1)
-            d1arrays = get_series(d1data)
+            d1arrays = get_series(d1data, unix_to - _MIN_ADJUSTMENT_PERIOD, unix_to, Interval.D1)
             close = d1arrays[-2]['c']
-            time = d1arrays[-2]['t'] #Move the start of the day to the start of the last hour
-            i = len(series) - 1
-            while i >= 0 and series[i]['t'] > time: i -= 1
-            if i >= 0 and series[i]['t'] == time:
+            time = d1arrays[-2]['t']
+            i = binary_search(series, time, lambda x: x['t'], edge=BinarySearchEdge.NONE)
+            if i is not None:
                 factor = close / series[i]['c']
-                for key in series[i].keys():
-                    if key != 't':
-                        for i in range(len(series)):
-                            series[i][key] *= factor if key != 'v' else 1/factor
-                return
-            logger.error(f"Failed to adjust {ticker}. No suitable timestamp found.")
+                return [{key:it[key]*(1 if key=='t' else 1/factor if key=='v' else factor) for key in it}  for it in series ]
+            raise Exception(f"No suitable timestamp found.")
         except:
             logger.error(f"Failed to adjust {ticker}.", exc_info=True)
-    series = get_series(data)
+            return series
+    series = get_series(data, unix_from, unix_to, interval)
     meta = get_meta(data)
     events = get_events(data)
     if interval <= Interval.H1 and unix_to < now - 15*24*3600:
-        try_adjust(series)
+        series = try_adjust(series)
     """
     Rearrange data to be comaptible with series caching by moving everything to one array.
     open - o, close - c, low - l, high - h, adjclose - a, volume - v, timestamp - t
@@ -176,7 +173,10 @@ def get_splits(data: dict) -> dict:
     path_fn=lambda args: _CACHE / common.escape_filename(args[0]) / 'info'
 )
 def _get_info(ticker: str) -> dict:
-    info = yfinance.Ticker(ticker).info
+    try:
+        info = yfinance.Ticker(ticker).info
+    except json.JSONDecodeError:
+        raise httputils.TooManyRequestsException()
     mock_time = int(time.time() - 15*24*3600)
     try:
         meta = _get_pricing_raw(ticker, mock_time-3*24*3600, mock_time, Interval.D1)['chart']['result'][0]['meta']

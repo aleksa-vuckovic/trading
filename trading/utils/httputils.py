@@ -31,14 +31,14 @@ class TooManyRequestsException(Exception):
     module: str
     url: str
     response: requests.Response
-    def __init__(self, url: str, response: requests.Response):
+    def __init__(self, url: str|None=None, response: requests.Response|None=None):
         super().__init__()
-        self.module = find_host(url)
+        self.module = find_host(url) if url else None
         self.url = url
         self.response = response
     
     def __str__(self):
-        return f"Too many requests for {self.module}. Url: {self.url}. Code: {self.response.status_code}. Text: {self.response.text}."
+        return f"Too many requests for {self.module or '<unknown>'}. Url: {self.url or '<unknown>'}. Code: {self.response.status_code if self.response else '<unknown>'}. Text: {self.response.text if self.response else '<unknown>'}."
 
 def assert_response(url: str, response: requests.Response):
     if response.status_code == HTTPStatus.TOO_MANY_REQUESTS or response.status_code == HTTPStatus.FORBIDDEN:

@@ -12,9 +12,9 @@ from typing import Callable, Any
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 from ..data import nasdaq, aggregate
-from ..utils import dateutils, plotutils, jsonutils
+from ..utils import plotutils, jsonutils
 from ..utils.jsonutils import serializable
-from ..utils.dateutils import TimingConfig
+from ..utils.dateutils import TimingConfig, XNAS
 from ..utils.common import Interval, get_full_classname
 from .abstract import AbstractModel, PriceEstimator
 from .generators.abstract import AbstractGenerator
@@ -124,13 +124,13 @@ class Evaluator:
         On update is invoked with an updated sorted list with each new result.
         """
         tickers = tickers or aggregate.get_sorted_tickers()
-        logger.info(f"Evaluating {len(tickers)} tickers for {dateutils.unix_to_datetime(unix_time) if unix_time else 'live'}.")
+        logger.info(f"Evaluating {len(tickers)} tickers for {XNAS.unix_to_datetime(unix_time) if unix_time else 'live'}.")
         if isinstance(selector, RandomSelector) and selector.top_count >= len(tickers):
             for ticker in tickers: selector.insert(Result(ticker, 0))
             return selector
         self.model.eval()
         with torch.no_grad():
-            for ticker in tqdm(tickers, leave=True, desc=f"Evaluating for {dateutils.unix_to_datetime(unix_time)}"):
+            for ticker in tqdm(tickers, leave=True, desc=f"Evaluating for {XNAS.unix_to_datetime(unix_time)}"):
                 try:
                     example = {key:value.to(dtype=self.dtype, device=self.device) for key,value in self.generator.generate_example(ticker, unix_time or time.time(), with_output=False).items()}
                     tensors = self.model.extract_tensors(example)
@@ -157,7 +157,7 @@ class Evaluator:
         """
         Returns total gain in percentages
         """
-        logger.info(f"Backtesting from {dateutils.unix_to_datetime(unix_from)} to {dateutils.unix_to_datetime(unix_to)}")
+        logger.info(f"Backtesting from {XNAS.unix_to_datetime(unix_from)} to {XNAS.unix_to_datetime(unix_to)}")
         unix_time = unix_from
         tickers = tickers or aggregate.get_sorted_tickers()
         history = {
@@ -185,7 +185,7 @@ class Evaluator:
         plotutils.refresh_interactive_figures(fig1, fig2)
         
         while True:
-            unix_time = timing.get_next_unix(unix_time)
+            unix_time = timing.get_next_time(unix_time)
             if unix_time >= unix_to:
                 break
             try:
@@ -208,7 +208,7 @@ class Evaluator:
                 history[REAL_LAST_WIN].append((sell_price-commission*sell_price-commission*last_price)/last_price)
                 history[WIN].append(history[WIN][-1]*history[LAST_WIN][-1])
                 history[REAL_WIN].append(history[REAL_WIN][-1]*history[REAL_LAST_WIN][-1])
-                logger.info(f"Buying {result.ticker.symbol} at {dateutils.unix_to_datetime(unix_time)}.")
+                logger.info(f"Buying {result.ticker.symbol} at {XNAS.unix_to_datetime(unix_time)}.")
                 logger.info(f"Output: {result.output}. Data: {result.data}.")
                 logger.info(f"WIN: {history[LAST_WIN][-1]}. REAL WIN {history[REAL_LAST_WIN][-1]}")
 
@@ -221,7 +221,7 @@ class Evaluator:
             except KeyboardInterrupt:
                 raise
             except:
-                logger.error(f"Failed to evaluate at {dateutils.unix_to_datetime(unix_time)}.", exc_info=True)
+                logger.error(f"Failed to evaluate at {XNAS.unix_to_datetime(unix_time)}.", exc_info=True)
         plt.ioff()
         selector.clear()
         backtest_result = BacktestResult(
@@ -245,7 +245,7 @@ class Evaluator:
         ax_left = fig.add_subplot(gs[1:,0])
         ax_right = fig.add_subplot(gs[1:,1])
         ax_title.text(0.5, 1, f"""\
-Model {data['model']}, hour {data['hour']}, from {dateutils.unix_to_datetime(data['unix_from'])} to {dateutils.unix_to_datetime(data['unix_to'])}.
+Model {data['model']}, hour {data['hour']}, from {XNAS.unix_to_datetime(data['unix_from'])} to {XNAS.unix_to_datetime(data['unix_to'])}.
 Selector {data['selector']}.
 Estimator {data['estimator']}.\
         """, ha='center', va='top', fontsize=10)

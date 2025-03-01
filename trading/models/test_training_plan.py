@@ -1,6 +1,5 @@
 import unittest
 import torch
-import logging
 from .training_plan import TrainingPlan
 from .stats import StatCollector, StatContainer
 from .utils import Batches

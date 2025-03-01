@@ -1,7 +1,9 @@
 import json
 import logging
+from datetime import timedelta
+from ..utils import httputils
 from ..utils.common import Interval
-from ..utils import httputils, dateutils, common
+from ..utils.dateutils import XNAS
 from .utils import combine_series, fix_long_timestamps, filter_by_timestamp, separate_quotes
 from .caching import cached_scalar, cached_series, CACHE_ROOT
 
@@ -51,13 +53,12 @@ def _get_pricing_raw(key: str, step: str, time_frame: str):
 
 def _merge_data_1h(data):
     result = []
-    dates = [dateutils.unix_to_datetime(it['t']) for it in data]
+    dates = [XNAS.unix_to_datetime(it['t']) for it in data]
+    half = timedelta(minutes=30)
     i = 0
     while i < len(data):
-        if dates[i].minute == 0:
-            if dates[i].hour == 16:
-                result.append(data[i])
-            elif i+1 < len(dates) and dates[i+1].hour == dates[i].hour and dates[i+1].minute == 30:
+        if XNAS.is_interval_timestamp(dates[i]+half, Interval.H1):
+            if i+1<len(dates) and dates[i]+half == dates[i+1]:
                 #Merge with next
                 data[i]['h'] = max(data[i]['h'],data[i+1]['h'])
                 data[i]['l'] = min(data[i]['l'],data[i+1]['l'])
@@ -67,9 +68,16 @@ def _merge_data_1h(data):
                 result.append(data[i])
                 i += 1
             else:
-                logger.warning(f"Failed to merge data points for time {dates[i]}. No suitable successor.")
+                logger.warning(f"Unpaired data point at {dates[i]}.")
                 data[i]['t'] += 1800
+                data[i]['v'] *= 2
                 result.append(data[i])
+        elif dates[i] == XNAS.set_close(dates[i]):
+            result.append(data[i])
+        elif XNAS.is_interval_timestamp(dates[i], Interval.H1):
+            logger.warning(f"Unpaired data point at {dates[i]}.")
+            data[i]['v'] *= 2
+            result.append(data[i])
         else:
             logger.warning(f"Unexpected non full-hour entry at time {dates[i]}. Skipping.")
         i += 1
@@ -86,9 +94,11 @@ def _fix_timestamps(timestamps: list[float|int|None], interval: Interval) -> lis
                 result.append(None)
                 continue
             it+=size
-            if not dateutils.is_interval_time_unix(it, interval, tz=dateutils.ET)\
-                and not(interval == Interval.H1 and dateutils.is_interval_time_unix(it+1800, interval, tz=dateutils.ET)):
-                logger.warning(f"Unexpected timestamp {dateutils.unix_to_datetime(it)}. Skipping entry.")
+            if not XNAS.is_interval_timestamp(it, interval)\
+                and not(\
+                    interval == Interval.H1 and XNAS.is_interval_timestamp(it+1800, interval)
+                ):
+                logger.warning(f"Unexpected timestamp {XNAS.unix_to_datetime(it)}. Skipping entry.")
                 result.append(None)
             else:
                 result.append(it)
@@ -102,7 +112,7 @@ def _fix_timestamps(timestamps: list[float|int|None], interval: Interval) -> lis
     timestamp_field='t',
     cache_root=_CACHE,
     live_delay_fn=5*60,
-    live_refresh_fn=lambda args,last,now: dateutils.get_next_interval_time_unix(last, args[1]) < now,
+    live_refresh_fn=lambda args,last,now: XNAS.get_next_timestamp(last, args[1]) < now,
     return_series_only=False,
     time_step_fn=10000000
 )

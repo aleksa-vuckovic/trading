@@ -1,9 +1,10 @@
 import math
 import json
 import logging
-from ..utils import httputils, common, dateutils
+from ..utils import httputils, common
+from ..utils.dateutils import XNAS
 from ..utils.common import Interval
-from .caching import cached_scalar, cached_series, CACHE_ROOT
+from .caching import cached_series, CACHE_ROOT
 
 logger = logging.getLogger(__name__)
 _API_KEY = "2mpdazNwFmxCMwRVx87Crv4JwoSWwqoe"
@@ -25,7 +26,7 @@ def _interval_to_str(interval: Interval) -> str:
     series_field="results",
     timestamp_field="t",
     live_delay_fn=0,
-    live_refresh_fn=lambda args,last,now: dateutils.get_next_interval_time_unix(last, args[1]) > now,
+    live_refresh_fn=lambda args,last,now: XNAS.get_next_timestamp(last, args[1]) > now,
     return_series_only=True
 )
 @httputils.backup_timeout()

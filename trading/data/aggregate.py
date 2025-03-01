@@ -1,6 +1,7 @@
 import logging
 import time
-from ..utils import httputils, dateutils
+from ..utils import httputils
+from ..utils.dateutils import XNAS
 from ..utils.common import Interval
 from . import nasdaq, macrotrends, yahoo, zacks, seekingalpha, globenewswire, wsj, financialtimes
 
@@ -22,7 +23,7 @@ def get_sorted_tickers() -> list[nasdaq.NasdaqListedEntry]:
     for it in nasdaq.get_filtered_entries():
         try:
             first_trade = get_first_trade_time(it)
-            dateutils.unix_to_datetime(first_trade)
+            XNAS.unix_to_datetime(first_trade)
         except:
             logger.error(f"Skipping {it.symbol}. No first trade time or can't be parsed by datetime.")
             continue
@@ -67,7 +68,7 @@ def get_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: flo
         return yahoo.get_pricing(ticker.symbol, unix_from, unix_to, interval, return_quotes=return_quotes, backup_behavior=httputils.BackupBehavior.RETHROW|httputils.BackupBehavior.SLEEP)
 def get_interpolated_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, interval: Interval, return_quotes=['close', 'volume'], max_fill_ratio: float = 0.4) -> tuple[list[float], ...]:
     raw_times, *raw_data = get_pricing(ticker, unix_from, unix_to, interval, ['timestamp', *return_quotes])
-    timestamps = dateutils.get_interval_timestamps(unix_from, unix_to, interval)
+    timestamps = XNAS.get_timestamps(unix_from, unix_to, interval)
     if not raw_times:
         if timestamps: raise Exception(f"Can't interpolate with no data at all! Ticker {ticker.symbol} from {unix_from} to {unix_to}.")
         return raw_data

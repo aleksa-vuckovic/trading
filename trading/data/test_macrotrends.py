@@ -1,7 +1,6 @@
 import unittest
 from . import macrotrends
 from . import nasdaq
-from ..utils import logutils
 
 nvda = nasdaq.NasdaqListedEntry.from_line('NVDA|NVIDIA Corporation - Common Stock|Q|N|N|100|N|N')
 

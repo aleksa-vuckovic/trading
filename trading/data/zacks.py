@@ -4,7 +4,8 @@ import re
 import time
 from bs4 import BeautifulSoup
 from pathlib import Path
-from ..utils import dateutils, httputils, common
+from ..utils import httputils
+from ..utils.dateutils import XNAS
 from .caching import cached_scalar, cached_series, CACHE_ROOT
 
 logger = logging.getLogger(__name__)
@@ -12,7 +13,7 @@ _MODULE: str = __name__.split(".")[-1]
 _CACHE: Path = CACHE_ROOT / _MODULE
 
 def _format_date(unix: float) -> str:
-    return dateutils.unix_to_datetime(unix, tz = dateutils.ET)\
+    return XNAS.unix_to_datetime(unix)\
         .strftime('%b-%d-%Y')\
         .replace("-0", "-")\
         .replace("jun", "june")\

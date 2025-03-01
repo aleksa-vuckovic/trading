@@ -3,7 +3,7 @@ import logging
 import re
 from enum import Enum
 from ..utils import httputils
-from .caching import cached_scalar, cached_series, CACHE_ROOT
+from .caching import cached_scalar, CACHE_ROOT
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
