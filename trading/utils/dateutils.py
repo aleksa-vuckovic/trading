@@ -105,22 +105,20 @@ class WorkCalendar:
             return self.add_intervals(self.unix_to_datetime(time), interval, count).timestamp()
         cache = self._get_cache(interval)
         span = timedelta(days=100)
-        if count > 0:
-            i = cache[-1]; j = i + span
-            while True:
-                index = binary_search(cache, time, edge=BinarySearchEdge.LOW)
-                if index+count < len(cache): return cache[index+count]
-                cache.extend(self._generate_timestamps(i, j, interval))
-                i = j; j += span; span *= 2
-        else:
-            i = cache[0] - span; j = cache[0]
-            while True:
-                index = binary_search(cache, time, edge=BinarySearchEdge.LOW)
-                if index+count >= 0: return cache[index+count]
+        while True:
+            index = binary_search(cache, time, edge=BinarySearchEdge.LOW)
+            if index < 0 or index+count<0:
+                # Expand to the left
+                j = cache[0]; i = j-span; span *= 2
                 prepend = self._generate_timestamps(i, j, interval)
                 if prepend and prepend[-1] == cache[0]: prepend.pop()
                 cache[:0] =  prepend
-                j = i; i = j - span; span *= 2
+            elif index>=len(cache)-1 or index+count>=len(cache):
+                # Expand to the right
+                i = cache[-1]; j = i+span; span *= 2
+                cache.extend(self._generate_timestamps(i, j, interval))
+            else:
+                return cache[index+count]
     #endregion
 
 class HolidaySchedule:
@@ -324,7 +322,7 @@ class TimingConfig:
         result.interval = self.interval
         result.calendar = calendar
         return result
-    def get_next_time(self, time: datetime|float|int) -> datetime:
+    def get_next_time(self, time: datetime|float|int) -> datetime|float:
         if not self.interval or not self.calendar: raise Exception(f"Both the interval and calendar must be set before calling get_next_time.")
         if not isinstance(time, datetime): return self.get_next_time(self.calendar.unix_to_datetime(time)).timestamp()
         time = self.calendar.get_next_timestamp(time, self.interval)

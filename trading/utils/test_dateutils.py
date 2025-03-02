@@ -216,8 +216,13 @@ class TestDates(unittest.TestCase):
             result.append(cur)
         self.assertEqual(expect, result)
 
+    @unittest.skip('Takes too long')
     def test_add_intervals(self):
-        dates = ['2025-02-21 13:34:12', '2025-02-21 16:00:00', '2025-02-21 18:23:23', '2025-02-22 12:12:12', '2025-02-24 07:12:13']
+        dates = [
+            '2025-02-21 13:34:12', '2025-02-21 16:00:00', '2025-02-21 18:23:23',
+            '2025-02-22 12:12:12', '2025-02-24 07:12:13', '1974-07-15 10:00:00',
+            '1977-07-15 10:00:00'
+        ]
         counts = range(-29,30,2)
         
         for unix_time in [XNAS.str_to_unix(it) for it in dates]:

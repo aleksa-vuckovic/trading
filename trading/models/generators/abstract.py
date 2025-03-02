@@ -7,8 +7,8 @@ from typing import Callable
 from torch import Tensor
 from pathlib import Path
 from trading.data import nasdaq, aggregate
-from trading.utils import jsonutils, dateutils
-from trading.utils.dateutils import TimingConfig
+from trading.utils import jsonutils
+from trading.utils.dateutils import TimingConfig, XNAS
 
 
 
@@ -49,8 +49,8 @@ class AbstractGenerator:
         
         msg = f"""----Generating examples into {folder}
         Timing config: {jsonutils.serialize(timing, typed=False)}
-        Start time: {dateutils.unix_to_datetime(time_frame[0])}
-        End time: {dateutils.unix_to_datetime(time_frame[1])}"""
+        Start time: {XNAS.unix_to_datetime(time_frame[0])}
+        End time: {XNAS.unix_to_datetime(time_frame[1])}"""
         logger.info(msg)
         print(msg)
         while True:
@@ -59,7 +59,7 @@ class AbstractGenerator:
                     try:
                         ticker = tickers[entry]
                         current.append(self.generate_example(ticker, float(unix_time), with_output=True))
-                        logger.info(f"Generated example for {ticker.symbol} for end time {str(dateutils.unix_to_datetime(unix_time))}")
+                        logger.info(f"Generated example for {ticker.symbol} for end time {str(XNAS.unix_to_datetime(unix_time))}")
                         bar.update(1)
                     except KeyboardInterrupt:
                         raise
@@ -83,7 +83,7 @@ class AbstractGenerator:
             
             if entry < len(tickers): continue
             while True:
-                unix_time = round(timing.get_next_unix(unix_time))
+                unix_time = round(timing.get_next_time(unix_time))
                 if unix_time > time_frame[1]:
                     logger.info(f"Stopping generation, time {unix_time} is now bigger than end time {time_frame[1]}.")
                     return

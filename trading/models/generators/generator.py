@@ -7,9 +7,7 @@ import time
 from torch import Tensor
 from pathlib import Path
 from matplotlib import pyplot as plt
-from ...utils import dateutils
-from ...utils.dateutils import TimingConfig
-from ...utils.common import Interval
+from ...utils.dateutils import TimingConfig, XNAS
 from ...data import nasdaq, aggregate
 from ..abstract import PriceEstimator, DataConfig, QUOTES, CLOSE_I, AFTER_KEY_PREFIX
 from ..utils import check_tensors, PriceTarget, BatchFile
@@ -33,7 +31,7 @@ class Generator(AbstractGenerator):
         self.tickers = [
             (
                 it,
-                dateutils.add_intervals_unix(
+                XNAS.add_intervals(
                     aggregate.get_first_trade_time(it),
                     self.data_config.max_interval,
                     self.data_config.max_interval_count
@@ -42,12 +40,12 @@ class Generator(AbstractGenerator):
             for it in aggregate.get_sorted_tickers()
         ]
         self.time_frame = (
-            dateutils.add_intervals_unix(
+            XNAS.add_intervals(
                 self.data_config.min_interval.start_unix(), 
                 self.data_config.min_interval, 
                 self.data_config.min_Interval_count
             ),
-            dateutils.add_intervals_unix(
+            XNAS.add_intervals(
                 time.time(), 
                 self.after_data_config.max_interval,
                 -self.after_data_config.max_interval_count
@@ -71,8 +69,8 @@ class Generator(AbstractGenerator):
         #1. Get the prices
         data = {}
         for interval, count in self.data_config:
-            start_time = dateutils.add_intervals_unix(end_time, interval, -count)
-            pricing = aggregate.get_interpolated_pricing(ticker, start_time, end_time, interval, return_quotes=QUOTES, max_fill_ratio=1/3)
+            start_time = XNAS.add_intervals(end_time, interval, -count)
+            pricing = aggregate.get_interpolated_pricing(ticker, start_time, end_time, interval, return_quotes=QUOTES, max_fill_ratio=1/5)
             if len(pricing[0]) != count:
                 raise Exception(f"Unexpected number of timestamps for start_time {start_time} end time {end_time} interval {interval} count {count}. Got {len(pricing[0])}.")
             data[interval.name] = torch.stack([torch.tensor(it, dtype=torch.float64) for it in pricing], dim=1)
@@ -81,8 +79,8 @@ class Generator(AbstractGenerator):
 
         after_data = {}
         for interval, count in self.after_data_config:
-            start_time = dateutils.add_intervals_unix(end_time, interval, -count)
-            pricing = aggregate.get_interpolated_pricing(ticker, start_time, end_time, interval, return_quotes=QUOTES, max_fill_ratio=1/3)
+            start_time = XNAS.add_intervals(end_time, interval, -count)
+            pricing = aggregate.get_interpolated_pricing(ticker, start_time, end_time, interval, return_quotes=QUOTES, max_fill_ratio=1/5)
             if len(pricing[0]) != count:
                 raise Exception(f"Unexpected number of timestamps for start_time {start_time} end time {end_time} interval {interval} count {count}. Got {len(pricing[0])}.")
             after_data[f"{AFTER_KEY_PREFIX}_{interval.name}"] = torch.stack([torch.tensor(it, dtype=torch.float64) for it in pricing], dim=1)
