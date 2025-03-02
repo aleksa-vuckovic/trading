@@ -41,11 +41,10 @@ def fix_timestamps():
                 result = []
                 for entry in data:
                     timestamp = entry['t']
+                    date = XNAS.unix_to_datetime(timestamp)
                     if XNAS.is_timestamp(timestamp, interval):
                         result.append(entry)
-                        continue
-                    date = XNAS.unix_to_datetime(timestamp)
-                    if interval == Interval.L1:
+                    elif interval == Interval.L1:
                         fixed_date = XNAS.get_next_timestamp(date.replace(day=1), interval)
                         entry['t'] = fixed_date.timestamp()
                         result.append(entry)
@@ -57,12 +56,12 @@ def fix_timestamps():
                         logger.info(f"Fixed {interval} from {date} to {fixed_date}")
                     elif interval == Interval.D1:
                         if not XNAS.is_workday(date):
-                            logger.info(f"Skipping {interval} {date}")
-                            continue
-                        fixed_date = XNAS.set_close(date)
-                        entry['t'] = fixed_date.timestamp()
-                        result.append(entry)
-                        logger.info(f"Fixed {interval} from {date} to {fixed_date}")
+                            logger.info(f"Deleting {interval} {date}")
+                        else:
+                            fixed_date = XNAS.set_close(date)
+                            entry['t'] = fixed_date.timestamp()
+                            result.append(entry)
+                            logger.info(f"Fixed {interval} from {date} to {fixed_date}")
                     elif interval == Interval.H1:
                         if timestamp-1800 == XNAS.set_close(timestamp):
                             entry['t'] = timestamp-1800
@@ -72,8 +71,7 @@ def fix_timestamps():
                             logger.info(f"Deleting {interval} {date}")
                     else:
                         logger.info(f"Deleting {interval} {date}")
-                        continue
                 info['data'] = result
-                #file.write_text(json.dumps(data))
+                file.write_text(json.dumps(data))
 
                 
