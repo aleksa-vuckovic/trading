@@ -65,7 +65,7 @@ def _fix_timestamps(timestamps: list[float], interval: Interval):
             if it + 1800 == XNAS.set_close(it): it += 1800
             else: it += 3600
         else: it += size
-        if not XNAS.is_interval_timestamp(it, interval):
+        if not XNAS.is_timestamp(it, interval):
             logger.warning(f"Unexpected timestamp {XNAS.unix_to_datetime(it)}. Skipping entry.")
             result.append(None)
         else: result.append(it)

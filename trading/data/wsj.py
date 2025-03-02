@@ -57,7 +57,7 @@ def _merge_data_1h(data):
     half = timedelta(minutes=30)
     i = 0
     while i < len(data):
-        if XNAS.is_interval_timestamp(dates[i]+half, Interval.H1):
+        if XNAS.is_timestamp(dates[i]+half, Interval.H1):
             if i+1<len(dates) and dates[i]+half == dates[i+1]:
                 #Merge with next
                 data[i]['h'] = max(data[i]['h'],data[i+1]['h'])
@@ -74,7 +74,7 @@ def _merge_data_1h(data):
                 result.append(data[i])
         elif dates[i] == XNAS.set_close(dates[i]):
             result.append(data[i])
-        elif XNAS.is_interval_timestamp(dates[i], Interval.H1):
+        elif XNAS.is_timestamp(dates[i], Interval.H1):
             logger.warning(f"Unpaired data point at {dates[i]}.")
             data[i]['v'] *= 2
             result.append(data[i])
@@ -94,9 +94,9 @@ def _fix_timestamps(timestamps: list[float|int|None], interval: Interval) -> lis
                 result.append(None)
                 continue
             it+=size
-            if not XNAS.is_interval_timestamp(it, interval)\
+            if not XNAS.is_timestamp(it, interval)\
                 and not(\
-                    interval == Interval.H1 and XNAS.is_interval_timestamp(it+1800, interval)
+                    interval == Interval.H1 and XNAS.is_timestamp(it+1800, interval)
                 ):
                 logger.warning(f"Unexpected timestamp {XNAS.unix_to_datetime(it)}. Skipping entry.")
                 result.append(None)

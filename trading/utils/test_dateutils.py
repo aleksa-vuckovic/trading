@@ -93,7 +93,7 @@ class TestDates(unittest.TestCase):
         ]
         self.assert_next_interval(pairs, Interval.H1)
     
-    def test_get_interval_timestamps_l1(self):
+    def test_get_timestamps_l1(self):
         start = XNAS.str_to_unix('2024-11-25 16:00:00')
         end = XNAS.str_to_unix('2025-05-02 16:00:00')
         expect = [XNAS.str_to_unix(it) for it in [
@@ -103,7 +103,7 @@ class TestDates(unittest.TestCase):
         result = XNAS.get_timestamps(start, end, Interval.L1)
         self.assertEqual(expect, result)
 
-    def test_get_interval_timestamps_w1(self):
+    def test_get_timestamps_w1(self):
         start = XNAS.str_to_unix('2025-02-28 16:00:00')
         end = XNAS.str_to_unix('2025-05-02 16:00:00')
         expect = [XNAS.str_to_unix(it) for it in [
@@ -113,7 +113,7 @@ class TestDates(unittest.TestCase):
         result = XNAS.get_timestamps(start, end, Interval.W1)
         self.assertEqual(expect, result)
 
-    def test_get_interval_timestamps_d1(self):
+    def test_get_timestamps_d1(self):
         start = XNAS.str_to_unix('2025-02-16 00:00:00')
         end = XNAS.str_to_unix('2025-02-19 15:30:00')
         times = XNAS.get_timestamps(start, end, Interval.D1)
@@ -125,7 +125,7 @@ class TestDates(unittest.TestCase):
         self.assertEqual(expect, times)
 
 
-    def test_get_interval_timestamps_h1(self):
+    def test_get_timestamps_h1(self):
         start = XNAS.str_to_unix('2025-02-16 00:00:00')
         end = XNAS.str_to_unix('2025-02-19 15:30:00')
         times = XNAS.get_timestamps(start, end, Interval.H1)
@@ -144,7 +144,7 @@ class TestDates(unittest.TestCase):
         ]]
         self.assertEqual(expect, times)
 
-    def test_get_interval_timestamps_m15(self):
+    def test_get_timestamps_m15(self):
         start = XNAS.str_to_unix('2025-02-28 14:30:00')
         end = XNAS.str_to_unix('2025-03-03 10:00:00')
         expect = [XNAS.str_to_unix(it) for it in [
@@ -154,7 +154,7 @@ class TestDates(unittest.TestCase):
         result = XNAS.get_timestamps(start, end, Interval.M15)
         self.assertEqual(expect, result)
     
-    def test_get_interval_timestamps_m5(self):
+    def test_get_timestamps_m5(self):
         start = XNAS.str_to_unix('2025-02-28 15:45:00')
         end = XNAS.str_to_unix('2025-03-03 09:40:00')
         expect = [XNAS.str_to_unix(it) for it in [

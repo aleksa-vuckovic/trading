@@ -83,7 +83,7 @@ def _fix_timestamps(timestamps: list[float], interval: Interval) -> list[float]:
                 result.append(None)
                 continue
             it = round(it/10)*10
-            if not XNAS.is_interval_timestamp(it, interval):
+            if not XNAS.is_timestamp(it, interval):
                 logger.error(f"Unexpected timestamp {XNAS.unix_to_datetime(it)} for period H1. Skipping entry.")
                 result.append(None)
             result.append(it)

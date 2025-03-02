@@ -47,17 +47,17 @@ class WorkCalendar:
     #region Abstract
     # These are the methods that must be implemented in a derived class.
     def is_workday(self, time: datetime|float|int) -> bool:
-        raise NotImplemented
+        raise NotImplementedError()
     def is_worktime(self, time: datetime|float|int) -> bool:
-        raise NotImplemented
+        raise NotImplementedError()
     def set_open(self, time: datetime|float|int) -> datetime:
-        raise NotImplemented
+        raise NotImplementedError()
     def set_close(self, time: datetime|float|int) -> datetime:
-        raise NotImplemented
+        raise NotImplementedError()
     def is_timestamp(self, time: datetime|float|int, interval: Interval) -> bool:
-        raise NotImplemented
+        raise NotImplementedError()
     def get_next_timestamp(self, time: datetime|float|int, interval: Interval) -> datetime|float:
-        raise NotImplemented
+        raise NotImplementedError()
     #endregion
 
     #region Caching
@@ -171,10 +171,10 @@ class NasdaqCalendar(WorkCalendar):
             '2025-09-01', '2025-11-27', '2025-12-25'
         )
         self.holidays.add_semi_days(
-            '2021-11-26',
-            '2022-07-03', '2023-11-24', '2024-07-03',
-            '2024-11-29', '2024-12-24', '2025-07-03',
-            '2025-11-28', '2025-12-24'
+            '2021-11-26', '2022-11-25', '2023-07-03',
+            '2023-11-24', '2024-07-03', '2024-11-29',
+            '2024-12-24', '2025-07-03', '2025-11-28',
+            '2025-12-24'
         )
     #region Overrides
     def is_workday(self, time: datetime|float|int) -> bool:
@@ -193,8 +193,8 @@ class NasdaqCalendar(WorkCalendar):
         if not isinstance(time, datetime): return self.set_close(self.unix_to_datetime(time)).timestamp()
         if not self.is_workday(time): raise Exception(f"Can't set close for non workday {time}.")
         return time.replace(hour=16 if not self.holidays.is_semi(time) else 13, minute=0, second=0, microsecond=0)
-    def is_interval_timestamp(self, time: datetime|float|int, interval: Interval):
-        if not isinstance(time, datetime): return self.is_interval_timestamp(self.unix_to_datetime(time), interval)
+    def is_timestamp(self, time: datetime|float|int, interval: Interval):
+        if not isinstance(time, datetime): return self.is_timestamp(self.unix_to_datetime(time), interval)
         if not self.is_workday(time): return False
         if time.second or time.microsecond: return False
         if time <= self.set_open(time) or time > self.set_close(time): return False

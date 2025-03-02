@@ -18,7 +18,7 @@ class TestQuery(unittest.TestCase):
         )
         self.assertTrue(prices and volume and low and high and open and times)
         self.assertEqual(18, len(prices))
-        self.assertTrue(all(XNAS.is_interval_timestamp(it, Interval.L1) for it in times))
+        self.assertTrue(all(XNAS.is_timestamp(it, Interval.L1) for it in times))
         self.assertAlmostEqual(prices[0], 32.67599868774414)
 
     def test_pricing_w1(self):
@@ -32,7 +32,7 @@ class TestQuery(unittest.TestCase):
         )
         self.assertTrue(prices and volume and low and high and open and times)
         self.assertEqual(23 if config.test.skip_cache else 24,len(prices))
-        self.assertTrue(all(XNAS.is_interval_timestamp(it, Interval.W1) for it in times))
+        self.assertTrue(all(XNAS.is_timestamp(it, Interval.W1) for it in times))
         if not config.test.skip_cache: self.assertAlmostEqual(prices[0], 32.67599868774414)
 
     def test_pricing_d1(self):
@@ -82,7 +82,7 @@ class TestQuery(unittest.TestCase):
         )
         self.assertTrue(prices and volume and low and high and open and times)
         self.assertEqual(52, len(prices))
-        self.assertTrue(all(XNAS.is_interval_timestamp(it, Interval.M15) for it in times))
+        self.assertTrue(all(XNAS.is_timestamp(it, Interval.M15) for it in times))
         self.assertAlmostEqual(133.8594422343359 if config.test.skip_cache else 133.92999267578125, prices[0])
 
     def test_pricing_m5(self):
@@ -96,7 +96,7 @@ class TestQuery(unittest.TestCase):
         )
         self.assertTrue(prices and volume and low and high and open and times)
         self.assertEqual(18, len(prices))
-        self.assertTrue(all(XNAS.is_interval_timestamp(it, Interval.M5) for it in times))
+        self.assertTrue(all(XNAS.is_timestamp(it, Interval.M5) for it in times))
         self.assertAlmostEqual(prices[0], 133.5915985107422)
     
     def test_get_info(self):
