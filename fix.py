@@ -72,6 +72,6 @@ def fix_timestamps():
                     else:
                         logger.info(f"Deleting {interval} {date}")
                 info['data'] = result
-                file.write_text(json.dumps(data))
+                file.write_text(json.dumps(info))
 
                 
