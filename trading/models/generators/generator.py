@@ -62,7 +62,7 @@ class Generator(AbstractGenerator):
 
     def generate_example(
         self,
-        ticker: nasdaq.NasdaqListedEntry,
+        ticker: nasdaq.NasdaqSecurity,
         end_time: float,
         with_output: bool = True
     ) -> dict[str, Tensor]:

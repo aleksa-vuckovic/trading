@@ -3,25 +3,25 @@ import math
 import re
 import time
 from bs4 import BeautifulSoup
-from pathlib import Path
 from ..utils import httputils
-from ..utils.dateutils import XNAS
-from .caching import cached_scalar, cached_series, CACHE_ROOT
+from .caching import cached_scalar, cached_series, CACHE_ROOT, FilePersistor
+from .nasdaq import Nasdaq
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
-_CACHE: Path = CACHE_ROOT / _MODULE
 
 def _format_date(unix: float) -> str:
-    return XNAS.unix_to_datetime(unix)\
+    return Nasdaq.instance.calendar.unix_to_datetime(unix)\
         .strftime('%b-%d-%Y')\
         .replace("-0", "-")\
         .replace("jun", "june")\
         .lower()
 
+def _get_summary_key_fn(unix_time: int) -> list[str]:
+    return [str(unix_time)]
 @cached_scalar(
-    include_args=[0],
-    path_fn=lambda args: _CACHE / _format_date(args[0])
+    key_fn=_get_summary_key_fn,
+    persistor_fn=FilePersistor(CACHE_ROOT/_MODULE/"summary")
 )
 @httputils.backup_timeout()
 def _get_summary(unix_time: int) -> str:
@@ -47,6 +47,5 @@ def _get_summary(unix_time: int) -> str:
                 return "\n".join([it.text for it in main_div.find_all("p", recursive=False)])
     logger.fatal(f"Couldn't find date {dates[0]} in pages from {start_page} to {end_page}.")
     return ""
-
 def get_summary(unix_time: float) -> str:
     return _get_summary(unix_time)

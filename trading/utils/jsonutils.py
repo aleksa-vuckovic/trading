@@ -5,8 +5,20 @@ from enum import Enum
 from .common import get_full_classname, get_class_by_full_classname
 
 _TYPE = '$$type'
-
 _SKIP_KEYS = '_serializable_skip_keys'
+
+class Serializer:
+    def serialize(self, obj: object) -> str:
+        raise NotImplementedError()
+    def deserialize(self, data: str) -> object:
+        raise NotImplementedError()
+
+class BasicSerializer(Serializer):
+    def serialize(self, obj: object) -> str:
+        return json.dumps(obj)
+    def deserialize(self, data):
+        return json.loads(data)
+
 def serializable(skip_keys: list[str] = []):
     def decorate(cls):
         try:
@@ -68,3 +80,10 @@ def _deserialize(obj: dict|list|str|int|float|bool|None) -> object:
             instance.__dict__.update(obj)
             return instance
         raise Exception(f"Can't deserialize {obj}.")
+    
+class TypedSerializer(Serializer):
+    def serialize(self, obj):
+        return serialize(obj)
+    def deserialize(self, data):
+        return deserialize(data)
+    

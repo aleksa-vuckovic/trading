@@ -1,5 +1,5 @@
 cache
-_test_cache
+test_data
 __pycache__
 venv
 logs*
@@ -17,3 +17,5 @@ checkpoints_*/
 /main.py
 result.json
 backtests/
+*.db
+*.db-journal

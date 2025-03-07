@@ -11,11 +11,58 @@ from trading.utils import dateutils
 from trading.data import aggregate
 from trading.utils.common import Interval
 from trading.utils.dateutils import XNAS
+from trading.data.caching import FilePersistor, SqlitePersistor
 from tqdm import tqdm
 import shutil
 
 
 logger = logging.getLogger(__name__)
+
+def migrate():
+    def migrate_cache(root: Path, db: Path, table: str):
+        p1 = FilePersistor(root)
+        p2 = SqlitePersistor(db, table)
+        p1.migrate(p2)
+
+    db = Path("./cache.db")
+    cache = Path("./trading/data/cache")
+
+    migrate_cache(cache/'financialtimes'/'info', db, 'financialtimes_info')
+    migrate_cache(cache/'financialtimes'/'pricing', db, 'financialtimes_pricing')
+    migrate_cache(cache/'globenewswire'/'news', db, 'globenewswire_news')
+    migrate_cache(cache/'seekingalpha'/'news', db, 'seekingalpha_news')
+    migrate_cache(cache/'wallstreetjournal'/'pricing', db, 'wallstreetjournal_pricing')
+    migrate_cache(cache/'yahoo'/'info', db, 'yahoo_info')
+    migrate_cache(cache/'yahoo'/'pricing', db, 'yahoo_pricing')
+
+
+def nest(folder: Path, into: str):
+    temp = folder.parent / (folder.parts[-1]+'2')
+    folder.rename(temp)
+    folder.mkdir(parents=True)
+    temp.rename(folder/into)
+
+def fix_pricing(root: Path):
+    (root/'info').mkdir(parents=True, exist_ok=True)
+    (root/'pricing').mkdir(parents=True, exist_ok=True)
+    for ticker in os.listdir(root):
+        if ticker == 'info' or ticker == 'pricing': continue
+        path = root/ticker/'info'
+        if path.exists(): path.rename(root/'info'/ticker)
+        (root/ticker).rename(root/'pricing'/ticker)        
+
+def fix_cache():
+    cache = Path('./trading')/'data'/'cache'
+    fix_pricing(cache/'financialtimes')
+    fix_pricing(cache/'yahoo')
+    (cache/'wallstreetjournal').mkdir(parents=True)
+    (cache/'wsj').rename(cache/'wallstreetjournal'/'pricing')
+    shutil.rmtree(cache/'polygon', ignore_errors=True)
+    shutil.rmtree(cache/'macrotrends', ignore_errors=True)
+    nest(cache/'seekingalpha', 'news')
+    nest(cache/'zacks', 'summary')
+    nest(cache/'globenewswire', 'news')
+
 
 def clear_cache(module: str):
     root = Path(__file__).parent / 'trading' / 'data' / 'cache' / module

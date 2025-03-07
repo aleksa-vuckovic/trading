@@ -71,7 +71,7 @@ class PriceEstimator:
         if key not in example: raise Exception(f"Can't estimate without {key}.")
         return self.estimate_tensor(example[key])
 
-    def estimate(self, ticker: nasdaq.NasdaqListedEntry, unix_time: float) -> float:
+    def estimate(self, ticker: nasdaq.NasdaqSecurity, unix_time: float) -> float:
         end_time = XNAS.add_intervals(unix_time, self.interval, self.index.stop)
         prices, = aggregate.get_interpolated_pricing(ticker, unix_time, end_time, self.interval, return_quotes=[self.quote], max_fill_ratio=self.max_fill_ratio)
         tensor = torch.tensor(prices, dtype=torch.float64)

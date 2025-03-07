@@ -3,22 +3,28 @@ import time
 from ..utils import httputils
 from ..utils.dateutils import XNAS
 from ..utils.common import Interval
-from . import nasdaq, macrotrends, yahoo, zacks, seekingalpha, globenewswire, wsj, financialtimes
+from . import nasdaq, macrotrends, zacks, seekingalpha, globenewswire
+from .yahoo import Yahoo
+from .financialtimes import FinancialTimes
+from .wallstreetjournal import WallStreetJournal
+from .abstract import PricingProvider
 
 logger = logging.getLogger(__name__)
 
+providers: list[PricingProvider] = [Yahoo(), WallStreetJournal(), FinancialTimes()]
+
 # Aggregating methods
-def get_shares_outstanding_at(ticker: nasdaq.NasdaqListedEntry, unix_time: float) -> float:
+def get_shares_outstanding_at(ticker: nasdaq.NasdaqSecurity, unix_time: float) -> float:
     try:
         return macrotrends.get_shares_outstanding_at(ticker, unix_time)
     except:
         pass
     return float(yahoo.get_shares(ticker.symbol))
-def get_first_trade_time(ticker: nasdaq.NasdaqListedEntry) -> float:
+def get_first_trade_time(ticker: nasdaq.NasdaqSecurity) -> float:
     return yahoo.get_first_trade_time(ticker.symbol)
-def get_market_cap(ticker: nasdaq.NasdaqListedEntry) -> float:
+def get_market_cap(ticker: nasdaq.NasdaqSecurity) -> float:
     return yahoo.get_market_cap(ticker.symbol)
-def get_sorted_tickers() -> list[nasdaq.NasdaqListedEntry]:
+def get_sorted_tickers() -> list[nasdaq.NasdaqSecurity]:
     tickers = []
     for it in nasdaq.get_filtered_entries():
         try:
@@ -40,7 +46,7 @@ def get_sorted_tickers() -> list[nasdaq.NasdaqListedEntry]:
         tickers.append({"ticker": it, "unix_time": first_trade})
     return [it['ticker'] for it in sorted(tickers, key=lambda it: it["unix_time"])]
 
-def get_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, interval: Interval, return_quotes=['close','volume']) -> tuple[list[float], ...]:
+def get_pricing(ticker: nasdaq.NasdaqSecurity, unix_from: float, unix_to: float, interval: Interval, return_quotes=['close','volume']) -> tuple[list[float], ...]:
     now = time.time()
     if now-unix_to < 2*24*3600 and interval <= Interval.D1:
         #Live. Use alternatives for recent prices.
@@ -54,7 +60,7 @@ def get_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: flo
         except:
             logger.warning(f"Failed live yahoo for {ticker.symbol}.")
             try:
-                recent = wsj.get_pricing(ticker.symbol, sep, unix_to, interval, return_quotes=return_quotes)
+                recent = wallstreetjournal.get_pricing(ticker.symbol, sep, unix_to, interval, return_quotes=return_quotes)
             except:
                 logger.warning(f"Failed wsj for {ticker.symbol}.")
                 recent = financialtimes.get_pricing(ticker.symbol, sep, unix_to, interval, return_quotes=return_quotes, backup_behavior=httputils.BackupBehavior.RETHROW|httputils.BackupBehavior.SLEEP)
@@ -66,7 +72,7 @@ def get_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: flo
             return recent
     else:
         return yahoo.get_pricing(ticker.symbol, unix_from, unix_to, interval, return_quotes=return_quotes, backup_behavior=httputils.BackupBehavior.RETHROW|httputils.BackupBehavior.SLEEP)
-def get_interpolated_pricing(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, interval: Interval, return_quotes=['close', 'volume'], max_fill_ratio: float = 0.4) -> tuple[list[float], ...]:
+def get_interpolated_pricing(ticker: nasdaq.NasdaqSecurity, unix_from: float, unix_to: float, interval: Interval, return_quotes=['close', 'volume'], max_fill_ratio: float = 0.4) -> tuple[list[float], ...]:
     raw_times, *raw_data = get_pricing(ticker, unix_from, unix_to, interval, ['timestamp', *return_quotes])
     timestamps = XNAS.get_timestamps(unix_from, unix_to, interval)
     if not raw_times:
@@ -101,9 +107,9 @@ def interpolate_pricing(raw_timestamps: list[float], raw_data: tuple[list[float]
 
 def get_market_summary(unix_time: float) -> str:
     return zacks.get_summary(unix_time, backup_behavior=httputils.BackupBehavior.RETHROW|httputils.BackupBehavior.SLEEP)
-def get_company_summary(ticker: nasdaq.NasdaqListedEntry) -> str:
+def get_company_summary(ticker: nasdaq.NasdaqSecurity) -> str:
     return yahoo.get_summary(ticker.symbol)
-def get_company_news(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float) -> str:
+def get_company_news(ticker: nasdaq.NasdaqSecurity, unix_from: float, unix_to: float) -> str:
     try:
         news = seekingalpha.get_news(ticker.symbol, unix_from, unix_to)
     except:

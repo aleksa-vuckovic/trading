@@ -4,8 +4,9 @@ from bs4 import BeautifulSoup
 from ..utils import httputils
 from ..utils.dateutils import XNAS
 from ..data import nasdaq
-from .caching import cached_series, CACHE_ROOT
+from .caching import cached_series, CACHE_ROOT, FilePersistor
 from .utils import filter_by_timestamp
+from .abstract import AbstractSecurity
 
 logger = logging.getLogger(__name__)
 _MODULE = __name__.split(".")[-1]
@@ -58,25 +59,28 @@ def _get_news_raw(orgs: list[str], keywords: list[str], unix_from: float, unix_t
             break
     return result
 
+def _get_org(ticker: AbstractSecurity) -> str:
+    try:
+        return ticker.name[ticker.name.index(' - ')].strip()
+    except:
+        return ticker.name
+def _get_news_key_fn(security: AbstractSecurity) -> list[str]:
+    return [_get_org(security)]
 @cached_series(
-    unix_from_arg=1,
-    unix_to_arg=2,
-    include_args=[0],
-    cache_root=_CACHE,
-    time_step_fn=100000000,
+    unix_args=(1,2),
+    key_fn=_get_news_key_fn,
     series_field=None,
     timestamp_field="unix_time",
+    persistor_fn=FilePersistor(CACHE_ROOT/_MODULE/'news'),
+    time_step_fn=100000000,
     live_delay_fn=3600, #let's say that news is an hour late usually
-    live_refresh_fn=2*3600,
-    return_series_only=True
+    live_refresh_fn=2*3600
 )
 @httputils.backup_timeout()
-def _get_news(org: str, unix_from: float, unix_to: float) -> list[dict]:
-    result = _get_news_raw([org], [], unix_from, unix_to)
-    result = reversed(result)
+def _get_news(security: AbstractSecurity, unix_from: float, unix_to: float) -> list[dict]:
+    result = _get_news_raw([_get_org(security)], [], unix_from, unix_to)
     result = filter_by_timestamp(result, unix_from=unix_from, unix_to=unix_to, timestamp_field='unix_time')
     return sorted(result, key=lambda it: it['unix_time'])
-
-def get_news(ticker: nasdaq.NasdaqListedEntry, unix_from: float, unix_to: float, **kwargs) -> list[str]:
-    return [it['title'] for it in _get_news(ticker.long_name(), unix_from, unix_to, **kwargs)]
+def get_news(security: AbstractSecurity, unix_from: float, unix_to: float, **kwargs) -> list[str]:
+    return [it['title'] for it in _get_news(security, unix_from, unix_to, **kwargs)]
 

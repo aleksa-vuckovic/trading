@@ -18,7 +18,7 @@ class AbstractGenerator:
     STATE_FILE = '_loop_state.json'
     def generate_example(
         self,
-        ticker: nasdaq.NasdaqListedEntry,
+        ticker: nasdaq.NasdaqSecurity,
         end_time: float,
         with_output: bool = True
     ) -> dict[str, Tensor]:
@@ -32,7 +32,7 @@ class AbstractGenerator:
         *,
         folder: Path,
         timing: TimingConfig, # should have a configured interval
-        tickers_fn: list[nasdaq.NasdaqListedEntry]|Callable[[float], list[nasdaq.NasdaqListedEntry]]|None = None,
+        tickers_fn: list[nasdaq.NasdaqSecurity]|Callable[[float], list[nasdaq.NasdaqSecurity]]|None = None,
         time_frame: tuple[float, float],
         batch_size: int = config.batch_size
     ):

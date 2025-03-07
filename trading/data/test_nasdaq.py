@@ -4,8 +4,8 @@ import unittest
 class NasdaqTest(unittest.TestCase):
 
     def test_line_parsing(self):
-        nvda = nasdaq.NasdaqListedEntry.from_line('NVDA|NVIDIA Corporation - Common Stock|Q|N|N|100|N|N')
-        etf = nasdaq.NasdaqListedEntry.from_line('NUSI|NEOS Nasdaq-100 Hedged Equity Income ETF|G|N|N|100|Y|N')
+        nvda = nasdaq.NasdaqSecurity.from_line('NVDA|NVIDIA Corporation - Common Stock|Q|N|N|100|N|N')
+        etf = nasdaq.NasdaqSecurity.from_line('NUSI|NEOS Nasdaq-100 Hedged Equity Income ETF|G|N|N|100|Y|N')
         self.assertEqual(nvda.symbol, 'NVDA')
         self.assertEqual(nvda.market, nasdaq.NasdaqMarket.SELECT)
         self.assertFalse(nvda.etf)
@@ -14,8 +14,8 @@ class NasdaqTest(unittest.TestCase):
         self.assertTrue(etf.etf)
     
     def test_is_warrant(self):
-        warrant = nasdaq.NasdaqListedEntry.from_line('ABLLW|Abacus Life, Inc. - Warrant|S|N|N|100|N|N')
-        nonwarrant = nasdaq.NasdaqListedEntry.from_line('NVDA|NVIDIA Corporation - Common Stock|Q|N|N|100|N|N')
+        warrant = nasdaq.NasdaqSecurity.from_line('ABLLW|Abacus Life, Inc. - Warrant|S|N|N|100|N|N')
+        nonwarrant = nasdaq.NasdaqSecurity.from_line('NVDA|NVIDIA Corporation - Common Stock|Q|N|N|100|N|N')
         self.assertTrue(warrant.is_warrant())
         self.assertFalse(nonwarrant.is_warrant())
     

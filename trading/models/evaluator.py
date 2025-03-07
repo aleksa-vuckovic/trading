@@ -30,7 +30,7 @@ if not FOLDER.exists(): FOLDER.mkdir()
 
 @serializable()
 class Result:
-    def __init__(self, ticker: nasdaq.NasdaqListedEntry, output: float):
+    def __init__(self, ticker: nasdaq.NasdaqSecurity, output: float):
         self.ticker = ticker
         self.output = output
         self.data = {}
@@ -113,7 +113,7 @@ class Evaluator:
 
     def evaluate(
         self,
-        tickers: list[nasdaq.NasdaqListedEntry]|None = None,
+        tickers: list[nasdaq.NasdaqSecurity]|None = None,
         unix_time: float|None = None,
         selector: SelectionStrategy = SelectionStrategy(),
         on_update: Callable[[SelectionStrategy], Any]|None = None,
@@ -152,7 +152,7 @@ class Evaluator:
         estimator: PriceEstimator,
         selector: SelectionStrategy = SelectionStrategy(),
         commission: float = 0.0035,
-        tickers: list[nasdaq.NasdaqListedEntry]|None = None
+        tickers: list[nasdaq.NasdaqSecurity]|None = None
     ) -> float:
         """
         Returns total gain in percentages
