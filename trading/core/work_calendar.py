@@ -178,7 +178,7 @@ class HolidaySchedule:
 class BasicWorkCalendar(WorkCalendar):
     def __init__(
         self,
-        *
+        *,
         tz: ZoneInfo,
         open_hour: int,
         open_minute: int = 0,
@@ -220,7 +220,7 @@ class BasicWorkCalendar(WorkCalendar):
         if close_hour == 0 and close_minute == 0: return dates.to_zero(time + timedelta(days=1))
         return time.replace(hour=self.close_hour, minute=self.close_minute, second=0, microsecond=0)
     def is_timestamp(self, time: datetime|float|int, interval: Interval) -> bool:
-        if not isinstance(time, datetime): return self.is_timestamp(time, self.unix_to_datetime(time))
+        if not isinstance(time, datetime): return self.is_timestamp(self.unix_to_datetime(time), interval)
         if interval == Interval.L1: return time == self.month_end(time)
         if interval == Interval.W1: return time == self.week_end(time)
         if not self.is_workday(time): return False
@@ -249,8 +249,8 @@ class BasicWorkCalendar(WorkCalendar):
         if self.is_worktime(time):
             open = self.set_open(time)
             close = self.set_close(time)
-            cnt = (time.timestamp() - open)//interval.time()
-            timestamp = self.unix_to_datetime(time.timestamp() + (cnt+1)*interval.time())
+            cnt = (time.timestamp() - open.timestamp())//interval.time()
+            timestamp = self.unix_to_datetime(open.timestamp() + (cnt+1)*interval.time())
             if timestamp <= close: return timestamp
             if close > time: return close
         if time > self.set_open(time): time += timedelta(days=1)

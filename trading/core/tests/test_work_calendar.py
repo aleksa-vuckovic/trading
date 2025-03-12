@@ -5,7 +5,7 @@ from base.serialization import serializer
 from trading.core import Interval
 from trading.core.work_calendar import WorkCalendar, BasicWorkCalendar, TimingConfig
 
-calendar = BasicWorkCalendar(tz=dates.ET, open_hour=9, open_minute=30, close_hour=16)
+calendar = BasicWorkCalendar(tz=dates.ET, open_hour=9, open_minute=30, close_hour=16, semi_close_hour=16)
 class TestTimingConfig(unittest.TestCase):
     def test_timing_config_next(self):
         config = TimingConfig.Builder()\

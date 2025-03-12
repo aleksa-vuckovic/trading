@@ -43,7 +43,7 @@ def merge_pricing(
         timestamp = calendar.get_next_timestamp(t, interval) if not calendar.is_timestamp(t, interval) else t
         if timestamp > unix_to: break
         j = i
-        while data[j]['t'] <= timestamp: j += 1
+        while j < len(data) and data[j]['t'] <= timestamp: j += 1
         seg = data[i:j]
         i = j
         if timestamp <= unix_from: continue
