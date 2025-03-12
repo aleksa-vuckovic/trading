@@ -10,10 +10,17 @@ from base.caching import cached_scalar, cached_series, FilePersistor, SqlitePers
 TEST_DATA = Path("./test_data")
 class TestCaching(unittest.TestCase):
     def setUp(self):
+        super().setUp()
         if TEST_DATA.exists():
             if TEST_DATA.is_file(): TEST_DATA.unlink()
             else: shutil.rmtree(TEST_DATA)
         TEST_DATA.mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self):
+        super().tearDown()
+        if TEST_DATA.exists():
+            if TEST_DATA.is_file(): TEST_DATA.unlink()
+            else: shutil.rmtree(TEST_DATA)
 
     def _test_persistor_multi(self, persistor: Persistor):
         self.assertEqual(0, len(list(persistor.keys())))
@@ -37,11 +44,37 @@ class TestCaching(unittest.TestCase):
     def test_file_persistor_multi(self):
         self._test_persistor_multi(FilePersistor(TEST_DATA))
     def test_file_persistor_none(self):
-        self._test_persistor_none(FilePersistor(TEST_DATA))
+        self._test_persistor_none(FilePersistor(TEST_DATA/'test'))
     def test_sqlite_persistor_multi(self):
         self._test_persistor_multi(SqlitePersistor(TEST_DATA/"test.db", "testtable"))
     def test_sqlite_persistor_none(self):
         self._test_persistor_none(SqlitePersistor(TEST_DATA/"test.db", "testtable"))
+    
+    def _test_cached_series_decorator_simple(self, start: int, end: int, step: int):
+        invocations = 0
+        @cached_series(
+            unix_args=(0,1),
+            timestamp_field="t",
+            key_fn=lambda: [],
+            persistor_fn=FilePersistor(TEST_DATA),
+            time_step_fn=step
+        )
+        def get_series(unix_from: float, unix_to: float):
+            nonlocal invocations
+            invocations += 1
+            return [{"t": it} for it in range(int(unix_from), int(unix_to)+1) if it >unix_from and it <=unix_to ]
+        start_id = start//step
+        end_id = end//step if end%step else end//step-1
+        data = get_series(start, end)
+        self.assertEqual(data, [{"t": it} for it in range(start+1, end+1)])
+        self.assertEqual(invocations, end_id-start_id+1)
+        get_series(start_id*step, (end_id+1)*step-0.01)
+        self.assertEqual(invocations, end_id-start_id+1)
+
+    def test_cached_series_decorator_simple(self):
+        for args in [(7,8,10),(7,15,10),(7,25,10),(7,30,10),(0,100,10),(12,12345,12)]:
+            self.setUp()
+            self._test_cached_series_decorator_simple(*args)
     
     def test_cached_series_decorator(self):
         invocations = 0
@@ -72,11 +105,11 @@ class TestCaching(unittest.TestCase):
         self.assertEqual(14, len(test2))
         self.assertEqual(17, test1[0]['data'])
         self.assertEqual(30, test2[-1]['data'])
-        self.assertEqual(4, invocations)
+        self.assertEqual(3, invocations)
 
         self.assertEqual(test1, get_series(16, unix_to=30, type="type10"))
         self.assertEqual(test2, get_series(16, unix_to=30, type="other"))
-        self.assertEqual(4, invocations)
+        self.assertEqual(3, invocations)
 
     def test_cached_series_decorator_live(self):
         invocations = 0

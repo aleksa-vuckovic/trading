@@ -3,14 +3,14 @@ import unittest
 import json
 from enum import Enum
 from base import serialization
-from trading.core import interval
+from base.classes import equatable
 
 class MyEnum(Enum):
     A = 'a'
     B = 'b'
 
 @serialization.serializable(skip_keys=['b'])
-@interval.equatable(skip_keys=['b'])
+@equatable(skip_keys=['b'])
 class A:
     def __init__(self, a:int, b:str, c: list, d: A, e: object = None):
         self.a = a

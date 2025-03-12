@@ -8,3 +8,4 @@ tqdm
 transformers
 torchinfo
 matplotlib
+parameterized

@@ -4,9 +4,9 @@ import json
 import re
 import time
 import config
+from base import text
 from http import HTTPStatus
 from enum import Flag, auto
-from trading.core import interval
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ def get_as_browser(
     response = requests.get(url, headers = {**_CHROME_HEADERS, 'Cookie': cookie, **headers}, params=params)
     logger.info(f"GET {url} ? {params} -> {response.status_code}")
     if config.http.log_response: logger.info(response.text)
-    elif config.http.log_response_short: logger.info(interval.shorter(response.text))
+    elif config.http.log_response_short: logger.info(text.shorter(response.text))
     if check_reponse: assert_response(url, response)
     return response
 
@@ -71,15 +71,15 @@ def post_as_browser(url: str, body: object, check_response: bool = True) -> requ
     response = requests.post(url, json=body, headers={**_CHROME_HEADERS})
     logger.info(f"POST {url} -> {response.status_code}")
     if config.http.log_request: logger.info("->" + json.dumps(body, indent = 4))
-    elif config.http.log_request_short: logger.info("->" + interval.shorter(json.dumps(body, indent=4)))
+    elif config.http.log_request_short: logger.info("->" + text.shorter(json.dumps(body, indent=4)))
     if config.http.log_response: logger.info("<-" + response.text)
-    elif config.http.log_response_short: logger.info("<-" + interval.shorter(response.text))
+    elif config.http.log_response_short: logger.info("<-" + text.shorter(response.text))
     if check_response: assert_response(url, response)
     return response
 
 class BackupBehavior(Flag):
     DEFAULT = 0
-    RETHROW = auto()
+    RERAISE = auto()
     SLEEP = auto()
 
 class BackupException(Exception):
@@ -90,7 +90,7 @@ class BackupException(Exception):
 def backup_timeout(
     *,
     exc_type = TooManyRequestsException,
-    default_behavior: BackupBehavior = BackupBehavior.RETHROW,
+    default_behavior: BackupBehavior = BackupBehavior.RERAISE,
     base_timeout: float = 30.0,
     backoff_factor: float = 2.0
 ):
@@ -107,7 +107,7 @@ def backup_timeout(
             if backup_time and backup_time > 0:
                 if BackupBehavior.SLEEP in behavior:
                     time.sleep(backup_time)
-                elif BackupBehavior.RETHROW in behavior:
+                elif BackupBehavior.RERAISE in behavior:
                     last_exception.__traceback__ = None
                     raise BackupException(backup_time) from last_exception
                 else:
@@ -124,8 +124,8 @@ def backup_timeout(
                     last_exception = ex
                     last_timeout = timeout
                     logger.error(f"Timing {func.__name__} out for {timeout} with behavior {behavior}.", exc_info = True)
-                    if BackupBehavior.RETHROW in behavior:
-                        raise
+                    if BackupBehavior.RERAISE in behavior:
+                        raise BackupException(timeout) from ex
                     else:
                         return None
                 raise

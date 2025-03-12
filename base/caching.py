@@ -169,6 +169,8 @@ def cached_series(
         for arg, value in zip(unix_args, value):
             if isinstance(arg, int): args[arg] = value
             else: kwargs[arg] = value
+    def get_id(unix_time: float, time_step: float) -> int:
+        return int(unix_time//time_step) if unix_time%time_step else int(unix_time//time_step)-1
     def decorate(func):
         def wrapper(*args, skip_cache: bool = False, **kwargs):
             if skip_cache: return func(*args, **kwargs)
@@ -185,9 +187,7 @@ def cached_series(
             # Take at most the last available time point. We don't want to rush and cache invalid or nonexistent data.
             unix_to = min(unix_value[1], unix_now)
             unix_from = min(unix_value[0], unix_to)
-            start_id = int(unix_from//time_step)
-            end_id = int(unix_to//time_step)
-            now_id = int(unix_now//time_step)
+            start_id, end_id, now_id = int(unix_from//time_step), get_id(unix_to, time_step), get_id(unix_now, time_step)
             result = []
             last_data = None
             def extend(data):
@@ -234,7 +234,7 @@ def cached_series(
                         extend(json.loads(persistor.read(key)))
                     except NotCachedError:
                         # Invoke the underlying method for the entire chunk
-                        set_unix_args(args, kwargs, (float(id*time_step)-1e-5, float((id+1)*time_step)-1e-5))
+                        set_unix_args(args, kwargs, (id*time_step, (id+1)*time_step))
                         data = func(*args, **kwargs)
                         persistor.persist(key, json.dumps(data))
                         extend(data)
