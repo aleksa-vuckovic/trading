@@ -5,8 +5,9 @@ from tqdm import tqdm
 from pathlib import Path
 from typing import Callable, NamedTuple
 from matplotlib import pyplot as plt
-from ..utils import plotutils, common
-from ..utils.dateutils import TimingConfig
+from trading.core import interval
+from trading.utils import plotutils
+from trading.core.work_calendar import TimingConfig
 from .stats import StatContainer
 from .utils import Batches, BatchFile
 from .abstract import AbstractModel
@@ -284,7 +285,7 @@ class TrainingPlan:
             logger.info(f"Using {len(self.batch_groups)} batch groups.")
             for entry in self.batch_groups:
                 logger.info(f"Batch group {entry.name} with {len(entry.batches)} batches.")
-            logger.info(f"Model {common.get_full_classname(self.model)}.")
+            logger.info(f"Model {interval.get_full_classname(self.model)}.")
             logger.info(f"Optimizer {type(self.optimizer)}.")
             
             while not self.stop and self.epoch < max_epoch:

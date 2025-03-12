@@ -4,12 +4,10 @@ import torch
 from torch import Tensor
 from pathlib import Path
 from enum import Enum
-from ..data import nasdaq, aggregate
-from ..utils import jsonutils
-from ..utils.dateutils import TimingConfig, XNAS
-from ..utils.common import Interval, equatable
-from ..utils.jsonutils import serializable
-from .utils import PriceTarget
+from base import serialization
+from trading.core.work_calendar import TimingConfig
+from trading.core.interval import Interval, equatable
+from base.serialization import serializable
 
 logger = logging.getLogger(__name__)
 
@@ -151,11 +149,11 @@ class ModelConfig:
     
     def __str__(self) -> str:
         return f"""
-estimator = {jsonutils.serialize(self.estimator, typed=False, indent=2)}
+estimator = {serialization.serialize(self.estimator, typed=False, indent=2)}
 target = {self.target.name}
 output = {self.output.name}
-timing = {jsonutils.serialize(self.timing, typed=False, indent=2)}
-inputs = {jsonutils.serialize(self.inputs, typed=False, indent=2)}
+timing = {serialization.serialize(self.timing, typed=False, indent=2)}
+inputs = {serialization.serialize(self.inputs, typed=False, indent=2)}
 data = {self.other}
 """
 

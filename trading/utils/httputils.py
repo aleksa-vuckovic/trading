@@ -6,7 +6,7 @@ import time
 import config
 from http import HTTPStatus
 from enum import Flag, auto
-from ..utils import common
+from trading.core import interval
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ def get_as_browser(
     response = requests.get(url, headers = {**_CHROME_HEADERS, 'Cookie': cookie, **headers}, params=params)
     logger.info(f"GET {url} ? {params} -> {response.status_code}")
     if config.http.log_response: logger.info(response.text)
-    elif config.http.log_response_short: logger.info(common.shorter(response.text))
+    elif config.http.log_response_short: logger.info(interval.shorter(response.text))
     if check_reponse: assert_response(url, response)
     return response
 
@@ -71,9 +71,9 @@ def post_as_browser(url: str, body: object, check_response: bool = True) -> requ
     response = requests.post(url, json=body, headers={**_CHROME_HEADERS})
     logger.info(f"POST {url} -> {response.status_code}")
     if config.http.log_request: logger.info("->" + json.dumps(body, indent = 4))
-    elif config.http.log_request_short: logger.info("->" + common.shorter(json.dumps(body, indent=4)))
+    elif config.http.log_request_short: logger.info("->" + interval.shorter(json.dumps(body, indent=4)))
     if config.http.log_response: logger.info("<-" + response.text)
-    elif config.http.log_response_short: logger.info("<-" + common.shorter(response.text))
+    elif config.http.log_response_short: logger.info("<-" + interval.shorter(response.text))
     if check_response: assert_response(url, response)
     return response
 
@@ -81,6 +81,11 @@ class BackupBehavior(Flag):
     DEFAULT = 0
     RETHROW = auto()
     SLEEP = auto()
+
+class BackupException(Exception):
+    def __init__(self, backup_time: float):
+        super().__init__()
+        self.backup_time = backup_time
 
 def backup_timeout(
     *,
@@ -93,21 +98,18 @@ def backup_timeout(
     last_exception: Exception = None
     last_timeout = None
     def decorate(func):
-        def wrapper(*args, **kwargs):
+        def wrapper(*args, backup_behavior: BackupBehavior|None = None, **kwargs):
             nonlocal last_break
             nonlocal last_exception
             nonlocal last_timeout
-            time_left: float = last_break and (last_break + last_timeout - time.time())
-            if 'backup_behavior' in kwargs:
-                behavior = kwargs['backup_behavior']
-                del kwargs['backup_behavior']
-            else: behavior = default_behavior
-            if time_left and time_left > 0:
+            backup_time: float|None = last_break and (last_break + last_timeout - time.time())
+            behavior = backup_behavior or default_behavior
+            if backup_time and backup_time > 0:
                 if BackupBehavior.SLEEP in behavior:
-                    time.sleep(time_left)
-                if BackupBehavior.RETHROW in behavior:
+                    time.sleep(backup_time)
+                elif BackupBehavior.RETHROW in behavior:
                     last_exception.__traceback__ = None
-                    raise last_exception from None
+                    raise BackupException(backup_time) from last_exception
                 else:
                     return None
             last_break = None

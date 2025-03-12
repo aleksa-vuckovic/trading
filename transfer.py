@@ -2,8 +2,8 @@ from trading.utils import logutils
 logutils.configure_logging()
 import logging
 from pathlib import Path
-from trading.utils import dateutils
-from trading.utils.common import Interval
+from trading.core import work_calendar
+from trading.core.interval import Interval
 from trading.models import model1, model2, model3
 from trading.models.evaluator import Evaluator, PriceEstimator, MarketCapSelector, RandomSelector, FirstTradeTimeSelector
 from trading.models.utils import PriceTarget
@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 plan = model2.train.get_plan(hour = 11)
 
 evaluator = Evaluator(model2.generator.Generator(), plan.model)
-unix_from = dateutils.str_to_unix('2025-01-03 00:00:00')
-unix_to = dateutils.str_to_unix('2025-01-18 00:00:00')
+unix_from = work_calendar.str_to_unix('2025-01-03 00:00:00')
+unix_to = work_calendar.str_to_unix('2025-01-18 00:00:00')
 selector = MarketCapSelector(top_count=10, select_at=0.5)
 estimator = PriceEstimator(interval=Interval.H1, quote='close', min_count=2)
 evaluator.backtest(unix_from, unix_to, 11, selector=selector, estimator=estimator)

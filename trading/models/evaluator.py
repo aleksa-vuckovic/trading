@@ -11,11 +11,13 @@ from pathlib import Path
 from typing import Callable, Any
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
-from ..data import nasdaq, aggregate
-from ..utils import plotutils, jsonutils
-from ..utils.jsonutils import serializable
-from ..utils.dateutils import TimingConfig, XNAS
-from ..utils.common import Interval, get_full_classname
+
+from base import serialization
+from ..securities import nasdaq, aggregate
+from trading.utils import plotutils
+from base.serialization import serializable
+from trading.core.work_calendar import TimingConfig, XNAS
+from trading.core.interval import Interval, get_full_classname
 from .abstract import AbstractModel, PriceEstimator
 from .generators.abstract import AbstractGenerator
 logger = logging.getLogger()
@@ -228,7 +230,7 @@ class Evaluator:
             history, unix_from, unix_to, get_full_classname(self.model), selector, estimator, commission
         )
         path = FOLDER / f"backtest_{self.model.get_name()}_t{int(time.time())}.json"
-        path.write_text(jsonutils.serialize(backtest_result))
+        path.write_text(serialization.serialize(backtest_result))
         plt.show(block = True)
         return history
 

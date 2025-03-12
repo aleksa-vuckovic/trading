@@ -6,9 +6,9 @@ from tqdm import tqdm
 from typing import Callable
 from torch import Tensor
 from pathlib import Path
-from trading.data import nasdaq, aggregate
-from trading.utils import jsonutils
-from trading.utils.dateutils import TimingConfig, XNAS
+from trading.securities import nasdaq, aggregate
+from base import serialization
+from trading.core.work_calendar import TimingConfig, XNAS
 
 
 
@@ -48,7 +48,7 @@ class AbstractGenerator:
         current: list[dict[str, Tensor]] = []
         
         msg = f"""----Generating examples into {folder}
-        Timing config: {jsonutils.serialize(timing, typed=False)}
+        Timing config: {serialization.serialize(timing, typed=False)}
         Start time: {XNAS.unix_to_datetime(time_frame[0])}
         End time: {XNAS.unix_to_datetime(time_frame[1])}"""
         logger.info(msg)

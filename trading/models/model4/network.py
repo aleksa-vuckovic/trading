@@ -2,9 +2,9 @@ import torch
 import torchinfo
 import config
 from torch import Tensor
-from ...utils.common import Interval
+from .trading.utils.common import Interval
 from ..abstract import AbstractModel, ModelConfig, OPEN_I, HIGH_I, LOW_I, CLOSE_I
-from ..utils import get_moving_average, get_time_relativized, check_tensors, check_tensor
+from trading.utils import get_moving_average, get_time_relativized, check_tensors, check_tensor
 
 INPUT_FEATURES = 'input_features'
 MVG_WINDOW = 'mvg_window'

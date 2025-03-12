@@ -1,7 +1,7 @@
 from pathlib import Path
 from trading.models.abstract import DataConfig
-from trading.utils.common import Interval
-from trading.utils.dateutils import TimingConfig, XNAS
+from trading.core.interval import Interval
+from trading.core.work_calendar import TimingConfig, XNAS
 
 class generator:
     data_config = DataConfig({

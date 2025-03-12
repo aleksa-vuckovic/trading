@@ -1,0 +1,330 @@
+#2
+from __future__ import annotations
+import calendar
+from zoneinfo import ZoneInfo
+from datetime import datetime, timedelta
+from base.algos import binary_search, BinarySearchEdge
+from base.classes import equatable
+from base import dates
+from base.serialization import serializable
+from trading.core import Interval
+
+class WorkCalendar:
+    """
+    A class for working with interval timestamps and time.
+    All methods that accept time arguments accept either unix timestamps as a float or int,
+    OR a datetime, in which case the datetime must be in the calendar's timezone!
+        A datetime not in the calendar's timezone can produce invalid results.
+    Because intervals are consistently considered open at the start and closed at the end, in all methods
+    the time 00:00 is (and should be) considered to belong to the previous day, i.e. to be the last moment of the previous day.
+    """
+    cache: dict[Interval, list[datetime]]
+    def __init__(self, tz: ZoneInfo):
+        self.tz = tz
+        self.cache = {}
+    #region Basics
+    def str_to_datetime(self, time_string: str, format: str = "%Y-%m-%d %H:%M:%S") -> datetime:
+        return dates.str_to_datetime(time_string, format, tz=self.tz)
+    def str_to_unix(self, time_string: str, format: str = "%Y-%m-%d %H:%M:%S") -> float:
+        return dates.str_to_unix(time_string, format, tz=self.tz)
+    def unix_to_datetime(self, unix: float|int) -> datetime:
+        return dates.unix_to_datetime(unix, tz=self.tz)
+    def datetime_to_unix(self, time:datetime) -> float:
+        return dates.datetime_to_unix(time)
+    def localize(self, time: datetime) -> datetime:
+        return dates.localize(time, tz=self.tz)
+    def to_zero(self, time: datetime|float|int) -> datetime|float:
+        return dates.to_zero(time, tz=self.tz)
+    def now(self) -> datetime:
+        return dates.now(self.tz)
+    def nudge(self, time: datetime|float|int) -> datetime|float:
+        if not isinstance(time, datetime): return self.nudge(self.unix_to_datetime(time)).timestamp()
+        if time == dates.to_zero(time): return time - timedelta(microseconds=1)
+        return time
+    #endregion
+
+    #region Abstract
+    # These are the methods that should be implemented in a derived class.
+    def is_workday(self, time: datetime|float|int) -> bool:
+        raise NotImplementedError()
+    def set_open(self, time: datetime|float|int) -> datetime|float:
+        """
+        Set to the opening hour of the given date.
+        Raise exception if there's not open on the given date i.e. it is not a workday (is_workday returns false)
+        """
+        raise NotImplementedError()
+    def set_close(self, time: datetime|float|int) -> datetime|float:
+        """
+        Set to the closing hour of the given date.
+        Raise exception if the given date is not a workday (is_workday returns false).
+        """
+        raise NotImplementedError()
+    def is_timestamp(self, time: datetime|float|int, interval: Interval) -> bool:
+        """
+        Returns true if the given time is a valid timestamp for the given interval.
+        """
+        raise NotImplementedError()
+    def get_next_timestamp(self, time: datetime|float|int, interval: Interval) -> datetime|float:
+        """
+        Get the next timestamp greater than the given time, for the given interval.
+        """
+        raise NotImplementedError()
+    #endregion
+
+    #region Utilities
+    def is_worktime(self, time: datetime|float|int) -> bool:
+        if not isinstance(time, datetime): return self.is_worktime(self.unix_to_datetime(time))
+        if not self.is_workday(time): return False
+        return time > self.set_open(time) and time <= self.set_close(time)
+    def month_end(self, time: datetime|float|int) -> datetime|float:
+        if not isinstance(time, datetime): return self.month_end(self.unix_to_datetime(time)).timestamp()
+        if time.day != 1 or time != dates.to_zero(time):
+            time = dates.to_zero(time.replace(day = calendar.monthrange(time.year, time.month)[1]) + timedelta(days=1))
+        while not self.is_workday(time): time -= timedelta(days=1)
+        return self.set_close(time)
+    def week_end(self, time: datetime) -> datetime:
+        if time.weekday() != 0 or time != dates.to_zero(time):
+            time = dates.to_zero(time + timedelta(days=6-time.weekday()))
+        while not self.is_workday(time): time -= timedelta(days=1)
+        return self.set_close(time)
+    #endregion
+
+    #region Caching
+    def _generate_timestamps(self, start_time: datetime, end_time: datetime, interval: Interval) -> list[datetime]:
+        result = []
+        cur = self.get_next_timestamp(start_time, interval)
+        while cur <= end_time:
+            result.append(cur)
+            cur = self.get_next_timestamp(cur, interval)
+        return result
+    def _get_cache(self, interval: Interval) -> list[datetime]:
+        if interval not in self.cache:
+            self.cache[interval] = []
+            span = timedelta(days=100)
+            i = self.now() - span; j = self.now() + span
+            while not self.cache[interval]:
+                self.cache[interval] = self._generate_timestamps(i, j, interval)
+                j = i; i -= span; span *= 2
+        return self.cache[interval]
+    def get_timestamps(self, start_time: datetime|float|int, end_time: datetime|float|int, interval: Interval) -> list[datetime]|list[float]:
+        if not isinstance(start_time, datetime):
+            return [it.timestamp() for it in self.get_timestamps(self.unix_to_datetime(start_time), self.unix_to_datetime(end_time), interval)]
+        cache = self._get_cache(interval)
+        # Expand to the left until a timestamp <= start_time is reached
+        if cache[0] > start_time:
+            span = timedelta(days=100)
+            i = start_time - span; j = cache[0]
+            while cache[0] > start_time:
+                prepend = self._generate_timestamps(i, j, interval)
+                if prepend[-1] == cache[0]: prepend.pop()
+                cache[:0] = prepend
+                j = i; i -= span; span *= 2
+        if cache[-1] < end_time:
+            span = timedelta(days=100)
+            i = cache[-1]; j = i + span
+            while cache[-1] < end_time:
+                cache.extend(self._generate_timestamps(i, j, interval))
+                i = j; j = i + span; span *= 2
+        start_index = binary_search(cache, start_time, edge=BinarySearchEdge.LOW)
+        end_index = binary_search(cache, end_time, edge=BinarySearchEdge.LOW)
+        return cache[start_index+1:end_index+1]
+    def add_intervals(self, time: datetime|float|int, interval: Interval, count: int) -> datetime|float|int:
+        if not count: return time
+        if not isinstance(time, datetime):
+            return self.add_intervals(self.unix_to_datetime(time), interval, count).timestamp()
+        cache = self._get_cache(interval)
+        span = timedelta(days=100)
+        while True:
+            index = binary_search(cache, time, edge=BinarySearchEdge.LOW)
+            if index < 0 or index+count<0:
+                # Expand to the left
+                j = cache[0]; i = j-span; span *= 2
+                prepend = self._generate_timestamps(i, j, interval)
+                if prepend and prepend[-1] == cache[0]: prepend.pop()
+                cache[:0] =  prepend
+            elif index>=len(cache)-1 or index+count>=len(cache):
+                # Expand to the right
+                i = cache[-1]; j = i+span; span *= 2
+                cache.extend(self._generate_timestamps(i, j, interval))
+            else:
+                return cache[index+count]
+    #endregion
+
+class HolidaySchedule:
+    """
+    Stores data about holidays, as a set of non working and semi working days.
+    Time zone independent.
+    """
+    off_days: set[str]
+    semi_days: set[str]
+    def __init__(self):
+        self.off_days = set()
+        self.semi_days = set()
+    def _format(self, time: datetime) -> str:
+        return time.strftime("%Y-%m-%d")
+    def add_off_day(self, time: datetime|str):
+        self.off_days.add(self._format(time) if isinstance(time, datetime) else time)
+    def add_off_days(self, *times: datetime|str):
+        for time in times: self.add_off_day(time)
+    def add_semi_day(self, time: datetime|str):
+        self.semi_days.add(self._format(time) if isinstance(time, datetime) else time)
+    def add_semi_days(self, *times: datetime):
+        for time in times: self.add_semi_day(time)
+    def is_off(self, time: datetime) -> bool:
+        return self._format(time) in self.off_days
+    def is_semi(self, time: datetime) -> bool:
+        return self._format(time) in self.semi_days
+
+class BasicWorkCalendar(WorkCalendar):
+    def __init__(
+        self,
+        *
+        tz: ZoneInfo,
+        open_hour: int,
+        open_minute: int = 0,
+        close_hour: int,
+        close_minute: int = 0,
+        semi_close_hour: int,
+        semi_close_minute: int = 0,
+        holidays: HolidaySchedule = HolidaySchedule()
+    ):
+        super().__init__(tz)
+        self.open_hour = open_hour
+        self.open_minute = open_minute
+        self.close_hour = close_hour
+        self.close_minute = close_minute
+        self.semi_close_hour = semi_close_hour
+        self.semi_close_minute = semi_close_minute
+        self.holidays = holidays
+    
+    #region Overrides
+    def is_workday(self, time: datetime|float|int) -> bool:
+        if not (isinstance(time, datetime)): return self.is_workday(self.unix_to_datetime(time))
+        time = self.nudge(time)
+        return time.weekday() < 5 and not self.holidays.is_off(time)
+    def set_open(self, time: datetime|float|int) -> datetime|float:
+        if not isinstance(time, datetime): return self.set_open(self.unix_to_datetime(time)).timestamp()
+        assert self.is_workday(time)
+        time = self.nudge(time)
+        return time.replace(hour=self.open_hour, minute=self.open_minute, second=0, microsecond=0)
+    def set_close(self, time: datetime|float|int) -> datetime|float:
+        if not isinstance(time, datetime): return self.set_close(self.unix_to_datetime(time)).timestamp()
+        assert self.is_workday(time)
+        time = self.nudge(time)
+        if self.holidays.is_semi(time):
+            close_hour = self.semi_close_hour
+            close_minute = self.semi_close_minute
+        else:
+            close_hour = self.close_hour
+            close_minute = self.close_minute
+        if close_hour == 0 and close_minute == 0: return dates.to_zero(time + timedelta(days=1))
+        return time.replace(hour=self.close_hour, minute=self.close_minute, second=0, microsecond=0)
+    def is_timestamp(self, time: datetime|float|int, interval: Interval) -> bool:
+        if not isinstance(time, datetime): return self.is_timestamp(time, self.unix_to_datetime(time))
+        if interval == Interval.L1: return time == self.month_end(time)
+        if interval == Interval.W1: return time == self.week_end(time)
+        if not self.is_workday(time): return False
+        if time == self.set_close(time): return True
+        if interval == Interval.D1: return False
+        return (time.timestamp() - self.set_open(time).timestamp())%interval.time() == 0
+    def get_next_timestamp(self, time: datetime|float|int, interval: Interval) -> datetime|float:
+        if not isinstance(time, datetime): return self.get_next_timestamp(self.unix_to_datetime(time), interval).timestamp()
+        if interval == Interval.L1:
+            timestamp = self.month_end(time)
+            if timestamp > time: return timestamp
+            else: return self.month_end(time+timedelta(days=1))
+        if interval == Interval.W1:
+            timestamp = self.week_end(time)
+            if timestamp > time: return timestamp
+            else: return self.week_end(time + timedelta(days=1))
+        if interval == Interval.D1:
+            timestamp = time
+            while not self.is_workday(timestamp): timestamp += timedelta(days=1)
+            timestamp = self.set_close(timestamp)
+            if timestamp > time: return timestamp
+            timestamp += timedelta(days=1)
+            while not self.is_workday(timestamp): timestamp += timedelta(days=1)
+            return self.set_close(timestamp)
+        #Intraday intervals
+        if self.is_worktime(time):
+            open = self.set_open(time)
+            close = self.set_close(time)
+            cnt = (time.timestamp() - open)//interval.time()
+            timestamp = self.unix_to_datetime(time.timestamp() + (cnt+1)*interval.time())
+            if timestamp <= close: return timestamp
+            if close > time: return close
+        if time > self.set_open(time): time += timedelta(days=1)
+        while not self.is_workday(time): time += timedelta(days=1)
+        time = self.set_open(time)
+        timestamp = self.unix_to_datetime(self.set_open(time).timestamp() + interval.time())
+        if timestamp <= self.set_close(time): return timestamp
+        return self.set_close(time)
+    #endregion
+
+
+@serializable(skip_keys=['interval', 'calendar'])
+@equatable(skip_keys=['interval', 'calendar'])
+class TimingConfig:
+    """
+    Represents a set of timing intervals or points during a single day.
+    The configuration is timezone and date independent, but:
+        To use get_next_time, the interval and calendar must be set.
+        To use __contains__, the calendar must be set.
+    When using datetimes in these methods, the datetime must match the calendar's timezone,
+    otherwise the behavior is undefined.
+    """
+    interval: Interval|None
+    calendar: WorkCalendar|None
+    def __init__(self, components: list[float|list[float]]):
+        self.components = components
+        self.interval = None
+        self.calendar = None
+    class Builder:
+        def __init__(self):
+            self.components = []
+        def at(self, hour: int = 9, minute: int = 30) -> TimingConfig.Builder:
+            self.components.append(float(hour*3600 + minute*60))
+            return self
+        class _Interval:
+            def __init__(self, builder: TimingConfig.Builder, start: float):
+                self._builder = builder
+                self._start = start
+            def until(self, hour: int = 16, minute: int = 0) -> TimingConfig.Builder:
+                self._builder.components.append([self._start, float(hour*3600+minute*60)])
+                return self._builder
+        def starting(self, hour: int = 9, minute: int = 30) -> TimingConfig.Builder._Interval:
+            return TimingConfig.Builder._Interval(self, float(hour*3600+minute*60))
+        def around(self, hour: int = 10, minute: int = 0, delta_minute: int = 10):
+            if not delta_minute: return self.at(hour = hour, minute = minute)
+            time = float(hour*3600 + minute*60)
+            self.components.append([time-delta_minute*60,time+delta_minute*60])
+            return self
+        def build(self) -> TimingConfig:
+            return TimingConfig(self.components)
+    def with_interval(self, interval: Interval) -> TimingConfig:
+        result = TimingConfig(self.components)
+        result.interval = interval
+        result.calendar = self.calendar
+        return result
+    def with_calendar(self, calendar: WorkCalendar) -> TimingConfig:
+        result = TimingConfig(self.components)
+        result.interval = self.interval
+        result.calendar = calendar
+        return result
+    def get_next_time(self, time: datetime|float|int) -> datetime|float:
+        if not self.interval or not self.calendar: raise Exception(f"Both the interval and calendar must be set before calling get_next_time.")
+        if not isinstance(time, datetime): return self.get_next_time(self.calendar.unix_to_datetime(time)).timestamp()
+        time = self.calendar.get_next_timestamp(time, self.interval)
+        while time not in self: time = self.calendar.get_next_timestamp(time, self.interval)
+        return time
+    def __contains__(self, time: datetime|float|int) -> bool:
+        if not self.calendar: raise Exception(f"Calendar must be set to call __contains__.")
+        if not isinstance(time, datetime): return self.calendar.unix_to_datetime(time) in self
+        if not self.calendar.is_worktime(time): return False
+        daysecs = time.hour*3600+time.minute*60+time.second+time.microsecond
+        for it in self.components:
+            if isinstance(it, list):
+                if daysecs > it[0] and daysecs <= it[1]: return True
+            else:
+                if daysecs == it: return True
+        return False
