@@ -1,35 +1,39 @@
 #2
+from typing import Sequence, override
 from base.caching import cached_series, Persistor
 from trading.core import Interval
 from trading.core.securities import PricingProvider, Security
 
-def interpolate_linear(raw_data: list[dict], timestamps: list[float], timestamp_field = 't') -> list[dict]:
+def interpolate_linear(raw_data: Sequence[dict], timestamps: Sequence[float], timestamp_field = 't') -> list[dict]:
+    """
+    Interpolates linearly the raw data fields for all missing timestamps.
+    The existing raw timestamps must match with the expected ones.
+    The interpolation is linear and based on timestamps.
+    The length of the returned list and its timestamps exactly match the timestamps argument.
+    """
+    t = timestamp_field
     if not raw_data:
         if timestamps: raise Exception(f"Can't interpolate with no data at all.")
         else: return []
-    result = []
-    raw_data.insert(0, raw_data[0]) # Pad to the left
-    if raw_data[-1][timestamp_field] < timestamps[-1]: # Pad to the right if necessary
-        raw_data.append({key:(value if key != timestamp_field else timestamps[-1]) for key,value in raw_data[-1].items()})
-    j = 0
-    for i in range(1,len(raw_data)):
-        fills = 0
-        while raw_data[i][timestamp_field] > timestamps[j]:
-            fills += 1
-            j += 1
-        assert raw_data[i][timestamp_field] == timestamps[j]
-        for r in range(fills+1):
-            factor = (r+1)/(fills+1)
-            timestamp = timestamps[j-fills+r]
-            result.append({
-                key: (raw_data[i-1][key]*(1-factor)+raw_data[i][key]*factor) if key != timestamp_field else timestamp
-                for key in raw_data[i]
-            })
-        j+=1
+    
+    result = [] if raw_data[0][t] == timestamps[0] else [{**raw_data[0], t: timestamps[0]}]
+    for entry in raw_data:
+        if entry[t] == timestamps[len(result)]:
+            result.append(entry)
+        else:
+            start = result[-1]
+            while entry[t] > timestamps[len(result)]:
+                factor = (timestamps[len(result)] - start[t])/(entry[t]-start[t])
+                result.append({
+                    key: (start[key]*(1-factor)+entry[key]*factor)
+                    for key in start
+                })
+            result.append(entry)
+    while len(result) < len(timestamps): result.append({**result[-1], t: timestamps[len(result)]})
     return result
 
 def merge_pricing(
-    data: list[dict],
+    data: Sequence[dict],
     unix_from: float,
     unix_to: float,
     interval: Interval,
@@ -60,11 +64,17 @@ def merge_pricing(
 class BasePricingProvider(PricingProvider):
     def __init__(
         self,
-        intervals: dict[Interval, Interval]
+        intervals: dict[Interval, Interval|None]
     ):
+        """
+        Args:
+            intervals: Determines which intervals are supported by this provider (keys), and if those intervals are calculated
+                based on a smaller one (value).
+        """
         self.intervals = intervals
-
-    def get_pricing(self, security, unix_from, unix_to, interval, *, return_quotes = ..., interpolate = False, max_fill_ratio = 1, **kwargs):
+    
+    @override
+    def get_pricing(self, security, unix_from, unix_to, interval, *, return_quotes = ['close'], interpolate = False, max_fill_ratio = 1, **kwargs):
         return_quotes = [it[0].lower() for it in return_quotes]
         data = self._get_pricing(security, unix_from, unix_to, interval, **kwargs)
         if interpolate:
@@ -75,8 +85,10 @@ class BasePricingProvider(PricingProvider):
             data = interpolate_linear(data, timestamps)
         return tuple([it[quote] for it in data] for quote in return_quotes)
 
-    def _get_pricing_key_fn(self, security: Security, interval: Interval) -> list[str]:
-        return [f"{security.exchange.mic}_{security.symbol}", interval.name]
+    @staticmethod
+    def _get_pricing_timestamp_fn(it: dict): return it['t']
+    def _get_pricing_key_fn(self, security: Security, interval: Interval) -> str:
+        return f"{security.exchange.mic}_{security.symbol}_{interval.name}"
     def _get_pricing_persistor_fn(self, security: Security, interval: Interval) -> Persistor:
         return self.get_pricing_persistor(security, interval)
     def _get_pricing_time_step_fn(self, security: Security, interval: Interval) -> float:
@@ -93,8 +105,7 @@ class BasePricingProvider(PricingProvider):
         return security.exchange.calendar.get_next_timestamp(fetch, interval) < now
     @cached_series(
         unix_args=(2,3),
-        series_field=None,
-        timestamp_field='t',
+        timestamp_fn=_get_pricing_timestamp_fn,
         key_fn=_get_pricing_key_fn,
         persistor_fn=_get_pricing_persistor_fn,
         time_step_fn=_get_pricing_time_step_fn,
@@ -114,16 +125,13 @@ class BasePricingProvider(PricingProvider):
         base_interval = self.intervals[interval]
         if not base_interval or unix_from <= self.get_interval_start(base_interval):
             return self.get_pricing_raw(security, unix_from, unix_to, interval, **kwargs)
-        base_interval = self.intervals[interval]
-        data = self._get_pricing(security, security.exchange.calendar.add_intervals(unix_from, -1, interval), unix_to, base_interval, **kwargs)
+        data = self._get_pricing(security, security.exchange.calendar.add_intervals(unix_from, interval, -1), unix_to, base_interval, **kwargs)
         return merge_pricing(data, unix_from, unix_to, interval, security)
 
-    def get_interval_start(self, interval: Interval) -> float:
-        raise NotImplementedError()
-    def get_pricing_persistor(self, security: Security, interval: Interval) -> Persistor:
-        raise NotImplementedError()
-    def get_pricing_delay(self, security: Security, interval: Interval) -> float:
-        raise NotImplementedError()
+    #region Abstract
+    def get_interval_start(self, interval: Interval) -> float: raise NotImplementedError()
+    def get_pricing_persistor(self, security: Security, interval: Interval) -> Persistor: raise NotImplementedError()
+    def get_pricing_delay(self, security: Security, interval: Interval) -> float: raise NotImplementedError()
     def get_pricing_raw(
         self,
         security: Security,
@@ -137,3 +145,4 @@ class BasePricingProvider(PricingProvider):
         The dict keys should be tohlcv.
         """
         raise NotImplementedError()
+    #endregion

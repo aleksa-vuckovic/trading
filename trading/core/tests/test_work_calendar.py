@@ -40,7 +40,6 @@ class TestTimingConfig(unittest.TestCase):
             result.append(cur)
         self.assertEqual(expect, result)
 
-    @unittest.skip('Takes too long')
     def test_add_intervals(self):
         dates = [
             '2025-02-21 13:34:12', '2025-02-21 16:00:00', '2025-02-21 18:23:23',
@@ -56,10 +55,9 @@ class TestTimingConfig(unittest.TestCase):
                     timestamps = calendar.get_timestamps(time, unix_time, interval) if count < 0 else calendar.get_timestamps(unix_time, time, interval)
                     self.assertEqual(len(timestamps), abs(count), f"Time {calendar.unix_to_datetime(unix_time)} count {count} interval {interval}")
 
-@unittest.skip('Abstract test class')
 class TestCalendar(unittest.TestCase):
     def get_calendar(self) -> WorkCalendar:
-        raise NotImplementedError()
+        return calendar
     def get_next_timestamp_examples(self, interval: Interval) -> list[tuple[str,str]]:
         return []
     def get_timestamps_examples(self, interval: Interval) -> list[tuple[str, str, list[str]]]:

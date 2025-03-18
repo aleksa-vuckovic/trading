@@ -1,8 +1,9 @@
 import json
 import logging
 import time
+from typing import override
 from datetime import timedelta
-from trading.core import work_calendar
+from base import dates
 from trading.utils import httputils
 from trading.core.interval import Interval
 from trading.securities.utils import combine_series, filter_by_timestamp
@@ -19,7 +20,6 @@ _MODULE: str = __name__.split(".")[-1]
 class WallStreetJournal(BasePricingProvider):
     def __init__(self, use_files: bool = False):
         self.pricing_persistor = FilePersistor(CACHE_ROOT/_MODULE/"pricing") if use_files else SqlitePersistor(DB_PATH, f"{_MODULE}_pricing")
-        self.interpolated_pricing_persistor = FilePersistor(CACHE_ROOT/_MODULE/"interpolated_pricing") if use_files else SqlitePersistor(DB_PATH, f"{_MODULE}_interpolated_pricing")
 
     @httputils.backup_timeout()
     def _fetch_pricing(self, key: str, step: str, time_frame: str, **kwargs):
@@ -68,13 +68,13 @@ class WallStreetJournal(BasePricingProvider):
 
     def _fix_timestamps(self, timestamps: list[float|int|None], interval: Interval, security: Security) -> list[float|None]:
         timestamps = [it//1000 if it else None for it in timestamps]
-        result = []
+        result: list[float|None] = []
         for it in timestamps:
             if not it:
                 result.append(None)
             elif interval >= Interval.D1:
-                date = work_calendar.unix_to_datetime(it, tz=work_calendar.UTC)
-                if date != work_calendar.to_zero(date):
+                date = dates.unix_to_datetime(it, tz=dates.UTC)
+                if date != dates.to_zero(date):
                     logger.warning(f"Unexpected UTC timestamp {date}. Skipping.")
                     result.append(None)
                 else:
@@ -90,17 +90,20 @@ class WallStreetJournal(BasePricingProvider):
                     result.append(None)
                 else:
                     result.append(it)
+        return result
 
+    @override
     def get_interval_start(self, interval):
         if interval == Interval.D1: return time.time() - 365*24*3600
         if interval < Interval.D1: return time.time() - 5*25*3600
         raise Exception(f"Unsupported interval {interval}.")
+    @override
     def get_pricing_persistor(self, security, interval):
         return self.pricing_persistor
-    def get_interpolated_pricing_persistor(self, security, interval):
-        return self.interpolated_pricing_persistor
+    @override
     def get_pricing_delay(self, security, interval):
         return 120
+    @override
     def get_pricing_raw(self, security, unix_from, unix_to, interval, **kwargs):
         if interval >= Interval.H1: raise Exception(f"Interval {interval} not supported for wsj.")
         data = self._fetch_pricing(f"STOCK/US/XNAS/{security.symbol}", self._get_interval(interval), 'D5', **kwargs)

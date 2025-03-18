@@ -1,8 +1,15 @@
 import logging
+from typing import Literal, overload
 logger = logging.getLogger(__name__)
 
+
+@overload
+def combine_series(data: dict, *, reduce_keys: bool=..., must_be_there: list[str]=..., must_be_truthy: list[str]|bool=..., as_list: Literal[False]=...) -> list[dict]: ...
+@overload
+def combine_series(data: dict, *, reduce_keys: bool=..., must_be_there: list[str]=..., must_be_truthy: list[str]|bool=..., as_list: Literal[True]) -> list[list]: ...
 def combine_series(
     data: dict,
+    *,
     reduce_keys: bool = True,
     must_be_there: list[str] = ['t', 'o', 'h', 'l', 'c', 'v'],
     must_be_truthy: list[str]|bool = True,
@@ -27,10 +34,15 @@ def combine_series(
     if as_list: return [[data[key][i] for key in must_be_there] for i in range(length) if is_ok(i)]
     else: return [{key: data[key][i] for key in keys} for i in range(length) if is_ok(i)]
 
-def filter_by_timestamp(data: list[dict|list], unix_from: float, unix_to: float, timestamp_field: str | int = 't') -> list[dict]:
-    data = sorted(data, lambda it: it[timestamp_field])
-    ret = []
-    for i in range(len(ret)):
+
+@overload
+def filter_by_timestamp(data: list[dict], unix_from: float, unix_to: float, timestamp_field: str=...) -> list[dict]: ...
+@overload
+def filter_by_timestamp(data: list[list], unix_from: float, unix_to: float, timestamp_field: int) -> list[list]: ...
+def filter_by_timestamp(data: list, unix_from: float, unix_to: float, timestamp_field: str|int = 't') -> list:
+    data = sorted(data, key=lambda it: it[timestamp_field])
+    ret: list = []
+    for i in range(len(data)):
         if data[i][timestamp_field] <= unix_from: continue
         if ret and ret[-1][timestamp_field] == data[i][timestamp_field]: continue
         if data[i][timestamp_field] > unix_to: break

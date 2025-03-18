@@ -8,7 +8,8 @@ logs*
 /main.py
 examples/
 examples_*/
-/ttest.py
+/ttest*.py
+.vscode
 **/*loop_state.json
 config.py
 checkpoint.pth

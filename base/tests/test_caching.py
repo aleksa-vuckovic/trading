@@ -3,6 +3,7 @@ import time
 import shutil
 import json
 import math
+from typing import Any
 from enum import Enum
 from pathlib import Path
 from base.caching import cached_scalar, cached_series, FilePersistor, SqlitePersistor, Persistor
@@ -25,10 +26,10 @@ class TestCaching(unittest.TestCase):
     def _test_persistor_multi(self, persistor: Persistor):
         self.assertEqual(0, len(list(persistor.keys())))
         data = "This is some data."
-        key = ['a', 'b', '123']
+        key = "a/b/123"
         persistor.persist(key, data)
         self.assertEqual(data, persistor.read(key))
-        key2 = ['a', 'c', '123']
+        key2 = "a/c/123"
         persistor.persist(key2, data)
         self.assertEqual(data, persistor.read(key2))
         self.assertEqual(sorted([key, key2]), sorted(persistor.keys()))
@@ -37,9 +38,9 @@ class TestCaching(unittest.TestCase):
     def _test_persistor_none(self, persistor: Persistor):
         self.assertEqual(0, len(list(persistor.keys())))
         data = "Some data."
-        persistor.persist([], data)
-        self.assertEqual([[]], list(persistor.keys()))
-        self.assertEqual(data, persistor.read([]))
+        persistor.persist("", data)
+        self.assertEqual([""], list(persistor.keys()))
+        self.assertEqual(data, persistor.read(""))
 
     def test_file_persistor_multi(self):
         self._test_persistor_multi(FilePersistor(TEST_DATA))
@@ -52,14 +53,16 @@ class TestCaching(unittest.TestCase):
     
     def _test_cached_series_decorator_simple(self, start: int, end: int, step: int):
         invocations = 0
+        def _timestamp_fn(it: dict) -> float: return it['t']
+        def _key_fn() -> str: return ""
         @cached_series(
             unix_args=(0,1),
-            timestamp_field="t",
-            key_fn=lambda: [],
+            timestamp_fn = _timestamp_fn,
+            key_fn=_key_fn,
             persistor_fn=FilePersistor(TEST_DATA),
             time_step_fn=step
         )
-        def get_series(unix_from: float, unix_to: float):
+        def get_series(unix_from: float, unix_to: float) -> list[dict]:
             nonlocal invocations
             invocations += 1
             return [{"t": it} for it in range(int(unix_from), int(unix_to)+1) if it >unix_from and it <=unix_to ]
@@ -78,26 +81,20 @@ class TestCaching(unittest.TestCase):
     
     def test_cached_series_decorator(self):
         invocations = 0
-        def get_series_key_fn(type: str) -> list[str]:
-            return [type]
-        def get_series_time_step_fn(type: str) -> float:
-            return 10 if type == 'type10' else 30
+        def get_series_timestamp_fn(it: dict) -> float: return it['time']
+        def get_series_key_fn(type: str) -> str: return type
+        def get_series_time_step_fn(type: str) -> float: return 10 if type == 'type10' else 30
         @cached_series(
             unix_args=(0,"unix_to"),
-            series_field="series",
-            timestamp_field="time",
+            timestamp_fn=get_series_timestamp_fn,
             key_fn=get_series_key_fn,
             persistor_fn=FilePersistor(TEST_DATA),
-            time_step_fn=get_series_time_step_fn,
-            return_series_only=True
+            time_step_fn=get_series_time_step_fn
         )
-        def get_series(unix_from: float, *, unix_to: float, type: str):
+        def get_series(unix_from: float, *, unix_to: float, type: str) -> list[dict]:
             nonlocal invocations
             invocations += 1
-            return {
-                "name": type,
-                "series": [{"time": float(it), "data": it} for it in range(math.floor(unix_from)+1, math.floor(unix_to)+1 )]
-            }
+            return [{"time": float(it), "data": it} for it in range(math.floor(unix_from)+1, math.floor(unix_to)+1 )]
         
         test1 = get_series(16, unix_to=30, type="type10")
         test2 = get_series(16, unix_to=30, type="other")
@@ -114,19 +111,18 @@ class TestCaching(unittest.TestCase):
     def test_cached_series_decorator_live(self):
         invocations = 0
         time_step = 24*3600
-        def get_series_key_fn() -> list[str]:
-            return []
+        def timestamp_fn(it: dict) -> float: return it['time']
+        def get_series_key_fn() -> str: return ""
         @cached_series(
             unix_args=(0,1),
-            series_field=None,
-            timestamp_field="time",
+            timestamp_fn=timestamp_fn,
             key_fn=get_series_key_fn,
             persistor_fn=FilePersistor(TEST_DATA),
             time_step_fn= time_step,
             live_delay_fn=0,
             should_refresh_fn=1
         )
-        def get_series(unix_from: float,  unix_to: float):
+        def get_series(unix_from: float,  unix_to: float) -> list[dict]:
             nonlocal invocations
             invocations += 1
             return [{"time": unix_from+0.1}, {"time": unix_to-0.1}]
@@ -154,12 +150,11 @@ class TestCaching(unittest.TestCase):
     def test_cached_series_decorator_live_delay(self):
         time_step = 24*3600
         now = time.time()
-        def get_series_key_fn() -> list[str]:
-            return []
+        def get_series_timestamp_fn(it: dict): return it['time']
+        def get_series_key_fn() -> str: return ""
         @cached_series(
             unix_args=(0,1),
-            series_field=None,
-            timestamp_field="time",
+            timestamp_fn=get_series_timestamp_fn,
             key_fn=get_series_key_fn,
             persistor_fn=FilePersistor(TEST_DATA),
             time_step_fn= time_step,
@@ -185,14 +180,12 @@ class TestCaching(unittest.TestCase):
     def test_cached_series_decorator_live_refresh(self):
         now = time.time()
         invocations = 0
-        def get_series_key_fn() -> list[str]:
-            return []
-        def get_series_refresh_fn(fetch: float, now: float) -> bool:
-            return now-fetch > 1
+        def get_series_timestamp_fn(it: dict) -> float: return it['time']
+        def get_series_key_fn() -> str: return ""
+        def get_series_refresh_fn(fetch: float, now: float) -> bool: return now-fetch > 1
         @cached_series(
             unix_args=(0,1),
-            series_field=None,
-            timestamp_field="time",
+            timestamp_fn=get_series_timestamp_fn,
             key_fn=get_series_key_fn,
             persistor_fn=FilePersistor(TEST_DATA),
             time_step_fn= 1000,
@@ -220,13 +213,12 @@ class TestCaching(unittest.TestCase):
         invocations = 0
         class Test(Enum):
             A = 'aa'
-        def get_scalar_key_fn(name: str, typ: Test) -> list[str]:
-            return [name, typ.name]
+        def get_scalar_key_fn(name: str, typ: Test) -> str: return f"{name}/{typ.name}" # type: ignore
         @cached_scalar(
             key_fn=get_scalar_key_fn,
             persistor_fn=FilePersistor(TEST_DATA)
         )
-        def get_scalar(name: str, typ: Test) -> dict:
+        def get_scalar(name: str, typ: Test) -> dict: # type: ignore
             nonlocal invocations
             invocations += 1
             return {'name': name, 'typ': typ.name}
@@ -236,12 +228,10 @@ class TestCaching(unittest.TestCase):
         self.assertEqual(data, get_scalar('test', Test.A))
         self.assertEqual(1, invocations)
 
-        def get_scalar_key_fn(name: str) -> list[str]:
-            return [f"test-{name}"]
+        def get_scalar_key_fn(name: str) -> str: return f"test-{name}"
         @cached_scalar(
             key_fn=get_scalar_key_fn,
             persistor_fn=FilePersistor(TEST_DATA)
         )
-        def get_scalar(name: str):
-            return name
+        def get_scalar(name: str) -> str: return name
         self.assertEqual('test', get_scalar('test'))

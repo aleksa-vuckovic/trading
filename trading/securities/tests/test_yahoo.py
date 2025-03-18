@@ -3,7 +3,7 @@ import config
 from trading.core.interval import Interval
 from trading.securities import Yahoo, Nasdaq
 
-security = Nasdaq.get_security('NVDA')
+security = Nasdaq.instance.get_security('NVDA')
 calendar = Nasdaq.instance.calendar
 provider = Yahoo()
 

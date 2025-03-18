@@ -1,5 +1,6 @@
 #1
 from __future__ import annotations
+from typing import Sequence
 from enum import Enum, auto
 from trading.core.interval import Interval
 from trading.core.work_calendar import WorkCalendar
@@ -18,9 +19,9 @@ class Exchange:
     def get_securities(self) -> list[Security]:
         raise NotImplementedError()
     
-    def get_security(self, symbol: str) -> Security|None:
+    def get_security(self, symbol: str) -> Security:
         sec = [it for it in self.get_securities() if it.symbol == symbol]
-        return sec[0] if sec else None
+        return sec[0]
 
 class SecurityType(Enum):
     STOCK = auto()
@@ -44,6 +45,12 @@ class Security:
         raise NotImplementedError()
 
 class PricingProvider:
+    """
+    Pricing providers will:
+        1. Raise an exception if info for a given security is not available.
+        2. Raise an exception if the interval is not supported.
+        3. Ignore interval parts that are unavailable.
+    """
     def get_pricing(
         self,
         security: Security,
@@ -51,9 +58,9 @@ class PricingProvider:
         unix_to: float,
         interval: Interval,
         *,
-        return_quotes: list[str] = ['close'],
-        interpolate: bool = False,
-        max_fill_ratio: float = 1,
+        return_quotes: list[str],
+        interpolate: bool,
+        max_fill_ratio: float,
         **kwargs
     ) -> tuple[list[float], ...]:
         """
@@ -66,17 +73,29 @@ class PricingProvider:
         raise NotImplementedError()
     
 class NewsProvider:
+    """
+    News providers will:
+        1. Raise an exception if info for a given security is not available.
+        2. Ignore interval parts that are unavailable.
+    """
     def get_news(
         self,
         security: Security,
         unix_from: float,
         unix_to: float,
         **kwargs
-    ) -> list[str]:
+    ) -> Sequence[dict]:
         raise NotImplementedError()
+    
+    def get_titles(self, security: Security, unix_from: float, unix_to: float, **kwargs) -> Sequence[str]: raise NotImplementedError()
 
 class DataProvider:
-    def get_outstanding_parts(self, security: Security) -> int:
+    """
+    Data providers will:
+        1. Raise an exception if info for a given security is not available.
+        2. Raise an exception if the particular piece of information is not available.
+    """
+    def get_outstanding_parts(self, security: Security) -> float:
         raise NotImplementedError()
     def get_summary(self, security: Security) -> str:
         raise NotImplementedError()

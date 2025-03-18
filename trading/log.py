@@ -4,7 +4,7 @@ from logging.handlers import RotatingFileHandler
 from datetime import datetime
 from pathlib import Path
 
-def configure_logging(testing: bool = False, console: bool = False, folder: Path = Path("./logs")):
+def configure_logging(testing: bool = False, console: bool = False, folder: Path = Path("./logs/main")):
     date = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
     logroot = folder/"test" if testing else folder/"prod"
     logbin = folder/"bin"

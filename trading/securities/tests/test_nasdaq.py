@@ -1,6 +1,9 @@
+from typing import override
 import unittest
+from trading.core import interval
 from trading.securities import NasdaqSecurity, NasdaqMarket, Nasdaq, SecurityType
 from trading.core.interval import Interval
+from trading.core.work_calendar import WorkCalendar
 from trading.core.tests.test_work_calendar import TestCalendar
 
 class TestNasdaq(unittest.TestCase):
@@ -17,10 +20,11 @@ class TestNasdaq(unittest.TestCase):
         self.assertIs(Nasdaq.instance, nvda.exchange)
 
 class TestNasdaqCalendar(TestCalendar):
-    def get_calendar(self):
+    def get_calendar(self) -> WorkCalendar:
         return Nasdaq.instance.calendar
     
-    def get_next_timestamp_examples(self, interval):
+    @override
+    def get_next_timestamp_examples(self, interval: Interval) -> list[tuple[str,str]]:
         if interval == Interval.L1: return [
             ('2025-01-05 12:12:12', '2025-01-31 16:00:00'),
             ('2025-01-31 16:00:00', '2025-02-28 16:00:00'),
@@ -70,7 +74,8 @@ class TestNasdaqCalendar(TestCalendar):
         ]
         return []
 
-    def get_timestamps_examples(self, interval):
+    @override
+    def get_timestamps_examples(self, interval: Interval) -> list[tuple[str, str, list[str]]]:
         if interval == Interval.L1: return [
             ('2024-11-25 16:00:00', '2025-05-02 16:00:00', [
                 '2024-11-29 13:00:00', '2024-12-31 16:00:00', '2025-01-31 16:00:00',
@@ -113,4 +118,5 @@ class TestNasdaqCalendar(TestCalendar):
                 '2025-03-03 09:35:00', '2025-03-03 09:40:00'  
             ])
         ]
+        return []
     

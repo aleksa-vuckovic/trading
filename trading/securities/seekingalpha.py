@@ -1,33 +1,20 @@
 import json
 import logging
+from typing import override
 from datetime import datetime
-from pathlib import Path
 from trading.utils import httputils
-from base.caching import cached_series, CACHE_ROOT, DB_PATH, Persistor, FilePersistor, SqlitePersistor
+from base.caching import CACHE_ROOT, DB_PATH, Persistor, FilePersistor, SqlitePersistor
 from trading.securities.utils import filter_by_timestamp
-from trading.core.securities import Security, NewsProvider
+from trading.core.securities import Security
+from trading.core.news_provider import BaseNewsProvider
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
 
-class SeekingAlpha(NewsProvider):
+class SeekingAlpha(BaseNewsProvider):
     def __init__(self, use_file: bool = False):
         self.news_persistor = FilePersistor(CACHE_ROOT/_MODULE/'news') if use_file else SqlitePersistor(DB_PATH, f"{_MODULE}_news")
 
-    def _get_news_key_fn(self, security: Security) -> list[str]:
-        return [security.symbol.lower()]
-    def _get_news_persistor_fn(self, security: Security) -> Persistor:
-        return self.news_persistor
-    @cached_series(
-        unix_args=(2,3),
-        series_field=None,
-        timestamp_field="unix_time",
-        key_fn=_get_news_key_fn,
-        persistor_fn=_get_news_persistor_fn,
-        time_step_fn=100000000,
-        live_delay_fn=3600,
-        should_refresh_fn=12*3600
-    )
     @httputils.backup_timeout()
     def _fetch_news(self, symbol: str, unix_from: float, unix_to: float) -> list[dict]:
         url = f"https://seekingalpha.com/api/v3/symbols/{symbol}/news?filter[since]={int(unix_from-1000)}&filter[until]={int(unix_to+1000)}&id={symbol}&include=author&isMounting=true&page[size]=50&page[number]="
@@ -51,5 +38,12 @@ class SeekingAlpha(NewsProvider):
             i += 1
         ret = filter_by_timestamp(ret, unix_from=unix_from, unix_to=unix_to, timestamp_field='unix_time')
         return sorted(ret, key = lambda it: it['unix_time'])
-    def get_news(self, security, unix_from, unix_to, **kwargs):
-        return [it['title'] for it in self._fetch_news(security.symbol, unix_from, unix_to, **kwargs)]
+    
+    #region Overrides
+    @override
+    def get_news_persistor(self, security: Security) -> Persistor:
+        return self.news_persistor
+    @override
+    def get_news_raw(self, security: Security, unix_from: float, unix_to: float, **kwargs) -> list[dict]:
+        return self._fetch_news(security.symbol, unix_from, unix_to, **kwargs)
+    #endregion

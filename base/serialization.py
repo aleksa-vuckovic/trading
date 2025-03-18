@@ -1,6 +1,8 @@
 #2
 import json
+from typing import Any, Callable, override
 from enum import Enum
+from datetime import datetime
 from base.classes import get_full_classname, get_class_by_full_classname
 
 _TYPE = '$$type'
@@ -9,22 +11,27 @@ _SKIP_KEYS = '_serializable_skip_keys'
 class Serializer:
     def serialize(self, obj: object) -> str:
         raise NotImplementedError()
-    def deserialize(self, data: str) -> object:
+    def deserialize(self, data: str, assert_type: type|None = None) -> Any:
         raise NotImplementedError()
 
 class BasicSerializer(Serializer):
+    @override
     def serialize(self, obj: object) -> str:
         return json.dumps(obj)
-    def deserialize(self, data):
-        return json.loads(data)
+    @override
+    def deserialize(self, data, assert_type: type|None = None):
+        ret = json.loads(data)
+        if assert_type: assert isinstance(ret, assert_type)
+        return ret
 
-def serializable(skip_keys: list[str] = []):
-    def decorate(cls):
+def serializable[T: type](skip_keys: list[str] = []) -> Callable[[T], T]:
+    def decorate(cls: T) -> T:
+        create: Callable[[], object]
         try:
-            cls()
-            create = cls
+            cls() # type: ignore
+            create = cls # type: ignore
         except TypeError:
-            create = lambda: object.__new__(cls)
+            create = lambda: object.__new__(cls) # type: ignore
         skips = skip_keys[:]
         for base in cls.__bases__:
             if hasattr(base, _SKIP_KEYS): skips.extend(getattr(base, _SKIP_KEYS))
@@ -37,53 +44,44 @@ def serializable(skip_keys: list[str] = []):
                 return {key:self.__dict__[key] for key in self.__dict__ if key not in skips}
         def from_dict(obj:dict) -> object:
             result = create()
-            result.__dict__.update(obj)
+            result.__dict__.update(obj) # type: ignore
             return result
-        cls.to_dict = to_dict
-        cls.from_dict = from_dict
+        cls.to_dict = to_dict # type: ignore
+        cls.from_dict = from_dict # type: ignore
         return cls
     return decorate
-def _is_serializable(obj_or_cls: object) -> bool:
-    hasattr(obj_or_cls, '_jsonutils_serializable')
-
-def _serialize_default(obj: object, typed:bool) -> dict:
-    if hasattr(obj, 'to_dict'): result = obj.to_dict()
-    elif isinstance(obj, Enum): result = {'name': obj.name}
-    elif type(obj).__module__ == 'builtins': result = {'value': repr(obj)}
-    elif _is_serializable(obj): result = obj.__dict__
-    else: raise Exception(f"Can't serialize {obj} of type {type(obj)}.")
-    if typed: return {_TYPE: get_full_classname(obj), **result}
-    else: return result
-def serialize(obj: object, typed:bool = True, indent:int|str|None=None) -> str:
-    return json.dumps(obj, default=lambda it: _serialize_default(it,typed), indent=indent)
-
-def deserialize(data: str) -> str:
-    return _deserialize(json.loads(data))
-def _deserialize(obj: dict|list|str|int|float|bool|None) -> object:
-    if obj is None: return None
-    if isinstance(obj, (bool, int, float, str)): return obj
-    if isinstance(obj, list):
-        return [_deserialize(it) for it in obj]
-    if isinstance(obj, dict):
-        for key in obj:
-            if key == _TYPE: continue
-            obj[key] = _deserialize(obj[key])
-        if _TYPE not in obj: return obj
-        cls = get_class_by_full_classname(obj[_TYPE])
-        del obj[_TYPE]
-        if hasattr(cls, 'from_dict'): return cls.from_dict(obj)
-        if issubclass(cls, Enum): return cls[obj['name']]
-        if cls.__module__ == 'builtins': return eval(obj['value'])
-        if _is_serializable(cls):
-            instance = cls()
-            instance.__dict__.update(obj)
-            return instance
-        raise Exception(f"Can't deserialize {obj}.")
     
 class TypedSerializer(Serializer):
-    def serialize(self, obj):
-        return serialize(obj)
-    def deserialize(self, data):
-        return deserialize(data)
+    def _serialize_default(self, obj: object, typed:bool) -> dict:
+        if hasattr(obj, 'to_dict'): result = obj.to_dict() # type: ignore
+        elif isinstance(obj, Enum): result = {'name': obj.name}
+        elif type(obj).__module__ == 'builtins': result = {'value': repr(obj)}
+        else: raise Exception(f"Can't serialize {obj} of type {type(obj)}.")
+        if typed: return {_TYPE: get_full_classname(obj), **result}
+        else: return result
+    @override
+    def serialize(self, obj: object, typed:bool = True, indent:int|str|None=None) -> str:
+        return json.dumps(obj, default=lambda it: self._serialize_default(it,typed), indent=indent)
+    def _deserialize(self, obj: dict|list|str|int|float|bool|None) -> object:
+        if obj is None: return None
+        if isinstance(obj, (bool, int, float, str)): return obj
+        if isinstance(obj, list):
+            return [self._deserialize(it) for it in obj]
+        if isinstance(obj, dict):
+            for key in obj:
+                if key == _TYPE: continue
+                obj[key] = self._deserialize(obj[key])
+            if _TYPE not in obj: return obj
+            cls = get_class_by_full_classname(obj[_TYPE])
+            del obj[_TYPE]
+            if hasattr(cls, 'from_dict'): return cls.from_dict(obj)
+            if issubclass(cls, Enum): return cls[obj['name']]
+            if cls.__module__ == 'builtins': return eval(obj['value'])
+            raise Exception(f"Can't deserialize {obj}.")
+    @override
+    def deserialize(self, data: str, assert_type: type|None = None) -> Any:
+        ret = self._deserialize(json.loads(data))
+        if assert_type: assert isinstance(ret, assert_type)
+        return ret
     
 serializer = TypedSerializer()

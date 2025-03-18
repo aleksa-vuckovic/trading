@@ -39,10 +39,6 @@ class Interval(Enum):
         3. The time range is closed at the start and open at the end.
     """
 
-    def refresh_time(self) -> float:
-        return 7*24*3600
-        #return self.time()
-        #raise ValueError(f"Unknown interval {self}.")
     def time(self) -> float:
         if self == Interval.L1: return 31*24*3600
         if self == Interval.W1: return 7*24*3600
@@ -51,13 +47,13 @@ class Interval(Enum):
         if self == Interval.M15: return 900
         if self == Interval.M5: return 300
         raise ValueError(f"Unknown interval {self}.")
-    def __lt__(self, other):
+    def __lt__(self, other: Interval):
         return self.time() < other.time()
-    def __le__(self, other):
+    def __le__(self, other: Interval):
         return self.time() <= other.time()
-    def __gt__(self, other):
+    def __gt__(self, other: Interval):
         return self.time() > other.time()
-    def __ge__(self, other):
+    def __ge__(self, other: Interval):
         return self.time() >= other.time()
     
     ascending: list[Interval]

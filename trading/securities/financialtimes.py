@@ -2,6 +2,7 @@ import json
 import logging
 import time
 import math
+from typing import override
 from trading.utils import httputils 
 from trading.core.interval import Interval
 from trading.securities.utils import combine_series, filter_by_timestamp
@@ -42,8 +43,8 @@ class FinancialTimes(BasePricingProvider):
     def _get_identifier(self, security: Security) -> str:
         return f"{security.symbol}:{_get_exchange(security)}"
     
-    def _get_info_key_fn(self, security: Security) -> list[str]:
-        return [f"{security.exchange.mic}_{security.symbol}"]
+    def _get_info_key_fn(self, security: Security) -> str:
+        return f"{security.exchange.mic}_{security.symbol}"
     def _get_info_persistor_fn(self, security: Security) -> Persistor:
         return self.info_persistor
     @cached_scalar(
@@ -96,8 +97,8 @@ class FinancialTimes(BasePricingProvider):
         resp = httputils.post_as_browser(url, request)
         return json.loads(resp.text)
     
-    def _fix_timestamps(self, dates: list[str], interval: Interval, security: Security) -> list[float]:
-        timestamps = [security.exchange.calendar.str_to_unix(it, format="%Y-%m-%dT%H:%M:%S")//10*10 if it else None for it in dates]
+    def _fix_timestamps(self, dates: list[float], interval: Interval, security: Security) -> list[float]:
+        timestamps = [it//10*10 if it else None for it in dates]
         result = []
         def skip(it):
             logger.warning(f"Unexpected {interval} timestamp {security.exchange.calendar.unix_to_datetime(it)}. Skipping.")
@@ -105,7 +106,7 @@ class FinancialTimes(BasePricingProvider):
         for it in timestamps:
             if not it: result.append(None)
             elif interval <= Interval.D1 and not security.exchange.calendar.is_workday(it): skip(it)
-            elif it >= Interval.D1:
+            elif interval >= Interval.D1:
                 if it != security.exchange.calendar.to_zero(it): skip(it)
                 else: result.append(security.exchange.calendar.get_next_timestamp(it+1, interval))
             else:
@@ -113,14 +114,17 @@ class FinancialTimes(BasePricingProvider):
                 else: result.append(it)
         return result
 
-    # Overrides
+    @override
     def get_interval_start(self, interval):
         return time.time() - 15*24*3600
+    @override
     def get_pricing_persistor(self, security: Security, interval: Interval) -> Persistor:
-        return self.interpolated_pricing_persistor
+        return self.pricing_persistor
+    @override
     def get_pricing_delay(self, security: Security, interval: Interval) -> float:
         return 17*60
-    def get_pricing_raw(self, security, unix_from, unix_to, interval, **kwargs):
+    @override
+    def get_pricing_raw(self, security, unix_from, unix_to, interval, **kwargs) -> list[dict]:
         days = math.ceil((time.time() - unix_from)/(24*3600)) + 1
         days = max(min(days, 15), 4)
         info = self._get_info(security)

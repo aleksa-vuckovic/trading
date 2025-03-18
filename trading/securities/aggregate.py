@@ -1,7 +1,9 @@
 import logging
 import time
+from typing import Callable, override, ParamSpec, TypeVar, Sequence
 from trading.core import Interval
-from trading.securities import Yahoo, FinancialTimes, WallStreetJournal, SeekingAlpha, GlobeNewswire, PricingProvider, NewsProvider, DataProvider
+from trading.core.securities import Security
+from trading.securities import Yahoo, FinancialTimes, WallStreetJournal, SeekingAlpha,GlobeNewswire, PricingProvider, NewsProvider, DataProvider
 
 logger = logging.getLogger(__name__)
 
@@ -9,17 +11,22 @@ pricing_providers: list[PricingProvider] = [Yahoo(), WallStreetJournal(), Financ
 news_providers: list[NewsProvider] = [GlobeNewswire(), SeekingAlpha()]
 data_providers: list[DataProvider] = [Yahoo()]
 
+P = ParamSpec('P')
+T = TypeVar('T')
+
 class AggregateProvider(PricingProvider, NewsProvider, DataProvider):
 
-    def _delegate_call(self, name: str, providers: list, *args, **kwargs):
-        for i in range(len(providers)):
+    def _delegate_call(self, methods: Sequence[Callable[P, T]], *args, **kwargs) -> T:
+        for i,method in enumerate(methods):
             try:
-                return getattr(providers, name)(*args, **kwargs)
+                return method(*args, **kwargs)
             except:
-                logger.warning(f"Failed to invoke {name} on {type(providers[i]).__name__}.", exc_info=True)
-                if i == len(providers)-1: raise
+                logger.warning(f"Failed to invoke {method.__qualname__}.", exc_info=True)
+                if i == len(methods)-1: raise
+        raise Exception("No methods to invoke.")
 
-    def get_pricing(self, security, unix_from, unix_to, interval, *, return_quotes = ..., interpolate = False, max_fill_ratio = 1, **kwargs):
+    @override
+    def get_pricing(self, security: Security, unix_from: float, unix_to: float, interval: Interval, *, return_quotes: list[str], interpolate: bool, max_fill_ratio: float, **kwargs) -> tuple[list[float], ...]:
         try:
             return pricing_providers[0].get_pricing(security, unix_from, unix_to, interval, return_quotes=return_quotes, interpolate=interpolate, max_fill_ratio=max_fill_ratio, **kwargs)
         except:
@@ -29,21 +36,27 @@ class AggregateProvider(PricingProvider, NewsProvider, DataProvider):
                 old = pricing_providers[0].get_pricing(security, unix_from, sep, interval, return_quotes=return_quotes, interpolate=interpolate, max_fill_ratio=max_fill_ratio, **kwargs)
             else:
                 old = None
-            recent = self._delegate_call(PricingProvider.get_pricing.__name__, pricing_providers, security, unix_from, unix_to, interval, return_quotes=return_quotes, interpolate=interpolate, max_fill_ratio=max_fill_ratio, **kwargs)
+            recent = self._delegate_call([it.get_pricing for it in pricing_providers], security, unix_from, unix_to, interval, return_quotes=return_quotes, interpolate=interpolate, max_fill_ratio=max_fill_ratio, **kwargs)
             if old:
                 for i in range(len(recent)): old[i].extend(recent[i])
                 return old
             else:
                 return recent
     
-    def get_news(self, security, unix_from, unix_to, **kwargs):
-        return self._delegate_call(NewsProvider.get_news.__name__, news_providers, security, unix_from, unix_to, **kwargs)
+    @override
+    def get_news(self, security: Security, unix_from: float, unix_to: float, **kwargs) -> Sequence[dict]:
+        return self._delegate_call([it.get_news for it in news_providers], security, unix_from, unix_to, **kwargs)
     
-    def get_outstanding_parts(self, security):
-        return self._delegate_call(DataProvider.get_outstanding_parts.__name__, data_providers, security)
-    def get_market_cap(self, security):
-        return self._delegate_call(DataProvider.get_market_cap.__name__, data_providers, security)
-    def get_first_trade_time(self, security):
-        return self._delegate_call(DataProvider.get_first_trade_time.__name__, data_providers, security)
-    def get_summary(self, security):
-        return self._delegate_call(DataProvider.get_summary.__name__, data_providers, security)
+    @override
+    def get_outstanding_parts(self, security: Security) -> float:
+        return self._delegate_call([it.get_outstanding_parts for it in data_providers], security)
+    @override
+    def get_market_cap(self, security: Security) -> float:
+        return self._delegate_call([it.get_market_cap for it in data_providers], security)
+    @override
+    def get_first_trade_time(self, security: Security) -> float:
+        return self._delegate_call([it.get_first_trade_time for it in data_providers], security)
+    @override
+    def get_summary(self, security: Security) -> str:
+        return self._delegate_call([it.get_summary for it in data_providers], security)
+    

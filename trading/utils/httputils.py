@@ -4,6 +4,7 @@ import json
 import re
 import time
 import config
+from typing import Callable, TypeVar, ParamSpec
 from base import text
 from http import HTTPStatus
 from enum import Flag, auto
@@ -17,20 +18,14 @@ def find_host(url: str) -> str | None:
     return None
 
 class BadResponseException(Exception):
-    module: str
-    url: str
-    response: requests.Response
     def __init__(self, url: str, response: requests.Response):
         self.module = find_host(url)
         self.url = url
         self.response = response
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Can't fetch from {self.module}. Url: '{self.url}'. Code: {self.response.status_code}. Text: '{self.response.text}'."
 
 class TooManyRequestsException(Exception):
-    module: str
-    url: str
-    response: requests.Response
     def __init__(self, url: str|None=None, response: requests.Response|None=None):
         super().__init__()
         self.module = find_host(url) if url else None
@@ -54,8 +49,8 @@ def get_as_browser(
     url: str,
     *,
     cookies: dict = {},
-    params: dict = None,
-    origin: str = None,
+    params: dict|None = None,
+    origin: str|None = None,
     headers: dict = {},
     check_reponse: bool = True
 ) -> requests.Response:
@@ -87,31 +82,32 @@ class BackupException(Exception):
         super().__init__()
         self.backup_time = backup_time
 
-def backup_timeout(
+def backup_timeout[T: Callable](
     *,
-    exc_type = TooManyRequestsException,
+    exc_type: type = TooManyRequestsException,
     default_behavior: BackupBehavior = BackupBehavior.RERAISE,
     base_timeout: float = 30.0,
     backoff_factor: float = 2.0
-):
-    last_break = None
-    last_exception: Exception = None
-    last_timeout = None
-    def decorate(func):
+) -> Callable[[T], T]:
+    last_break: float|None = None
+    last_exception: Exception|None = None
+    last_timeout: float|None = None
+    def decorate(func: T) -> T:
         def wrapper(*args, backup_behavior: BackupBehavior|None = None, **kwargs):
+            behavior: BackupBehavior = backup_behavior or default_behavior
             nonlocal last_break
             nonlocal last_exception
             nonlocal last_timeout
-            backup_time: float|None = last_break and (last_break + last_timeout - time.time())
-            behavior = backup_behavior or default_behavior
-            if backup_time and backup_time > 0:
-                if BackupBehavior.SLEEP in behavior:
-                    time.sleep(backup_time)
-                elif BackupBehavior.RERAISE in behavior:
-                    last_exception.__traceback__ = None
-                    raise BackupException(backup_time) from last_exception
-                else:
-                    return None
+            if last_break and last_exception and last_timeout:
+                backup_time = last_break + last_timeout - time.time()
+                if backup_time > 0:
+                    if BackupBehavior.SLEEP in behavior:
+                        time.sleep(backup_time)
+                    elif BackupBehavior.RERAISE in behavior:
+                        last_exception.__traceback__ = None
+                        raise BackupException(backup_time) from last_exception
+                    else:
+                        return None
             last_break = None
             last_exception = None
             timeout = last_timeout*backoff_factor if last_timeout else base_timeout
@@ -129,5 +125,5 @@ def backup_timeout(
                     else:
                         return None
                 raise
-        return wrapper
+        return wrapper # type: ignore
     return decorate

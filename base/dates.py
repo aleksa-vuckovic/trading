@@ -1,6 +1,8 @@
 #1
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from typing import overload
+
 
 """
 datetime stores the date components and an optional timezone (if unset, treated as the local timezone)
@@ -15,13 +17,18 @@ def str_to_datetime(time_string: str, format: str = "%Y-%m-%d %H:%M:%S", tz=UTC)
     return datetime.strptime(time_string, format).replace(tzinfo=tz)
 def str_to_unix(time_string: str, format: str = "%Y-%m-%d %H:%M:%S", tz=UTC) -> float:
     return str_to_datetime(time_string, format=format, tz=tz).timestamp()
-def unix_to_datetime(unix: float|int, tz=UTC) -> datetime:
+def unix_to_datetime(unix: float, tz=UTC) -> datetime:
     return datetime.fromtimestamp(unix, tz=tz)
 def datetime_to_unix(time: datetime) -> float:
     return time.timestamp()
 def localize(time: datetime, tz=UTC) -> datetime:
     return time.astimezone(tz)
-def to_zero(time: datetime|float|int, tz=UTC) -> datetime|float|int:
+
+@overload
+def to_zero(time: datetime) -> datetime: ...
+@overload
+def to_zero(time: float, tz: ZoneInfo=...) -> float: ...
+def to_zero(time: datetime|float, tz=UTC) -> datetime|float:
     if not isinstance(time, datetime):
         return to_zero(unix_to_datetime(time, tz=tz)).timestamp()
     return time.replace(hour=0, minute=0, second=0, microsecond=0)

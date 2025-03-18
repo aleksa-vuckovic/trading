@@ -1,8 +1,12 @@
 #1
 import importlib
+from typing import TypeVar, Callable
 
-def equatable(skip_keys: list[str] = []):
-    def decorate(cls):
+def equatable[T: type](skip_keys: list[str] = []) -> Callable[[T], T]:
+    """
+    Defines the __eq__ method for the decorated class as a recursive __eq__ for all contained keys.
+    """
+    def decorate(cls: T) -> T:
         def __eq__(self, other: object) -> bool:
             if not isinstance(other, cls): return False
             for key in self.__dict__:
@@ -12,7 +16,7 @@ def equatable(skip_keys: list[str] = []):
             for key in other.__dict__:
                 if key not in skip_keys and key not in self.__dict__: return False
             return True
-        cls.__eq__ = __eq__
+        cls.__eq__ = __eq__ # type: ignore
         return cls
     return decorate
 

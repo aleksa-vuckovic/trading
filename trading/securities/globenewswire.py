@@ -1,9 +1,11 @@
 import logging
+from typing import override
 from urllib import parse
 from bs4 import BeautifulSoup
 from trading.utils import httputils
 from base.caching import cached_series, CACHE_ROOT, DB_PATH, Persistor, FilePersistor, SqlitePersistor
-from trading.core.securities import Security, NewsProvider
+from trading.core.securities import Security
+from trading.core.news_provider import BaseNewsProvider
 from trading.securities.utils import filter_by_timestamp
 from trading.securities.nasdaq import Nasdaq
 
@@ -14,11 +16,12 @@ def _format_for_url(input: str) -> str:
     input = input.replace('.', '§').replace(',', 'δ')
     return parse.quote(input)
 
-class GlobeNewswire(NewsProvider):
+class GlobeNewswire(BaseNewsProvider):
     
     def __init__(self, use_files: bool = False):
         self.news_persistor = FilePersistor(CACHE_ROOT/_MODULE/'news') if use_files else SqlitePersistor(DB_PATH, f"{_MODULE}_news")
 
+    @httputils.backup_timeout()
     def _fetch_news(self, orgs: list[str], keywords: list[str], unix_from: float, unix_to: float) -> list[dict]:
         url = f"{_BASE_URL}/en/search/"
         if orgs:
@@ -61,32 +64,19 @@ class GlobeNewswire(NewsProvider):
             else:
                 break
         return result
-
     def _get_org(self, ticker: Security) -> str:
         try:
             return ticker.name[ticker.name.index(' - ')].strip()
         except:
             return ticker.name
-        
-    def _get_news_key_fn(self, security: Security) -> list[str]:
-        return [self._get_org(security)]
-    def _get_news_persistor_fn(self, security: Security) -> Persistor:
+
+    #region Overrides
+    @override
+    def get_news_persistor(self, security: Security) -> Persistor:
         return self.news_persistor
-    @cached_series(
-        unix_args=(2,3),
-        series_field=None,
-        timestamp_field="unix_time",
-        key_fn=_get_news_key_fn,
-        persistor_fn=_get_news_persistor_fn,
-        time_step_fn=100000000,
-        live_delay_fn=3600, #let's say that news is an hour late usually
-        should_refresh_fn=2*3600
-    )
-    @httputils.backup_timeout()
-    def _get_news(self, security: Security, unix_from: float, unix_to: float) -> list[dict]:
+    @override
+    def get_news_raw(self, security: Security, unix_from: float, unix_to: float, **kwargs) -> list[dict]:
         result = self._fetch_news([self._get_org(security)], [], unix_from, unix_to)
         result = filter_by_timestamp(result, unix_from=unix_from, unix_to=unix_to, timestamp_field='unix_time')
         return sorted(result, key=lambda it: it['unix_time'])
-    def get_news(self, security, unix_from, unix_to, **kwargs) -> list[str]:
-        return [it['title'] for it in self._get_news(security, unix_from, unix_to, **kwargs)]
-
+    #endregion

@@ -17,7 +17,7 @@ class MockSecurity(Security):
 security = MockSecurity()
 
 class TestPricingProvider(unittest.TestCase):
-    def test_interpolate_linear(self):
+    def test_interpolate_linear_indices(self):
         data = [{'a':1,'b':4,'t':2},{'a':2,'b':5,'t':5},{'a':3,'b':6,'t':7}]
         timestamps = list(range(1,11))
         result = interpolate_linear(data, timestamps)
@@ -29,6 +29,18 @@ class TestPricingProvider(unittest.TestCase):
         self.assertAlmostEqual(0, t1)
         self.assertAlmostEqual(0, t2)
         self.assertEqual(expect_t, [it['t'] for it in result])
+    
+    def test_interpolate_linear_timestamps(self):
+        data = [{'a':1,'t':1},{'a':2,'t':5},{'a':4,'t':7}]
+        timestamps = [1,2,5,6,7]
+        expect = [{'a':1,'t':1},{'a':1/4*2+3/4,'t':2},{'a':2,'t':5},{'a':3,'t':6},{'a':4,'t':7}]
+        result = interpolate_linear(data, timestamps)
+        self.assertEqual(expect, result)
+
+        timestamps = [0,*timestamps,8]
+        expect = [{'a':1,'t':0}, *expect, {'a':4,'t':8}]
+        result = interpolate_linear(data, timestamps)
+        self.assertEqual(expect, result)
 
     def test_merge(self):
         start = calendar.str_to_unix('2025-01-10 10:00:00')

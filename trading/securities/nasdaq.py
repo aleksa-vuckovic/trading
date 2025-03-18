@@ -2,6 +2,7 @@ from __future__ import annotations
 import logging
 import re
 import calendar
+from typing import override
 from enum import Enum
 from datetime import datetime, timedelta
 from base import dates
@@ -162,6 +163,7 @@ NasdaqCalendar.instance = NasdaqCalendar()
 
 class Nasdaq(Exchange):
     instance: Nasdaq
+    securities: list[Security]|None
     def __init__(self):
         super().__init__('XNAS', 'Nasdaq US', NasdaqCalendar.instance)
         self.securities = None
@@ -170,7 +172,8 @@ class Nasdaq(Exchange):
         response = httputils.get_as_browser("https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt")
         return response.text.splitlines(False)
 
-    def get_securities(self) -> list[NasdaqSecurity]:
+    @override
+    def get_securities(self) -> list[Security]:
         if self.securities is None:
             self.securities = []
             tests = 0
@@ -178,7 +181,7 @@ class Nasdaq(Exchange):
             for row in self._get_entries():
                 try:
                     sec = NasdaqSecurity.from_line(row)
-                    if sec.test: tests += 1
+                    if sec.type == SecurityType.TEST: tests += 1
                     else: self.securities.append(sec)
                 except:
                     failed += 1
@@ -214,11 +217,11 @@ class NasdaqSecurity(Security):
         self.status = status
 
     @property
-    def exchange() -> Nasdaq:
+    def exchange(self) -> Nasdaq:
         return Nasdaq.instance
 
     @staticmethod
-    def from_line(line: str):
+    def from_line(line: str) -> NasdaqSecurity:
         data = line.split('|')
         symbol = data[0]
         name = data[1]
@@ -227,7 +230,7 @@ class NasdaqSecurity(Security):
         status = FinancialStatus(data[4])
         lot_size = int(data[5])
         etf = _yn_to_bool(data[6])
-        next_shares = NasdaqSecurity.yn_to_bool(data[7])
+        next_shares = _yn_to_bool(data[7])
 
         type = SecurityType.ETF if etf\
             else SecurityType.WARRANT if re.search(r'.*warrant.*', name, re.IGNORECASE)\
@@ -235,4 +238,3 @@ class NasdaqSecurity(Security):
             else SecurityType.TEST
         
         return NasdaqSecurity(symbol, name, type, market, status)
-        
