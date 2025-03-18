@@ -4,7 +4,7 @@ from typing import override
 from datetime import datetime
 from trading.utils import httputils
 from base.caching import CACHE_ROOT, DB_PATH, Persistor, FilePersistor, SqlitePersistor
-from trading.securities.utils import filter_by_timestamp
+from trading.providers.utils import filter_by_timestamp
 from trading.core.securities import Security
 from trading.core.news_provider import BaseNewsProvider
 

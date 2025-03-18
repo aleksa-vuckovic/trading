@@ -6,7 +6,7 @@ from tqdm import tqdm
 from typing import Callable
 from torch import Tensor
 from pathlib import Path
-from trading.securities import nasdaq, aggregate
+from trading.providers import nasdaq, aggregate
 from base import serialization
 from trading.core.work_calendar import TimingConfig, XNAS
 

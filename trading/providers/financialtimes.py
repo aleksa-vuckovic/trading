@@ -5,11 +5,11 @@ import math
 from typing import override
 from trading.utils import httputils 
 from trading.core.interval import Interval
-from trading.securities.utils import combine_series, filter_by_timestamp
+from trading.providers.utils import combine_series, filter_by_timestamp
 from base.caching import cached_scalar, CACHE_ROOT, DB_PATH, Persistor, FilePersistor, SqlitePersistor
 from trading.core.securities import Security
 from trading.core.pricing_provider import BasePricingProvider
-from trading.securities.nasdaq import NasdaqSecurity, NasdaqMarket
+from trading.providers.nasdaq import NasdaqSecurity, NasdaqMarket
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]

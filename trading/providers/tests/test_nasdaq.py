@@ -1,7 +1,7 @@
 from typing import override
 import unittest
 from trading.core import interval
-from trading.securities import NasdaqSecurity, NasdaqMarket, Nasdaq, SecurityType
+from trading.providers import NasdaqSecurity, NasdaqMarket, Nasdaq, SecurityType
 from trading.core.interval import Interval
 from trading.core.work_calendar import WorkCalendar
 from trading.core.tests.test_work_calendar import TestCalendar

@@ -6,7 +6,7 @@ from datetime import timedelta
 from base import dates
 from trading.utils import httputils
 from trading.core.interval import Interval
-from trading.securities.utils import combine_series, filter_by_timestamp
+from trading.providers.utils import combine_series, filter_by_timestamp
 from base.caching import CACHE_ROOT, DB_PATH, FilePersistor, SqlitePersistor
 from trading.core.securities import Security
 from trading.core.pricing_provider import BasePricingProvider

@@ -13,7 +13,7 @@ from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 
 from base import serialization
-from ..securities import nasdaq, aggregate
+from ..providers import nasdaq, aggregate
 from trading.utils import plotutils
 from base.serialization import serializable
 from trading.core.work_calendar import TimingConfig, XNAS

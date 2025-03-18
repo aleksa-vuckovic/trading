@@ -6,8 +6,8 @@ from trading.utils import httputils
 from base.caching import cached_series, CACHE_ROOT, DB_PATH, Persistor, FilePersistor, SqlitePersistor
 from trading.core.securities import Security
 from trading.core.news_provider import BaseNewsProvider
-from trading.securities.utils import filter_by_timestamp
-from trading.securities.nasdaq import Nasdaq
+from trading.providers.utils import filter_by_timestamp
+from trading.providers.nasdaq import Nasdaq
 
 logger = logging.getLogger(__name__)
 _MODULE = __name__.split(".")[-1]

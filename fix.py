@@ -8,7 +8,7 @@ from datetime import timedelta
 from pathlib import Path
 from trading.core.work_calendar import TimingConfig
 from trading.core import work_calendar
-from trading.securities import aggregate
+from trading.providers import aggregate
 from trading.core.interval import Interval
 from trading.core.work_calendar import XNAS
 from base.caching import FilePersistor, SqlitePersistor

@@ -1,5 +1,5 @@
 import unittest
-from trading.securities.utils import combine_series, filter_by_timestamp
+from trading.providers.utils import combine_series, filter_by_timestamp
 
 class TestUtils(unittest.TestCase):
 

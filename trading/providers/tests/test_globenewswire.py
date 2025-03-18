@@ -1,6 +1,6 @@
 import unittest
 import config
-from trading.securities import GlobeNewswire, Nasdaq
+from trading.providers import GlobeNewswire, Nasdaq
 
 security = Nasdaq.instance.get_security("NVDA")
 provider = GlobeNewswire()

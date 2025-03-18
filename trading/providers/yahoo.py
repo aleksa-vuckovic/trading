@@ -10,7 +10,7 @@ from trading.core import Interval
 from trading.core.securities import Security, DataProvider
 from trading.core.pricing_provider import BasePricingProvider
 from trading.utils import httputils
-from trading.securities.utils import combine_series, filter_by_timestamp
+from trading.providers.utils import combine_series, filter_by_timestamp
 
 
 

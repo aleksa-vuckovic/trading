@@ -8,7 +8,7 @@ from torch import Tensor
 from pathlib import Path
 from matplotlib import pyplot as plt
 from .trading.utils.dateutils import TimingConfig, XNAS
-from ...securities import nasdaq, aggregate
+from ...providers import nasdaq, aggregate
 from ..abstract import PriceEstimator, DataConfig, QUOTES, CLOSE_I, AFTER_KEY_PREFIX
 from trading.utils import check_tensors, PriceTarget, BatchFile
 from .abstract import AbstractGenerator

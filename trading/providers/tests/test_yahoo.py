@@ -1,7 +1,7 @@
 import unittest
 import config
 from trading.core.interval import Interval
-from trading.securities import Yahoo, Nasdaq
+from trading.providers import Yahoo, Nasdaq
 
 security = Nasdaq.instance.get_security('NVDA')
 calendar = Nasdaq.instance.calendar

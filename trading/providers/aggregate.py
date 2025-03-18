@@ -3,7 +3,7 @@ import time
 from typing import Callable, override, ParamSpec, TypeVar, Sequence
 from trading.core import Interval
 from trading.core.securities import Security
-from trading.securities import Yahoo, FinancialTimes, WallStreetJournal, SeekingAlpha,GlobeNewswire, PricingProvider, NewsProvider, DataProvider
+from trading.providers import Yahoo, FinancialTimes, WallStreetJournal, SeekingAlpha,GlobeNewswire, PricingProvider, NewsProvider, DataProvider
 
 logger = logging.getLogger(__name__)
 
