@@ -6,7 +6,7 @@ import math
 from typing import Any
 from enum import Enum
 from pathlib import Path
-from base.caching import cached_scalar, cached_series, FilePersistor, SqlitePersistor, Persistor
+from base.caching import cached_scalar, cached_series, FilePersistor, SqlitePersistor, Persistor, MetaDict
 
 TEST_DATA = Path("./test_data")
 class TestCaching(unittest.TestCase):
@@ -53,25 +53,27 @@ class TestCaching(unittest.TestCase):
     
     def _test_cached_series_decorator_simple(self, start: int, end: int, step: int):
         invocations = 0
-        def _timestamp_fn(it: dict) -> float: return it['t']
-        def _key_fn() -> str: return ""
-        @cached_series(
-            unix_args=(0,1),
-            timestamp_fn = _timestamp_fn,
-            key_fn=_key_fn,
-            persistor_fn=FilePersistor(TEST_DATA),
-            time_step_fn=step
-        )
-        def get_series(unix_from: float, unix_to: float) -> list[dict]:
-            nonlocal invocations
-            invocations += 1
-            return [{"t": it} for it in range(int(unix_from), int(unix_to)+1) if it >unix_from and it <=unix_to ]
+        class Provider:
+            @staticmethod
+            def _timestamp_fn(it: dict) -> float: return it['t']
+            def _key_fn(self) -> str: return ""
+            @cached_series(
+                timestamp_fn = _timestamp_fn,
+                key_fn=_key_fn,
+                persistor_fn=FilePersistor(TEST_DATA),
+                time_step_fn=step
+            )
+            def get_series(self, unix_from: float, unix_to: float) -> list[dict]:
+                nonlocal invocations
+                invocations += 1
+                return [{"t": it} for it in range(int(unix_from), int(unix_to)+1) if it >unix_from and it <=unix_to ]
+        provider = Provider()
         start_id = start//step
         end_id = end//step if end%step else end//step-1
-        data = get_series(start, end)
+        data = provider.get_series(start, end)
         self.assertEqual(data, [{"t": it} for it in range(start+1, end+1)])
         self.assertEqual(invocations, end_id-start_id+1)
-        get_series(start_id*step, (end_id+1)*step-0.01)
+        provider.get_series(start_id*step, (end_id+1)*step-0.01)
         self.assertEqual(invocations, end_id-start_id+1)
 
     def test_cached_series_decorator_simple(self):
@@ -81,131 +83,139 @@ class TestCaching(unittest.TestCase):
     
     def test_cached_series_decorator(self):
         invocations = 0
-        def get_series_timestamp_fn(it: dict) -> float: return it['time']
-        def get_series_key_fn(type: str) -> str: return type
-        def get_series_time_step_fn(type: str) -> float: return 10 if type == 'type10' else 30
-        @cached_series(
-            unix_args=(0,"unix_to"),
-            timestamp_fn=get_series_timestamp_fn,
-            key_fn=get_series_key_fn,
-            persistor_fn=FilePersistor(TEST_DATA),
-            time_step_fn=get_series_time_step_fn
-        )
-        def get_series(unix_from: float, *, unix_to: float, type: str) -> list[dict]:
-            nonlocal invocations
-            invocations += 1
-            return [{"time": float(it), "data": it} for it in range(math.floor(unix_from)+1, math.floor(unix_to)+1 )]
-        
-        test1 = get_series(16, unix_to=30, type="type10")
-        test2 = get_series(16, unix_to=30, type="other")
+        class Provider:
+            @staticmethod
+            def get_series_timestamp_fn(it: dict) -> float: return it['time']
+            def get_series_key_fn(self, type: str) -> str: return type
+            def get_series_time_step_fn(self, type: str) -> float: return 10 if type == 'type10' else 30
+            @cached_series(
+                timestamp_fn=get_series_timestamp_fn,
+                key_fn=get_series_key_fn,
+                persistor_fn=FilePersistor(TEST_DATA),
+                time_step_fn=get_series_time_step_fn
+            )
+            def get_series(self, unix_from: float, unix_to: float, type: str) -> list[dict]:
+                nonlocal invocations
+                invocations += 1
+                return [{"time": float(it), "data": it} for it in range(math.floor(unix_from)+1, math.floor(unix_to)+1 )]
+            
+        provider = Provider()
+        test1 = provider.get_series(16, 30, "type10")
+        test2 = provider.get_series(16, 30, "other")
         self.assertEqual(14, len(test1))
         self.assertEqual(14, len(test2))
         self.assertEqual(17, test1[0]['data'])
         self.assertEqual(30, test2[-1]['data'])
         self.assertEqual(3, invocations)
 
-        self.assertEqual(test1, get_series(16, unix_to=30, type="type10"))
-        self.assertEqual(test2, get_series(16, unix_to=30, type="other"))
+        self.assertEqual(test1, provider.get_series(16, 30, "type10"))
+        self.assertEqual(test2, provider.get_series(16, 30, "other"))
         self.assertEqual(3, invocations)
 
     def test_cached_series_decorator_live(self):
         invocations = 0
         time_step = 24*3600
-        def timestamp_fn(it: dict) -> float: return it['time']
-        def get_series_key_fn() -> str: return ""
-        @cached_series(
-            unix_args=(0,1),
-            timestamp_fn=timestamp_fn,
-            key_fn=get_series_key_fn,
-            persistor_fn=FilePersistor(TEST_DATA),
-            time_step_fn= time_step,
-            live_delay_fn=0,
-            should_refresh_fn=1
-        )
-        def get_series(unix_from: float,  unix_to: float) -> list[dict]:
-            nonlocal invocations
-            invocations += 1
-            return [{"time": unix_from+0.1}, {"time": unix_to-0.1}]
+        class Provider:
+            @staticmethod
+            def timestamp_fn(it: dict) -> float: return it['time']
+            def get_series_key_fn(self) -> str: return ""
+            @cached_series(
+                timestamp_fn=timestamp_fn,
+                key_fn=get_series_key_fn,
+                persistor_fn=FilePersistor(TEST_DATA),
+                time_step_fn= time_step,
+                live_delay_fn=0,
+                should_refresh_fn=1
+            )
+            def get_series(self, unix_from: float,  unix_to: float) -> list[dict]:
+                nonlocal invocations
+                invocations += 1
+                return [{"time": unix_from+0.1}, {"time": unix_to-0.1}]
         
+        provider = Provider()
         unix_to = time.time()
         unix_from = unix_to - 1000
-        test1 = get_series(unix_from, unix_to)
+        test1 = provider.get_series(unix_from, unix_to)
         self.assertEqual(1, len(test1)) #get_series will be invoked with the lower chunk border, therefore the first entry will be filtered out
-        self.assertEqual(test1, get_series(unix_from, unix_to))
+        self.assertEqual(test1, provider.get_series(unix_from, unix_to))
 
-        get_series(unix_from, unix_to + 1)
+        provider.get_series(unix_from, unix_to + 1)
         self.assertEqual(1, invocations)
         time.sleep(1)
         new_unix_to = time.time()
-        series = get_series(unix_from, new_unix_to)
+        series = provider.get_series(unix_from, new_unix_to)
         self.assertEqual(3, len(series)) #now get_series will be invoked with the previous upper border
         self.assertGreaterEqual(series[2]["time"], unix_to)
         self.assertAlmostEqual(series[0]["time"] + 0.2, series[1]["time"], places=6)
         self.assertEqual(2, invocations)
 
-        series = get_series(unix_from, new_unix_to)
+        series = provider.get_series(unix_from, new_unix_to)
         self.assertEqual(3, len(series))
         self.assertEqual(2, invocations)
 
     def test_cached_series_decorator_live_delay(self):
         time_step = 24*3600
         now = time.time()
-        def get_series_timestamp_fn(it: dict): return it['time']
-        def get_series_key_fn() -> str: return ""
-        @cached_series(
-            unix_args=(0,1),
-            timestamp_fn=get_series_timestamp_fn,
-            key_fn=get_series_key_fn,
-            persistor_fn=FilePersistor(TEST_DATA),
-            time_step_fn= time_step,
-            live_delay_fn=2,
-            should_refresh_fn=0
-        )
-        def get_series(unix_from: float,  unix_to: float):
-            if now-1 > unix_from and now-1 < unix_to:
-                return [{"time": now-1}]
-            return []
+        class Provider:
+            @staticmethod
+            def get_series_timestamp_fn(it: dict): return it['time']
+            def get_series_key_fn(self) -> str: return ""
+            @cached_series(
+                timestamp_fn=get_series_timestamp_fn,
+                key_fn=get_series_key_fn,
+                persistor_fn=FilePersistor(TEST_DATA),
+                time_step_fn= time_step,
+                live_delay_fn=2,
+                should_refresh_fn=0
+            )
+            def get_series(self, unix_from: float,  unix_to: float):
+                if now-1 > unix_from and now-1 < unix_to:
+                    return [{"time": now-1}]
+                return []
         
+        provider = Provider()
         unix_from = now-3
         unix_to = now
-        test1 = get_series(unix_from, unix_to)
-        metapath = TEST_DATA / "meta"
-        meta = json.loads(metapath.read_text())["live"]
-        self.assertLess(meta['fetch'], now-1)
+        test1 = provider.get_series(unix_from, unix_to)
+        metapath = TEST_DATA / MetaDict.__name__
+        meta: MetaDict = json.loads(metapath.read_text())
+        self.assertLess(meta['live_fetch'] or now, now-1) 
         self.assertEqual(0, len(test1))
         time.sleep(1.1)
-        test2= get_series(unix_from, unix_to)
+        test2= provider.get_series(unix_from, unix_to)
         self.assertEqual(1, len(test2))
 
     def test_cached_series_decorator_live_refresh(self):
         now = time.time()
         invocations = 0
-        def get_series_timestamp_fn(it: dict) -> float: return it['time']
-        def get_series_key_fn() -> str: return ""
-        def get_series_refresh_fn(fetch: float, now: float) -> bool: return now-fetch > 1
-        @cached_series(
-            unix_args=(0,1),
-            timestamp_fn=get_series_timestamp_fn,
-            key_fn=get_series_key_fn,
-            persistor_fn=FilePersistor(TEST_DATA),
-            time_step_fn= 1000,
-            live_delay_fn=0,
-            should_refresh_fn=get_series_refresh_fn
-        )
-        def get_series(unix_from: float,  unix_to: float):
-            nonlocal invocations
-            invocations += 1
-            return [{"time": unix_from+0.1}, {"time": unix_to-0.1}]
+        class Provider:
+            @staticmethod
+            def get_series_timestamp_fn(it: dict) -> float: return it['time']
+            def get_series_key_fn(self) -> str: return ""
+            def get_series_refresh_fn(self, fetch: float, now: float) -> bool: return now-fetch > 1
+            @cached_series(
+                timestamp_fn=get_series_timestamp_fn,
+                key_fn=get_series_key_fn,
+                persistor_fn=FilePersistor(TEST_DATA),
+                time_step_fn= 1000,
+                live_delay_fn=0,
+                should_refresh_fn=get_series_refresh_fn
+            )
+            def get_series(self, unix_from: float,  unix_to: float):
+                nonlocal invocations
+                invocations += 1
+                return [{"time": unix_from+0.1}, {"time": unix_to-0.1}]
         
+        provider = Provider()
         unix_from = now-3
-        test = get_series(unix_from, time.time())
+        test = provider.get_series(unix_from, time.time())
         self.assertEqual(1, invocations)
         self.assertTrue(test)
         time.sleep(0.2)
-        test = get_series(unix_from, time.time())
+        test = provider.get_series(unix_from, time.time())
         self.assertEqual(1, invocations)
         time.sleep(1)
-        test = get_series(unix_from, time.time())
+        test = provider.get_series(unix_from, time.time())
         self.assertEqual(2, invocations)
         self.assertEqual(3, len(test))    
 
@@ -213,12 +223,12 @@ class TestCaching(unittest.TestCase):
         invocations = 0
         class Test(Enum):
             A = 'aa'
-        def get_scalar_key_fn(name: str, typ: Test) -> str: return f"{name}/{typ.name}" # type: ignore
+        def get_scalar_key_fn(name: str, typ: Test) -> str: return f"{name}/{typ.name}"
         @cached_scalar(
             key_fn=get_scalar_key_fn,
             persistor_fn=FilePersistor(TEST_DATA)
         )
-        def get_scalar(name: str, typ: Test) -> dict: # type: ignore
+        def get_scalar(name: str, typ: Test) -> dict:
             nonlocal invocations
             invocations += 1
             return {'name': name, 'typ': typ.name}
@@ -228,10 +238,10 @@ class TestCaching(unittest.TestCase):
         self.assertEqual(data, get_scalar('test', Test.A))
         self.assertEqual(1, invocations)
 
-        def get_scalar_key_fn(name: str) -> str: return f"test-{name}"
+        def get_scalar_key_fn2(name: str) -> str: return f"test-{name}"
         @cached_scalar(
-            key_fn=get_scalar_key_fn,
+            key_fn=get_scalar_key_fn2,
             persistor_fn=FilePersistor(TEST_DATA)
         )
-        def get_scalar(name: str) -> str: return name
-        self.assertEqual('test', get_scalar('test'))
+        def get_scalar2(name: str) -> str: return name
+        self.assertEqual('test', get_scalar2('test'))

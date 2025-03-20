@@ -16,7 +16,7 @@ T = TypeVar('T')
 
 class AggregateProvider(PricingProvider, NewsProvider, DataProvider):
 
-    def _delegate_call(self, methods: Sequence[Callable[P, T]], *args, **kwargs) -> T:
+    def _delegate_call(self, methods: Sequence[Callable[P, T]], *args: P.args, **kwargs: P.kwargs) -> T:
         for i,method in enumerate(methods):
             try:
                 return method(*args, **kwargs)
@@ -26,17 +26,17 @@ class AggregateProvider(PricingProvider, NewsProvider, DataProvider):
         raise Exception("No methods to invoke.")
 
     @override
-    def get_pricing(self, security: Security, unix_from: float, unix_to: float, interval: Interval, *, return_quotes: list[str], interpolate: bool, max_fill_ratio: float, **kwargs) -> tuple[list[float], ...]:
+    def get_pricing(self, unix_from: float, unix_to: float, security: Security, interval: Interval, *, return_quotes: list[str], interpolate: bool, max_fill_ratio: float) -> tuple[list[float], ...]:
         try:
-            return pricing_providers[0].get_pricing(security, unix_from, unix_to, interval, return_quotes=return_quotes, interpolate=interpolate, max_fill_ratio=max_fill_ratio, **kwargs)
+            return pricing_providers[0].get_pricing(unix_from, unix_to, security, interval, return_quotes=return_quotes, interpolate=interpolate, max_fill_ratio=max_fill_ratio)
         except:
             if unix_to < time.time() - 4*24*3600 or interval > Interval.D1: raise
             sep = max(time.time() - 4*24*3600, unix_from)
             if unix_from < sep:
-                old = pricing_providers[0].get_pricing(security, unix_from, sep, interval, return_quotes=return_quotes, interpolate=interpolate, max_fill_ratio=max_fill_ratio, **kwargs)
+                old = pricing_providers[0].get_pricing(unix_from, sep, security, interval, return_quotes=return_quotes, interpolate=interpolate, max_fill_ratio=max_fill_ratio)
             else:
                 old = None
-            recent = self._delegate_call([it.get_pricing for it in pricing_providers], security, unix_from, unix_to, interval, return_quotes=return_quotes, interpolate=interpolate, max_fill_ratio=max_fill_ratio, **kwargs)
+            recent = self._delegate_call([it.get_pricing for it in pricing_providers], unix_from, unix_to, security, interval, return_quotes=return_quotes, interpolate=interpolate, max_fill_ratio=max_fill_ratio)
             if old:
                 for i in range(len(recent)): old[i].extend(recent[i])
                 return old
@@ -44,8 +44,8 @@ class AggregateProvider(PricingProvider, NewsProvider, DataProvider):
                 return recent
     
     @override
-    def get_news(self, security: Security, unix_from: float, unix_to: float, **kwargs) -> Sequence[dict]:
-        return self._delegate_call([it.get_news for it in news_providers], security, unix_from, unix_to, **kwargs)
+    def get_news(self, unix_from: float, unix_to: float, security: Security) -> Sequence[dict]:
+        return self._delegate_call([it.get_news for it in news_providers], unix_from, unix_to, security)
     
     @override
     def get_outstanding_parts(self, security: Security) -> float:

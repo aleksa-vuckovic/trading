@@ -1,5 +1,8 @@
 import unittest
 import sys
+import config
+import config_test
+config.__dict__.update(config_test.__dict__)
 from trading import log
 
 log.configure_logging(True)

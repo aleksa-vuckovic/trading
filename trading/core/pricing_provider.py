@@ -74,9 +74,9 @@ class BasePricingProvider(PricingProvider):
         self.intervals = intervals
     
     @override
-    def get_pricing(self, security, unix_from, unix_to, interval, *, return_quotes = ['close'], interpolate = False, max_fill_ratio = 1, **kwargs):
+    def get_pricing(self, unix_from, unix_to, security, interval, *, return_quotes = ['close'], interpolate = False, max_fill_ratio = 1):
         return_quotes = [it[0].lower() for it in return_quotes]
-        data = self._get_pricing(security, unix_from, unix_to, interval, **kwargs)
+        data = self._get_pricing(unix_from, unix_to, security, interval)
         if interpolate:
             timestamps = security.exchange.calendar.get_timestamps(unix_from, unix_to, interval)
             fill_ratio = (len(timestamps)-len(data))/len(timestamps) if timestamps else 0
@@ -101,10 +101,9 @@ class BasePricingProvider(PricingProvider):
         else: raise Exception(f"Unknown interval {interval}.")
     def _get_pricing_live_delay_fn(self, security: Security, interval: Interval) -> float:
         return self.get_pricing_delay(security, interval)
-    def _get_pricing_should_refresh_fn(self, security: Security, interval: Interval, fetch: float, now: float) -> bool:
+    def _get_pricing_should_refresh_fn(self, fetch: float, now: float, security: Security, interval: Interval) -> bool:
         return security.exchange.calendar.get_next_timestamp(fetch, interval) < now
     @cached_series(
-        unix_args=(2,3),
         timestamp_fn=_get_pricing_timestamp_fn,
         key_fn=_get_pricing_key_fn,
         persistor_fn=_get_pricing_persistor_fn,
@@ -114,9 +113,9 @@ class BasePricingProvider(PricingProvider):
     )
     def _get_pricing(
         self,
-        security: Security,
         unix_from: float,
         unix_to: float,
+        security: Security,
         interval: Interval,
         **kwargs
     ) -> list[dict]:
@@ -124,22 +123,15 @@ class BasePricingProvider(PricingProvider):
             raise Exception(f"Unsupported interval {interval}. Supported intervals are {list(self.intervals.keys())}.")
         base_interval = self.intervals[interval]
         if not base_interval or unix_from <= self.get_interval_start(base_interval):
-            return self.get_pricing_raw(security, unix_from, unix_to, interval, **kwargs)
-        data = self._get_pricing(security, security.exchange.calendar.add_intervals(unix_from, interval, -1), unix_to, base_interval, **kwargs)
+            return self.get_pricing_raw(unix_from, unix_to, security, interval)
+        data = self._get_pricing(security.exchange.calendar.add_intervals(unix_from, interval, -1), unix_to, security, base_interval)
         return merge_pricing(data, unix_from, unix_to, interval, security)
 
     #region Abstract
     def get_interval_start(self, interval: Interval) -> float: raise NotImplementedError()
     def get_pricing_persistor(self, security: Security, interval: Interval) -> Persistor: raise NotImplementedError()
     def get_pricing_delay(self, security: Security, interval: Interval) -> float: raise NotImplementedError()
-    def get_pricing_raw(
-        self,
-        security: Security,
-        unix_from: float,
-        unix_to: float,
-        interval: Interval,
-        **kwargs
-    ) -> list[dict]:
+    def get_pricing_raw(self, unix_from: float, unix_to: float, security: Security, interval: Interval) -> list[dict]:
         """
         Implement this so that it fetches raw fresh data and returns a list of dicts containing quotes.
         The dict keys should be tohlcv.

@@ -4,7 +4,7 @@ import json
 import re
 import time
 import config
-from typing import Callable, TypeVar, ParamSpec
+from typing import Callable, TypeVar, ParamSpec, Any
 from base import text
 from http import HTTPStatus
 from enum import Flag, auto
@@ -93,8 +93,8 @@ def backup_timeout[T: Callable](
     last_exception: Exception|None = None
     last_timeout: float|None = None
     def decorate(func: T) -> T:
-        def wrapper(*args, backup_behavior: BackupBehavior|None = None, **kwargs):
-            behavior: BackupBehavior = backup_behavior or default_behavior
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            behavior: BackupBehavior = default_behavior
             nonlocal last_break
             nonlocal last_exception
             nonlocal last_timeout

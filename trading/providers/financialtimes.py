@@ -2,11 +2,12 @@ import json
 import logging
 import time
 import math
-from typing import override
+from typing import Literal, override
+import config
 from trading.utils import httputils 
 from trading.core.interval import Interval
 from trading.providers.utils import combine_series, filter_by_timestamp
-from base.caching import cached_scalar, CACHE_ROOT, DB_PATH, Persistor, FilePersistor, SqlitePersistor
+from base.caching import cached_scalar, Persistor, FilePersistor, SqlitePersistor, NullPersistor
 from trading.core.securities import Security
 from trading.core.pricing_provider import BasePricingProvider
 from trading.providers.nasdaq import NasdaqSecurity, NasdaqMarket
@@ -30,15 +31,19 @@ def _get_interval(interval: Interval) -> tuple[str, int]:
     raise Exception(f"Unknown interval {interval}")
 
 class FinancialTimes(BasePricingProvider):
-    def __init__(self, use_file: bool = False):
+    def __init__(self, storage: Literal['file','db','none']='db'):
         super().__init__({
             Interval.D1: None,
             Interval.H1: Interval.M5,
             Interval.M15: Interval.M5,
             Interval.M5: None
         })
-        self.info_persistor = FilePersistor(CACHE_ROOT/_MODULE/'info') if use_file else SqlitePersistor(DB_PATH, f"{_MODULE}_info")
-        self.pricing_persistor = FilePersistor(CACHE_ROOT/_MODULE/'pricing') if use_file else SqlitePersistor(DB_PATH, f"{_MODULE}_pricing")
+        self.info_persistor = FilePersistor(config.caching.file_path/_MODULE/'info') if storage == 'file'\
+            else SqlitePersistor(config.caching.db_path, f"{_MODULE}_info") if storage == 'db'\
+            else NullPersistor()
+        self.pricing_persistor = FilePersistor(config.caching.file_path/_MODULE/'pricing') if storage =='file'\
+            else SqlitePersistor(config.caching.db_path, f"{_MODULE}_pricing") if storage == 'db'\
+            else NullPersistor()
 
     def _get_identifier(self, security: Security) -> str:
         return f"{security.symbol}:{_get_exchange(security)}"
@@ -124,7 +129,7 @@ class FinancialTimes(BasePricingProvider):
     def get_pricing_delay(self, security: Security, interval: Interval) -> float:
         return 17*60
     @override
-    def get_pricing_raw(self, security, unix_from, unix_to, interval, **kwargs) -> list[dict]:
+    def get_pricing_raw(self, unix_from: float, unix_to: float, security: Security, interval: Interval) -> list[dict]:
         days = math.ceil((time.time() - unix_from)/(24*3600)) + 1
         days = max(min(days, 15), 4)
         info = self._get_info(security)

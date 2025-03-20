@@ -119,7 +119,6 @@ class WorkCalendar:
         if interval >= Interval.D1: return 1000*interval.time()
         else: return 4000*interval.time()
     @cached_series(
-        unix_args=(1,2),
         timestamp_fn=_get_timestamps_timestamp_fn,
         key_fn=_get_timestamps_key_fn,
         persistor_fn=MemoryPersistor(),
@@ -266,7 +265,7 @@ class BasicWorkCalendar(WorkCalendar):
             timestamp = self.unix_to_datetime(open.timestamp() + (cnt+1)*interval.time())
             if timestamp <= close: return timestamp
             if close > time: return close
-        if time > self.set_open(time): time += timedelta(days=1)
+        if self.is_workday(time) and time > self.set_open(time): time += timedelta(days=1)
         while not self.is_workday(time): time += timedelta(days=1)
         time = self.set_open(time)
         timestamp = self.unix_to_datetime(self.set_open(time).timestamp() + interval.time())

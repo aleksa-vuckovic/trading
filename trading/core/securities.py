@@ -53,15 +53,14 @@ class PricingProvider:
     """
     def get_pricing(
         self,
-        security: Security,
         unix_from: float,
         unix_to: float,
+        security: Security,
         interval: Interval,
         *,
         return_quotes: list[str],
         interpolate: bool,
-        max_fill_ratio: float,
-        **kwargs
+        max_fill_ratio: float
     ) -> tuple[list[float], ...]:
         """
         Returns the requested pricing data fresh from the source.
@@ -80,14 +79,13 @@ class NewsProvider:
     """
     def get_news(
         self,
-        security: Security,
         unix_from: float,
         unix_to: float,
-        **kwargs
+        security: Security
     ) -> Sequence[dict]:
         raise NotImplementedError()
     
-    def get_titles(self, security: Security, unix_from: float, unix_to: float, **kwargs) -> Sequence[str]: raise NotImplementedError()
+    def get_titles(self, unix_from: float, unix_to: float, security: Security) -> Sequence[str]: raise NotImplementedError()
 
 class DataProvider:
     """

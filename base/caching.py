@@ -1,24 +1,16 @@
 #2
 from __future__ import annotations
-import json
-import re
 import os
 import logging
 import time
 import sqlite3
-from typing import Callable, Iterable, Any, Sequence, overload, override, TypeVar, ParamSpec
+from typing import Callable, Iterable, Any, Sequence, Unpack, override, TypeVar, ParamSpec, Concatenate, Type, TypeVarTuple, TypedDict
 from pathlib import Path
-from base.algos import binary_search, BinarySearchEdge, Comparable
+from base.algos import binary_search, BinarySearchEdge
 from base.files import escape_filename, unescape_filename
-from base.serialization import Serializer, BasicSerializer
+from base.serialization import Serializer, BasicSerializer, serializable
 
 logger = logging.getLogger(__name__)
-CACHE_ROOT = Path(__file__).parent / 'cache'
-DB_PATH = Path(__file__).parent.parent / 'cache.db'
-
-LIVE = 'live'
-FETCH = 'fetch'
-NOW = 'now'
 
 class NotCachedError(Exception):
     def __init__(self):
@@ -139,66 +131,57 @@ class MemoryPersistor(Persistor):
     def keys(self) -> Iterable[str]:
         return self.data.keys()
 
-P = ParamSpec('P')
+class MetaDict(TypedDict):
+    live_fetch: float|None
+    live_id: int|None
+
+S = TypeVar('S')
 T = TypeVar('T')
+PKeys = TypeVarTuple('PKeys')
+
 def cached_series(
     *,
-    unix_args: tuple[str|int,str|int] = (1,2),
     timestamp_fn: Callable[[T], float],
-    key_fn: Callable[..., str],
-    persistor_fn: Persistor | Callable[..., Persistor],
-    time_step_fn: float | Callable[..., float], #filtered args
-    live_delay_fn: float | Callable[..., float] | None = 0, # filtered args
-    should_refresh_fn: float | Callable[..., bool] = 0, # filtered args with 'last' and 'now' timestamps as kwargs
-) -> Callable[[Callable[P, Sequence[T]]], Callable[P, list[T]]]:
+    key_fn: Callable[[S, *PKeys], str],
+    persistor_fn: Persistor | Callable[[S, *PKeys], Persistor],
+    time_step_fn: float | Callable[[S, *PKeys], float],
+    live_delay_fn: float | Callable[[S, *PKeys], float] | None = 0,
+    should_refresh_fn: float | Callable[[S, float, float, *PKeys], bool] = 0,
+) -> Callable[[Callable[[S, float, float, *PKeys], Sequence[T]]], Callable[[S, float, float, *PKeys], list[T]]]:
     """
     Denotes a method which returns time series data, based on unix timestamps, and whose results should be cached.
     The return value of the method can be a dictionary or a list. The series_field denotes the path to the time series,
     which is the only relevant part. The time series should be validated, filtered and sorted, with no null timestamps.
     Intervals are considered OPEN at the start and CLOSED at the end.
-    Set skip_cache kwarg to True to invoke underlying method with no additional behavior.
 
     Args:
-        series_field: The json path to locate the time series part of the object.
         timestamp_field: The field within a single time series object containing the timestamp value.
         time_step_fn: How big is one chunk of data?
         live_delay_fn: How long to wait before trying to fetch live data?
-        live_refresh_fn: Should live data be refereshed? With fetch and now as kwargs.
-        return_series_only: If the series is nested, return the series or the entire object?
+        live_refresh_fn: Should live data be refereshed?
     Returns:
         The time series list or the entire object as returned from the last underlying method call, with the proper series set.
     """
     get_timestamp = timestamp_fn
     get_key = key_fn
-    get_persistor: Callable[..., Persistor] = persistor_fn  if callable(persistor_fn) else lambda *args, **kwargs: persistor_fn
-    get_time_step: Callable[..., float] = time_step_fn if callable(time_step_fn) else lambda *args, **kwargs: float(time_step_fn)
-    get_delay: Callable[..., float] = live_delay_fn if callable(live_delay_fn) else (lambda *args, **kwargs: -1.0e10) if live_delay_fn is None else (lambda *args, **kwargs: float(live_delay_fn))
-    should_refresh: Callable[..., bool] = should_refresh_fn if callable(should_refresh_fn) else lambda *args, **kwargs: kwargs[NOW]-kwargs[FETCH] > float(should_refresh_fn)
+    get_persistor: Callable[[S, *PKeys], Persistor] = persistor_fn  if callable(persistor_fn) else (lambda self, *args: persistor_fn)
+    get_time_step: Callable[[S, *PKeys], float] = time_step_fn if callable(time_step_fn) else (lambda self, *args: float(time_step_fn))
+    get_delay: Callable[[S, *PKeys], float] = live_delay_fn if callable(live_delay_fn) else (lambda self, *args: -1.0e10) if live_delay_fn is None else (lambda self, *args: float(live_delay_fn))
+    should_refresh: Callable[[S, float, float, *PKeys], bool] = should_refresh_fn if callable(should_refresh_fn) else lambda self, fetch, now, *args: now-fetch > float(should_refresh_fn)
 
-    def get_unix_args(args: list, kwargs: dict) -> tuple[float, float]:
-        return tuple(float(args[it]) if isinstance(it, int) else float(kwargs[it]) for it in unix_args) # type: ignore
-    def set_unix_args(args: list, kwargs: dict, values: tuple[float, float]):
-        for arg, value in zip(unix_args, values):
-            if isinstance(arg, int): args[arg] = value
-            else: kwargs[arg] = value
     def get_id(unix_time: float, time_step: float) -> int:
         return int(unix_time//time_step) if unix_time%time_step else int(unix_time//time_step)-1
-    def decorate(func: Callable[P, Sequence[T]]) -> Callable[P, list[T]]:
-        def wrapper(*argstuple: Any, skip_cache: bool = False, **kwargs) -> list[T]:
-            if skip_cache: return list(func(*argstuple, **kwargs))
-            args = list(argstuple)
-            unix_value = get_unix_args(args, kwargs)
-            filtered_args = [it for i,it in enumerate(args) if i not in unix_args]
-            filtered_kwargs = {key:kwargs[key] for key in kwargs if key not in unix_args}
-            base_key = get_key(*filtered_args, **filtered_kwargs)
-            persistor = get_persistor(*filtered_args, **filtered_kwargs)
-            meta_key = f"{base_key}/meta"
-            time_step = get_time_step(*filtered_args, **filtered_kwargs)
-            live_delay = get_delay(*filtered_args, **filtered_kwargs)
+    def decorate(func: Callable[[S, float, float, *PKeys], Sequence[T]]) -> Callable[[S, float, float, *PKeys], list[T]]:
+        def wrapper(self: S, unix_from: float, unix_to: float, *args: *PKeys) -> list[T]:
+            base_key = get_key(self, *args)
+            persistor = get_persistor(self, *args)
+            time_step = get_time_step(self, *args)
+            live_delay = get_delay(self, *args)
+            meta_key = f"{base_key}/{MetaDict.__name__}"
             unix_now = time.time() - live_delay
             # Take at most the last available time point. We don't want to rush and cache invalid or nonexistent data.
-            unix_to = min(unix_value[1], unix_now)
-            unix_from = min(unix_value[0], unix_to)
+            unix_to = min(unix_to, unix_now)
+            unix_from = min(unix_from, unix_to)
             start_id, end_id, now_id = int(unix_from//time_step), get_id(unix_to, time_step), get_id(unix_now, time_step)
             result: list[T] = []
             def extend(data: Sequence[T]):
@@ -212,26 +195,21 @@ def cached_series(
                     #live data
                     key = f"{base_key}/live"
                     try:
-                        meta: dict = persistor.read(meta_key)
+                        meta: MetaDict|None = persistor.read(meta_key)
                     except NotCachedError:
-                        meta = {LIVE: None}
-                    if meta[LIVE] and meta[LIVE]['id'] != id:
-                        meta[LIVE] = None
-                        logger.info(f"Switching to new id {id} from {meta[LIVE]}.")
-                    if not meta[LIVE]:
-                        set_unix_args(args, kwargs, (float(id*time_step), unix_now))
-                        data = func(*args, **kwargs) # type: ignore
+                        meta = None
+                    if not meta or not meta['live_id'] or not meta['live_fetch'] or meta['live_id'] != id:
+                        data = func(self, float(id*time_step), unix_now, *args)
                         persistor.persist(key, list(data))
                         extend(data)
-                        meta[LIVE] = {'id': id, FETCH: unix_now}
-                    elif meta[LIVE][FETCH] < min(unix_to, unix_now) and should_refresh(*filtered_args, **filtered_kwargs, **{FETCH: meta[LIVE][FETCH], NOW: unix_now}):
+                        meta = {'live_id': id, 'live_fetch': unix_now}
+                    elif meta['live_id'] < min(unix_to, unix_now) and should_refresh(self, meta['live_fetch'], unix_now, *args):
                         existing_data: list[T] = persistor.read(key)
-                        set_unix_args(args, kwargs, (meta[LIVE][FETCH], unix_now))
-                        new_data = func(*args, **kwargs) # type: ignore
+                        new_data = func(self, meta['live_fetch'], unix_now, *args)
                         existing_data.extend(new_data)
                         extend(existing_data)
                         persistor.persist(key, existing_data)
-                        meta[LIVE] = {'id': id, FETCH: unix_now}
+                        meta = {'live_id': id, 'live_fetch': unix_now}
                     else:
                         extend(persistor.read(key))
                     persistor.persist(meta_key, meta)
@@ -242,24 +220,23 @@ def cached_series(
                         extend(persistor.read(key))
                     except NotCachedError:
                         # Invoke the underlying method for the entire chunk
-                        set_unix_args(args, kwargs, (id*time_step, (id+1)*time_step))
-                        data = func(*args, **kwargs) # type: ignore
+                        data = func(self, id*time_step, (id+1)*time_step, *args)
                         persistor.persist(key, data)
                         extend(data)
             return result
-        return wrapper # type: ignore
+        return wrapper
     return decorate
 
-def cached_scalar[T: Callable](
+P = ParamSpec('P')
+def cached_scalar(
     *,
-    key_fn: Callable[..., str],
-    persistor_fn: Persistor|Callable[...,Persistor]
-) -> Callable[[T], T]:
-    get_key = key_fn
-    get_persistor = persistor_fn if callable(persistor_fn) else lambda *args, **kwargs: persistor_fn
-    def decorate(func: T) -> T:
-        def wrapper(*args, skip_cache: bool = False, **kwargs):
-            if skip_cache: return func(*args, **kwargs)
+    key_fn: Callable[P, str],
+    persistor_fn: Persistor|Callable[P,Persistor]
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
+    get_key: Callable[P, str] = key_fn
+    get_persistor: Callable[P, Persistor] = persistor_fn if callable(persistor_fn) else lambda *args, **kwargs: persistor_fn
+    def decorate(func: Callable[P, T]) -> Callable[P, T]:
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
             key = get_key(*args, **kwargs)
             persistor = get_persistor(*args, **kwargs)
             try:
@@ -268,5 +245,5 @@ def cached_scalar[T: Callable](
                 result = func(*args, **kwargs)
                 persistor.persist(key, result)
             return result
-        return wrapper # type: ignore
+        return wrapper
     return decorate

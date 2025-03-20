@@ -1,9 +1,10 @@
 import json
 import logging
-from typing import override
+from typing import Literal, override
 from datetime import datetime
+import config
 from trading.utils import httputils
-from base.caching import CACHE_ROOT, DB_PATH, Persistor, FilePersistor, SqlitePersistor
+from base.caching import NullPersistor, Persistor, FilePersistor, SqlitePersistor
 from trading.providers.utils import filter_by_timestamp
 from trading.core.securities import Security
 from trading.core.news_provider import BaseNewsProvider
@@ -12,11 +13,13 @@ logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
 
 class SeekingAlpha(BaseNewsProvider):
-    def __init__(self, use_file: bool = False):
-        self.news_persistor = FilePersistor(CACHE_ROOT/_MODULE/'news') if use_file else SqlitePersistor(DB_PATH, f"{_MODULE}_news")
+    def __init__(self, storage: Literal['file','db','none']='db'):
+        self.news_persistor = FilePersistor(config.caching.file_path/_MODULE/'news') if storage == 'file'\
+            else SqlitePersistor(config.caching.db_path, f"{_MODULE}_news") if storage == 'db'\
+            else NullPersistor()
 
     @httputils.backup_timeout()
-    def _fetch_news(self, symbol: str, unix_from: float, unix_to: float) -> list[dict]:
+    def _fetch_news(self, unix_from: float, unix_to: float, symbol: str) -> list[dict]:
         url = f"https://seekingalpha.com/api/v3/symbols/{symbol}/news?filter[since]={int(unix_from-1000)}&filter[until]={int(unix_to+1000)}&id={symbol}&include=author&isMounting=true&page[size]=50&page[number]="
         i = 1
         ret = []
@@ -44,6 +47,6 @@ class SeekingAlpha(BaseNewsProvider):
     def get_news_persistor(self, security: Security) -> Persistor:
         return self.news_persistor
     @override
-    def get_news_raw(self, security: Security, unix_from: float, unix_to: float, **kwargs) -> list[dict]:
-        return self._fetch_news(security.symbol, unix_from, unix_to, **kwargs)
+    def get_news_raw(self, unix_from: float, unix_to: float, security: Security) -> list[dict]:
+        return self._fetch_news(unix_from, unix_to, security.symbol)
     #endregion

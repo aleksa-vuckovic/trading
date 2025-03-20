@@ -86,5 +86,9 @@ class TestCalendar(unittest.TestCase):
                 end = calendar.str_to_unix(end)
                 expect = [calendar.str_to_unix(it) for it in expect]
                 result = calendar.get_timestamps(start, end, interval)
-                self.assertEqual(expect, result, f"({name}) Unexpected timestamps for interval {interval}, start {calendar.unix_to_datetime(start)}, end {calendar.unix_to_datetime(end)}.")
+                self.assertEqual(expect, result, f"""
+({name}) Unexpected timestamps for interval {interval}, start {calendar.unix_to_datetime(start)}, end {calendar.unix_to_datetime(end)}.
+Expect {[str(calendar.unix_to_datetime(it)) for it in expect]}.
+Got {[str(calendar.unix_to_datetime(it)) for it in result]}.
+""")
                 

@@ -3,9 +3,10 @@ import yfinance # type: ignore
 import logging
 import time
 import math
-from typing import override
+from typing import Literal, override
+import config
 from base.algos import BinarySearchEdge, binary_search
-from base.caching import cached_scalar, CACHE_ROOT, DB_PATH, Persistor, FilePersistor, SqlitePersistor
+from base.caching import NullPersistor, cached_scalar, Persistor, FilePersistor, SqlitePersistor
 from trading.core import Interval
 from trading.core.securities import Security, DataProvider
 from trading.core.pricing_provider import BasePricingProvider
@@ -25,7 +26,7 @@ class Yahoo(BasePricingProvider, DataProvider):
     The last nonprepost period is at 15:30 and covers only the last 30 minutes.
     The timestamps correspond to the START of the period.
     """
-    def __init__(self, use_files: bool = False):
+    def __init__(self, storage: Literal['file','db','none']='db'):
         BasePricingProvider.__init__(self, {
             Interval.L1: None,
             Interval.W1: None,
@@ -35,19 +36,22 @@ class Yahoo(BasePricingProvider, DataProvider):
             Interval.M5: None
         })
         DataProvider.__init__(self)
-        self.info_persistor = FilePersistor(CACHE_ROOT/_MODULE/"info") if use_files else SqlitePersistor(DB_PATH, f"{_MODULE}_info")
-        self.pricing_persistor = FilePersistor(CACHE_ROOT/_MODULE/"pricing") if use_files else SqlitePersistor(DB_PATH, f"{_MODULE}_pricing")
+        self.info_persistor = FilePersistor(config.caching.file_path/_MODULE/"info") if storage == 'file'\
+            else SqlitePersistor(config.caching.db_path, f"{_MODULE}_info") if storage == 'db'\
+            else NullPersistor()
+        self.pricing_persistor = FilePersistor(config.caching.file_path/_MODULE/"pricing") if storage == 'file'\
+            else SqlitePersistor(config.caching.db_path, f"{_MODULE}_pricing") if storage == 'db'\
+            else NullPersistor()
 
     @httputils.backup_timeout()
     def _fetch_pricing(
         self,
-        symbol: str,
         start_time: float, #unix
         end_time: float, #unix
+        symbol: str,
         interval: str,
         events: list[str] = [],
-        include_pre_post = False,
-        **kwargs
+        include_pre_post = False
     ) -> dict:
         result =  f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
         result += f"?period1={int(start_time)}&period2={math.ceil(end_time)}&interval={interval}"
@@ -100,7 +104,7 @@ class Yahoo(BasePricingProvider, DataProvider):
     def get_pricing_delay(self, security, interval):
         return 120
     @override
-    def get_pricing_raw(self, security, unix_from, unix_to, interval, **kwargs):
+    def get_pricing_raw(self, unix_from: float, unix_to: float, security: Security, interval: Interval) -> list[dict]:
         first_trade_time = self.get_first_trade_time(security)
         now = time.time()
         query_from = max(unix_from - interval.time(), first_trade_time + _MIN_AFTER_FIRST_TRADE)
@@ -108,7 +112,7 @@ class Yahoo(BasePricingProvider, DataProvider):
         query_to = unix_to
         if query_to <= query_from: return []
         try:
-            data = self._fetch_pricing(security.symbol, query_from, query_to, self._get_interval(interval), **kwargs)
+            data = self._fetch_pricing(query_from, query_to, security.symbol, self._get_interval(interval))
         except httputils.BadResponseException:
             logger.error(f"Bad response for {security.symbol} from {unix_from} to {unix_to} at {interval}. PERMANENT EMPTY RETURN!", exc_info=True)
             return []
@@ -124,7 +128,7 @@ class Yahoo(BasePricingProvider, DataProvider):
             return filter_by_timestamp(combine_series(arrays), unix_from, unix_to)
         def try_adjust(series: list[dict]) -> list[dict]:
             try:
-                d1data = self._get_pricing(security, unix_to - _ADJUSTMENT_PERIOD, unix_to, Interval.D1)
+                d1data = self._get_pricing(unix_to - _ADJUSTMENT_PERIOD, unix_to, security, Interval.D1)
                 close = d1data[-2]['c']
                 time = d1data[-2]['t']
                 i = binary_search(series, time, lambda x: x['t'], edge=BinarySearchEdge.NONE)
@@ -155,7 +159,7 @@ class Yahoo(BasePricingProvider, DataProvider):
             raise httputils.TooManyRequestsException()
         mock_time = int(time.time() - 15*24*3600)
         try:
-            meta = self._fetch_pricing(security.symbol, mock_time-3*24*3600, mock_time, self._get_interval(Interval.D1))['chart']['result'][0]['meta']
+            meta = self._fetch_pricing(mock_time-3*24*3600, mock_time, security.symbol, self._get_interval(Interval.D1))['chart']['result'][0]['meta']
         except httputils.BadResponseException:
             logger.error(f"Bad response for {security.symbol} in _get_info. PERMANENT EMPTY RETURN!", exc_info=True)
             meta = {}

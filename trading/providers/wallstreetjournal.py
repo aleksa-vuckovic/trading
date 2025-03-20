@@ -1,13 +1,14 @@
 import json
 import logging
 import time
-from typing import override
+from typing import Literal, override
 from datetime import timedelta
+import config
 from base import dates
 from trading.utils import httputils
 from trading.core.interval import Interval
 from trading.providers.utils import combine_series, filter_by_timestamp
-from base.caching import CACHE_ROOT, DB_PATH, FilePersistor, SqlitePersistor
+from base.caching import FilePersistor, NullPersistor, SqlitePersistor
 from trading.core.securities import Security
 from trading.core.pricing_provider import BasePricingProvider
 
@@ -18,8 +19,10 @@ _CKEY='57494d5ed7'
 _MODULE: str = __name__.split(".")[-1]
 
 class WallStreetJournal(BasePricingProvider):
-    def __init__(self, use_files: bool = False):
-        self.pricing_persistor = FilePersistor(CACHE_ROOT/_MODULE/"pricing") if use_files else SqlitePersistor(DB_PATH, f"{_MODULE}_pricing")
+    def __init__(self, storage: Literal['file','db','none']='db'):
+        self.pricing_persistor = FilePersistor(config.caching.file_path/_MODULE/"pricing") if storage == 'file'\
+            else SqlitePersistor(config.caching.db_path, f"{_MODULE}_pricing") if storage == 'db'\
+            else NullPersistor()
 
     @httputils.backup_timeout()
     def _fetch_pricing(self, key: str, step: str, time_frame: str, **kwargs):
@@ -104,9 +107,9 @@ class WallStreetJournal(BasePricingProvider):
     def get_pricing_delay(self, security, interval):
         return 120
     @override
-    def get_pricing_raw(self, security, unix_from, unix_to, interval, **kwargs):
+    def get_pricing_raw(self, unix_from, unix_to, security, interval):
         if interval >= Interval.H1: raise Exception(f"Interval {interval} not supported for wsj.")
-        data = self._fetch_pricing(f"STOCK/US/XNAS/{security.symbol}", self._get_interval(interval), 'D5', **kwargs)
+        data = self._fetch_pricing(f"STOCK/US/XNAS/{security.symbol}", self._get_interval(interval), 'D5')
         def extract_data_points(series: dict) -> dict:
             return {key: [it[index] for it in series['DataPoints']] for index,key in enumerate(series['DesiredDataPoints'])}
         quotes = {'Timestamp': self._fix_timestamps(data['TimeInfo']['Ticks'], interval, security)}
