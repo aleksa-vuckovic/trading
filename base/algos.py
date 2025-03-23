@@ -1,16 +1,16 @@
 #1
-from typing import Callable, Sequence
+from typing import Callable, Sequence, Iterable, Any, overload, Protocol, Literal
 from enum import Enum
-from typing import Iterable, Any, overload, Protocol, Literal
+import itertools
+import math
+
+class Comparable(Protocol):
+    def __lt__(self, other: Any, /) -> bool: ...
 
 class BinarySearchEdge(Enum):
     LOW ='low'
     HIGH = 'high'
     NONE = 'none'
-
-class Comparable(Protocol):
-    def __lt__(self, other: Any, /) -> bool: ...
-
 @overload
 def binary_search[T](collection: Sequence[T], value: Comparable, key: Callable[[T], Comparable], *, edge: Literal[BinarySearchEdge.LOW,BinarySearchEdge.HIGH]) -> int: ...
 @overload
@@ -50,8 +50,6 @@ def binary_search(collection: Sequence, value: Comparable, key: Callable[..., Co
         else: i = mid
     return i if edge == BinarySearchEdge.LOW else j if edge == BinarySearchEdge.HIGH else None
 
-result = binary_search([1], 1, key=lambda x:x, edge=BinarySearchEdge.LOW)
-
 def is_sorted(collection: Iterable[Comparable]) -> bool:
     iter1 = iter(collection)
     iter2 = iter(collection)
@@ -61,3 +59,37 @@ def is_sorted(collection: Iterable[Comparable]) -> bool:
             if next(iter2) < next(iter1): return False
     except:
         return True
+
+class LineSegment:
+    def __init__(self, pointA: tuple[float,float], pointB: tuple[float,float]):
+        self.start = pointA[0]
+        self.end = pointB[0]
+        if math.isinf(pointA[0]):
+            self.k = 0
+            self.n = pointB[1]
+        elif math.isinf(pointB[0]):
+            self.k = 0 
+            self.n = pointA[1]
+        else:
+            self.k = (pointB[1]-pointA[1])/(pointB[0]-pointA[0])
+            self.n = -self.k*pointA[0]+pointA[1]
+    def __contains__(self, x: float) -> bool:
+        return x >= self.start and x <= self.end
+    def __call__(self, x: float) -> float:
+        return self.k*x+self.n
+def interpolate(x: Sequence[float], y: Sequence[float], x_ret: Sequence[float], method: Literal['linear_edge'] = 'linear_edge') -> list[float]:
+    if len(x) != len(y): raise Exception(f"Lists x and y in interpolate must have the same length.")
+    y_ret: list[float] = []
+    i = 0 #x_ret cursor
+    if method == 'linear_edge':
+        for segment in itertools.chain(
+            [LineSegment((float('-inf'), y[0]), (x[0], y[0]))],
+            [LineSegment((x[i-1], y[i-1]), (x[i], y[i])) for i in range(1,len(x))],
+            [LineSegment((x[-1], y[-1]), (float('+inf'), y[-1]))]
+        ):
+            while i < len(x_ret) and x_ret[i] in segment:
+                y_ret.append(segment(x_ret[i]))
+                i += 1
+            if i == len(x_ret): break
+    else: raise Exception(f"Unknown interpolation methods {method}.")
+    return y_ret

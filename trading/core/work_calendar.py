@@ -1,14 +1,11 @@
 #2
 from __future__ import annotations
 import calendar
-from typing import overload, Any, TypeVar, override
+from typing import overload, TypeVar, override
 from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta
-
-from torch.sparse import SparseSemiStructuredTensorCUSPARSELT
-from base.algos import binary_search, BinarySearchEdge
 from base.classes import equatable
-from base.caching import cached_series, Persistor, MemoryPersistor
+from base.caching import cached_series, MemoryPersistor
 from base import dates
 from base.serialization import serializable
 from trading.core import Interval
@@ -232,7 +229,7 @@ class BasicWorkCalendar(WorkCalendar):
             close_hour = self.close_hour
             close_minute = self.close_minute
         if close_hour == 0 and close_minute == 0: return dates.to_zero(time + timedelta(days=1))
-        return time.replace(hour=self.close_hour, minute=self.close_minute, second=0, microsecond=0)
+        return time.replace(hour=close_hour, minute=close_minute, second=0, microsecond=0)
     @override
     def _is_timestamp(self, time: datetime, interval: Interval) -> bool:
         if interval == Interval.L1: return time == self.month_end(time)

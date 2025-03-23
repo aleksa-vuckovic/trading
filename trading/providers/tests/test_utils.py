@@ -1,36 +1,24 @@
 import unittest
-from trading.providers.utils import combine_series, filter_by_timestamp
+from trading.core.pricing import OHLCV
+from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
 
 class TestUtils(unittest.TestCase):
 
-    def test_combine_series_as_dict(self):
-        input = {key: [
-            None if key == 'd' and i == 3
-            else 0 if key=='Aaa' and i == 4
-            else None if key == 'b' and i == 5
-            else i + index for i in range(1,6)
-            ] for index,key in enumerate(['Aaa', 'b', 'c', 'd'])}
-        expect = [{'a': i, 'b': None if i == 5 else i+1, 'c': i+2, 'd': i+3} for i in range(1,6) if i != 3 and i != 4]
-        result = combine_series(input, must_be_truthy=['a','d'], must_be_there=['a','b','c','d'])
+    def test_arrays_to_ohlcv(self):
+        input = {'t': [None,2,3,4,5],'o':[5,5,1,5,None],'h':[9,9,9,9,9],'l':[1,-1,2,1,1],'c':[5,5,5,5,5],'v':[2,None,2,0,2]}
+        expect = [OHLCV(3,1,9,2,5,2),OHLCV(4,5,9,1,5,0)]
+        result = arrays_to_ohlcv(input)
         self.assertEqual(expect, result)
 
-        expect = expect[:-1]
-        result = combine_series(input, must_be_there=['a','b','c','d'])
+    def test_filter_ohlcv(self):
+        # check timestamp filtering
+        input = [OHLCV(it,1,1,1,1,1) for it in [5,1,3,3,10,11]]
+        expect = [OHLCV(it,1,1,1,1,1) for it in [3,5,10]]
+        result = filter_ohlcv(input, 1, 10)
         self.assertEqual(expect, result)
-
-    def test_combine_series_as_list(self):
-        input = {key: [
-            None if key == 'd' and i == 3
-            else 0 if key=='a' and i == 4
-            else None if key == 'b' and i == 5
-            else i + index for i in range(1,6)
-            ] for index,key in enumerate(['a', 'b', 'c', 'd'])}
-        expect = [[None if i == 5 else i+1, i, i+2] for i in range(1,6) if i != 3 and i != 4]
-        result = combine_series(input, must_be_there=['b','a','c'], must_be_truthy=['a','d'], as_list=True)
-        self.assertEqual(expect, result)
-
-    def test_filter_by_timestamp(self):
-        input = [{'t': 5}, {'t':1}, {'t': 3}, {'t': 3}, {'t': 10}, {'t': 11}]
-        expect = [{'t': 3}, {'t': 5}, {'t': 10}]
-        result = filter_by_timestamp(input, unix_from=1, unix_to=10)
+        
+        # check validation filtering
+        input = [OHLCV(0,5,9,1,5,2),OHLCV(2,5,9,-1,5,2),OHLCV(3,1,9,2,5,2),OHLCV(4,5,9,1,5,0),OHLCV(5,5,9,1,5,2),OHLCV(6,5,9,1,5,2)]
+        expect = [OHLCV(it,5,9,1,5,2) if it != 3 else OHLCV(3,1,9,2,5,2) for it in [0,3,5,6]]
+        result = filter_ohlcv(input, -1, 10)
         self.assertEqual(expect, result)

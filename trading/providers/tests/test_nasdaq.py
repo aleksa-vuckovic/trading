@@ -1,6 +1,7 @@
 from typing import override
 import unittest
-from trading.providers import NasdaqSecurity, NasdaqMarket, Nasdaq, SecurityType
+from trading.core.securities import SecurityType
+from trading.providers import NasdaqSecurity, NasdaqMarket, Nasdaq
 from trading.core.interval import Interval
 from trading.core.work_calendar import WorkCalendar
 from trading.core.tests.test_work_calendar import TestCalendar
@@ -40,9 +41,9 @@ class TestNasdaqCalendar(TestCalendar):
             ('2025-02-15 05:00:12', '2025-02-19 00:00:00'),
             ('2025-02-18 10:44:44', '2025-02-19 00:00:00'),
             ('2025-02-18 16:00:00', '2025-02-19 00:00:00'),
-            ('2025-02-14 20:00:00', '2025-02-19 00:00:00'),
+            ('2025-02-14 20:00:00', '2025-02-15 00:00:00'),
             ('2025-12-24 11:00:00', '2025-12-25 00:00:00'),
-            ('2025-12-24 15:00:00', '2025-12-27 00:00:00'),
+            ('2025-12-24 15:00:00', '2025-12-25 00:00:00'),
         ]
         if interval == Interval.H1: return [
             ('2025-02-18 09:15:12', '2025-02-18 10:30:00'),

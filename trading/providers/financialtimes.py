@@ -1,15 +1,17 @@
+from datetime import timedelta
 import json
 import logging
 import time
 import math
-from typing import Literal, override
+from typing import Literal, Sequence, override
 import config
+from base import dates
 from trading.utils import httputils 
 from trading.core.interval import Interval
-from trading.providers.utils import combine_series, filter_by_timestamp
+from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
 from base.caching import cached_scalar, Persistor, FilePersistor, SqlitePersistor, NullPersistor
 from trading.core.securities import Security
-from trading.core.pricing_provider import BasePricingProvider
+from trading.core.pricing import OHLCV, BasePricingProvider
 from trading.providers.nasdaq import NasdaqSecurity, NasdaqMarket
 
 logger = logging.getLogger(__name__)
@@ -32,12 +34,13 @@ def _get_interval(interval: Interval) -> tuple[str, int]:
 
 class FinancialTimes(BasePricingProvider):
     def __init__(self, storage: Literal['file','db','none']='db'):
-        super().__init__({
-            Interval.D1: None,
-            Interval.H1: Interval.M5,
-            Interval.M15: Interval.M5,
-            Interval.M5: None
-        })
+        super().__init__(
+            native = [Interval.D1, Interval.H1, Interval.M15, Interval.M5],
+            merge = {
+                Interval.H1: Interval.M5,
+                Interval.M15: Interval.M5
+            }
+        )
         self.info_persistor = FilePersistor(config.caching.file_path/_MODULE/'info') if storage == 'file'\
             else SqlitePersistor(config.caching.db_path, f"{_MODULE}_info") if storage == 'db'\
             else NullPersistor()
@@ -102,18 +105,22 @@ class FinancialTimes(BasePricingProvider):
         resp = httputils.post_as_browser(url, request)
         return json.loads(resp.text)
     
-    def _fix_timestamps(self, dates: list[float], interval: Interval, security: Security) -> list[float]:
-        timestamps = [it//10*10 if it else None for it in dates]
-        result = []
+    def _fix_timestamps(self, timestamps: Sequence[float|None], interval: Interval, security: Security) -> list[float|None]:
+        calendar = security.exchange.calendar
+        timestamps = [round(it/10)*10.0 if it else None for it in timestamps]
+        result: list[float|None] = []
         def skip(it):
-            logger.warning(f"Unexpected {interval} timestamp {security.exchange.calendar.unix_to_datetime(it)}. Skipping.")
+            logger.warning(f"Unexpected {interval} timestamp {calendar.unix_to_datetime(it)}. Skipping.")
             result.append(None)
         for it in timestamps:
             if not it: result.append(None)
-            elif interval <= Interval.D1 and not security.exchange.calendar.is_workday(it): skip(it)
-            elif interval >= Interval.D1:
-                if it != security.exchange.calendar.to_zero(it): skip(it)
-                else: result.append(security.exchange.calendar.get_next_timestamp(it+1, interval))
+            elif interval == Interval.D1: # Should be UTC 00:00
+                utc = dates.unix_to_datetime(it, tz=dates.UTC)
+                if utc != dates.to_zero(utc): skip(it)
+                else:
+                    time = utc.replace(tzinfo=calendar.tz).timestamp()+1
+                    if not calendar.is_workday(time): skip(it)
+                    else: result.append(calendar.get_next_timestamp(time, Interval.D1))
             else:
                 if not security.exchange.calendar.is_timestamp(it, interval): skip(it)
                 else: result.append(it)
@@ -129,7 +136,7 @@ class FinancialTimes(BasePricingProvider):
     def get_pricing_delay(self, security: Security, interval: Interval) -> float:
         return 17*60
     @override
-    def get_pricing_raw(self, unix_from: float, unix_to: float, security: Security, interval: Interval) -> list[dict]:
+    def get_pricing_raw(self, unix_from: float, unix_to: float, security: Security, interval: Interval) -> list[OHLCV]:
         days = math.ceil((time.time() - unix_from)/(24*3600)) + 1
         days = max(min(days, 15), 4)
         info = self._get_info(security)
@@ -145,4 +152,4 @@ class FinancialTimes(BasePricingProvider):
             return {it['Type']:it['Values'] for it in element['ComponentSeries']}
         data = {**extract_component_series_values(prices), **extract_component_series_values(volumes)}
         data['t'] = timestamps
-        return filter_by_timestamp(combine_series(data), unix_from, unix_to)
+        return filter_ohlcv(arrays_to_ohlcv(data), unix_from, unix_to)

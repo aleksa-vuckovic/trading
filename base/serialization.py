@@ -1,12 +1,17 @@
 #2
+from __future__ import annotations
 import json
-from typing import Any, Callable, override
+from typing import Any, Callable, override, Self
 from enum import Enum
-from datetime import datetime
 from base.classes import get_full_classname, get_class_by_full_classname
 
 _TYPE = '$$type'
 _SKIP_KEYS = '_serializable_skip_keys'
+
+class Serializable:
+    def to_dict(self) -> dict: ...
+    @staticmethod
+    def from_dict(data: dict) -> Any: ...
 
 class Serializer:
     def serialize(self, obj: object) -> str:

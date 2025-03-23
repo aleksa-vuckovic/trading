@@ -9,9 +9,9 @@ from base.algos import BinarySearchEdge, binary_search
 from base.caching import NullPersistor, cached_scalar, Persistor, FilePersistor, SqlitePersistor
 from trading.core import Interval
 from trading.core.securities import Security, DataProvider
-from trading.core.pricing_provider import BasePricingProvider
+from trading.core.pricing import OHLCV, BasePricingProvider
 from trading.utils import httputils
-from trading.providers.utils import combine_series, filter_by_timestamp
+from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
 
 
 
@@ -27,14 +27,13 @@ class Yahoo(BasePricingProvider, DataProvider):
     The timestamps correspond to the START of the period.
     """
     def __init__(self, storage: Literal['file','db','none']='db'):
-        BasePricingProvider.__init__(self, {
-            Interval.L1: None,
-            Interval.W1: None,
-            Interval.D1: None,
-            Interval.H1: None,
-            Interval.M15: Interval.M5,
-            Interval.M5: None
-        })
+        BasePricingProvider.__init__(
+            self,
+            native = [Interval.L1, Interval.W1, Interval.D1, Interval.H1, Interval.M15, Interval.M5],
+            merge = {
+                Interval.M15: Interval.M5
+            }
+        )
         DataProvider.__init__(self)
         self.info_persistor = FilePersistor(config.caching.file_path/_MODULE/"info") if storage == 'file'\
             else SqlitePersistor(config.caching.db_path, f"{_MODULE}_info") if storage == 'db'\
@@ -81,7 +80,7 @@ class Yahoo(BasePricingProvider, DataProvider):
                 if it != security.exchange.calendar.to_zero(it): skip(it)
                 else: result.append(security.exchange.calendar.get_next_timestamp(it + 1, interval))
             elif interval == Interval.D1:
-                if it != security.exchange.calendar.set_close(it): skip(it)
+                if it != security.exchange.calendar.set_open(it): skip(it)
                 else: result.append(security.exchange.calendar.get_next_timestamp(it - 1, interval))
             else:
                 timestamp = security.exchange.calendar.get_next_timestamp(it, interval)
@@ -104,7 +103,7 @@ class Yahoo(BasePricingProvider, DataProvider):
     def get_pricing_delay(self, security, interval):
         return 120
     @override
-    def get_pricing_raw(self, unix_from: float, unix_to: float, security: Security, interval: Interval) -> list[dict]:
+    def get_pricing_raw(self, unix_from: float, unix_to: float, security: Security, interval: Interval) -> list[OHLCV]:
         first_trade_time = self.get_first_trade_time(security)
         now = time.time()
         query_from = max(unix_from - interval.time(), first_trade_time + _MIN_AFTER_FIRST_TRADE)
@@ -116,25 +115,25 @@ class Yahoo(BasePricingProvider, DataProvider):
         except httputils.BadResponseException:
             logger.error(f"Bad response for {security.symbol} from {unix_from} to {unix_to} at {interval}. PERMANENT EMPTY RETURN!", exc_info=True)
             return []
-        def get_series(data: dict, unix_from: float, unix_to: float, interval: Interval) -> list[dict]:
+        def get_series(data: dict, unix_from: float, unix_to: float, interval: Interval) -> list[OHLCV]:
             data = data['chart']['result'][0]
             if 'timestamp' not in data or not data['timestamp']: return []
             arrays: dict = data['indicators']['quote'][0]
             arrays['timestamp'] = self._fix_timestamps(data['timestamp'], interval, security)
             try:
-                arrays['adjclose'] = data['indicators']['adjclose'][0]['adjclose']
+                arrays['close'] = data['indicators']['adjclose'][0]['adjclose']
             except:
                 pass
-            return filter_by_timestamp(combine_series(arrays), unix_from, unix_to)
-        def try_adjust(series: list[dict]) -> list[dict]:
+            return filter_ohlcv(arrays_to_ohlcv(arrays), unix_from, unix_to)
+        def try_adjust(series: list[OHLCV]) -> list[OHLCV]:
             try:
-                d1data = self._get_pricing(unix_to - _ADJUSTMENT_PERIOD, unix_to, security, Interval.D1)
-                close = d1data[-2]['c']
-                time = d1data[-2]['t']
-                i = binary_search(series, time, lambda x: x['t'], edge=BinarySearchEdge.NONE)
+                d1data = self.get_pricing(unix_to - _ADJUSTMENT_PERIOD, unix_to, security, Interval.D1)
+                close = d1data[-1]['c']
+                time = security.exchange.calendar.set_close(d1data[-1]['t'])
+                i = binary_search(series, time, lambda x: x.t, edge=BinarySearchEdge.NONE)
                 if i is not None:
                     factor = close / series[i]['c']
-                    return [{key:it[key]*(1 if key=='t' else 1/factor if key=='v' else factor) for key in it}  for it in series ]
+                    return [it.adjust(factor)  for it in series ]
                 raise Exception(f"No suitable timestamp found.")
             except:
                 logger.error(f"Failed to adjust {security.symbol}.", exc_info=True)
@@ -156,7 +155,9 @@ class Yahoo(BasePricingProvider, DataProvider):
         try:
             info = yfinance.Ticker(security.symbol).info
         except json.JSONDecodeError:
-            raise httputils.TooManyRequestsException()
+            #raise httputils.TooManyRequestsException()
+            logger.warning(f"YFINANCE TICKER ERROR", exc_info=True)
+            info = {'BAD_YFINANCE_TICKER': True}
         mock_time = int(time.time() - 15*24*3600)
         try:
             meta = self._fetch_pricing(mock_time-3*24*3600, mock_time, security.symbol, self._get_interval(Interval.D1))['chart']['result'][0]['meta']

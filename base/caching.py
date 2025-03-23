@@ -6,6 +6,7 @@ import time
 import sqlite3
 from typing import Callable, Iterable, Any, Sequence, Unpack, override, TypeVar, ParamSpec, Concatenate, Type, TypeVarTuple, TypedDict
 from pathlib import Path
+from base import TypedSerializer
 from base.algos import binary_search, BinarySearchEdge
 from base.files import escape_filename, unescape_filename
 from base.serialization import Serializer, BasicSerializer, serializable
@@ -44,7 +45,7 @@ class NullPersistor(Persistor):
         return []
 
 class FilePersistor(Persistor):
-    def __init__(self, root: Path, serializer: Serializer = BasicSerializer()):
+    def __init__(self, root: Path, serializer: Serializer = TypedSerializer()):
         self.root = root
         self.serializer = serializer
     def _get_path(self, key: str) -> Path:
@@ -77,7 +78,7 @@ class FilePersistor(Persistor):
                 yield str.join("/",(unescape_filename(it) for it in relative.parts))
 
 class SqlitePersistor(Persistor):
-    def __init__(self, db_path: Path, table: str, serializer: Serializer = BasicSerializer()):
+    def __init__(self, db_path: Path, table: str, serializer: Serializer = TypedSerializer()):
         self.conn = sqlite3.connect(db_path, isolation_level=None)
         self.table = table
         self.serializer = serializer

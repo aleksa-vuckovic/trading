@@ -9,10 +9,8 @@ class TestGlobenewswire(unittest.TestCase):
         start_time = security.exchange.calendar.str_to_unix('2023-01-01 00:00:00')
         end_time = security.exchange.calendar.str_to_unix('2024-06-01 00:00:00')
         
-        first_title = "NVIDIA Brings RTX 4080 to GeForce NOW"
-        last_title = "NVIDIA Announces Upcoming Event for Financial Community"
-        total_count = 98
-        data = provider.get_titles(start_time, end_time, security)
-        self.assertEqual(first_title, data[0])
-        self.assertEqual(last_title, data[-1])
-        self.assertEqual(total_count, len(data))
+        data = provider.get_news(start_time, end_time, security)
+        self.assertEqual(98, len(data))
+        self.assertEqual("NVIDIA Brings RTX 4080 to GeForce NOW", data[0].title)
+        self.assertEqual("NVIDIA Announces Upcoming Event for Financial Community", data[-1].title)
+        

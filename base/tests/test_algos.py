@@ -1,5 +1,5 @@
 import unittest
-from base.algos import binary_search, BinarySearchEdge, is_sorted
+from base.algos import binary_search, BinarySearchEdge, interpolate, is_sorted
 
 class TestAlgos(unittest.TestCase):
     def test_binary_search(self):
@@ -29,3 +29,23 @@ class TestAlgos(unittest.TestCase):
         for example in true_examples: self.assertTrue(is_sorted(example), f"Expected sorted for {example}.")
         for example in false_examples: self.assertFalse(is_sorted(example), f"Expected not sorted for {example}.")
 
+    def test_interpolate_linear_edge(self):
+        x = [2,5,7]
+        y = [1,2,3]
+        x_ret = list(range(1,11))
+        expect = [1.0,1.0,4/3,5/3,2.0,2.5,3.0,3.0,3.0,3.0]
+        result = interpolate(x, y, x_ret, method='linear_edge')
+        for i in range(len(expect)):
+            self.assertAlmostEqual(expect[i], result[i], None, f"\n{expect} !=\n{result}")
+
+        x = [1,5,7]
+        y = [1,2,4]
+        x_ret = [1,2,5,6,7]
+        expect = [1,5/4,2,3,4]
+        result = interpolate(x, y, x_ret, method='linear_edge')
+        self.assertEqual(expect, result)
+        
+        x_ret = [0,*x_ret,8]
+        expect = [1, *expect, 4]
+        result = interpolate(x, y, x_ret, method='linear_edge')
+        self.assertEqual(expect, result)

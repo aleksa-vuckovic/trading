@@ -1,6 +1,6 @@
 #1
 import importlib
-from typing import TypeVar, Callable
+from typing import Callable
 
 def equatable[T: type](skip_keys: list[str] = []) -> Callable[[T], T]:
     """

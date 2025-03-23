@@ -7,10 +7,10 @@ import config
 from base import dates
 from trading.utils import httputils
 from trading.core.interval import Interval
-from trading.providers.utils import combine_series, filter_by_timestamp
-from base.caching import FilePersistor, NullPersistor, SqlitePersistor
+from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
+from base.caching import FilePersistor, NullPersistor, Persistor, SqlitePersistor
 from trading.core.securities import Security
-from trading.core.pricing_provider import BasePricingProvider
+from trading.core.pricing import OHLCV, BasePricingProvider
 
 logger = logging.getLogger(__name__)
 _TOKEN_KEY='Dylan2010.Entitlementtoken'
@@ -20,6 +20,13 @@ _MODULE: str = __name__.split(".")[-1]
 
 class WallStreetJournal(BasePricingProvider):
     def __init__(self, storage: Literal['file','db','none']='db'):
+        super().__init__(
+            native = [Interval.D1, Interval.M15, Interval.M5],
+            merge = {
+                Interval.H1: Interval.M5,
+                Interval.M15: Interval.M5
+            }
+        )
         self.pricing_persistor = FilePersistor(config.caching.file_path/_MODULE/"pricing") if storage == 'file'\
             else SqlitePersistor(config.caching.db_path, f"{_MODULE}_pricing") if storage == 'db'\
             else NullPersistor()
@@ -64,10 +71,9 @@ class WallStreetJournal(BasePricingProvider):
     
     def _get_interval(self, interval: Interval) -> str:
         if interval == Interval.D1: return 'P1D'
-        elif interval == Interval.H1: return 'PT30M'
         elif interval == Interval.M15: return 'PT15M'
         elif interval == Interval.M5: return 'PT5M'
-        else: raise ValueError(f"Unknown interval {interval}")
+        else: raise ValueError(f"Unsupported interval {interval}")
 
     def _fix_timestamps(self, timestamps: list[float|int|None], interval: Interval, security: Security) -> list[float|None]:
         timestamps = [it//1000 if it else None for it in timestamps]
@@ -96,19 +102,18 @@ class WallStreetJournal(BasePricingProvider):
         return result
 
     @override
-    def get_interval_start(self, interval):
+    def get_interval_start(self, interval) -> float:
         if interval == Interval.D1: return time.time() - 365*24*3600
         if interval < Interval.D1: return time.time() - 5*25*3600
         raise Exception(f"Unsupported interval {interval}.")
     @override
-    def get_pricing_persistor(self, security, interval):
+    def get_pricing_persistor(self, security, interval) -> Persistor:
         return self.pricing_persistor
     @override
-    def get_pricing_delay(self, security, interval):
+    def get_pricing_delay(self, security, interval) -> float:
         return 120
     @override
-    def get_pricing_raw(self, unix_from, unix_to, security, interval):
-        if interval >= Interval.H1: raise Exception(f"Interval {interval} not supported for wsj.")
+    def get_pricing_raw(self, unix_from, unix_to, security, interval) -> list[OHLCV]:
         data = self._fetch_pricing(f"STOCK/US/XNAS/{security.symbol}", self._get_interval(interval), 'D5')
         def extract_data_points(series: dict) -> dict:
             return {key: [it[index] for it in series['DataPoints']] for index,key in enumerate(series['DesiredDataPoints'])}
@@ -117,4 +122,4 @@ class WallStreetJournal(BasePricingProvider):
             quotes = {**quotes, **extract_data_points(series)}
         quotes['Close'] = quotes['Last']
         del quotes['Last']
-        return filter_by_timestamp(combine_series(quotes), unix_from, unix_to)
+        return filter_ohlcv(arrays_to_ohlcv(quotes), unix_from, unix_to)
