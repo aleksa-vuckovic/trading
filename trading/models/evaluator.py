@@ -8,18 +8,20 @@ import json
 import random
 from tqdm import tqdm
 from pathlib import Path
-from typing import Callable, Any
+from typing import Callable, Any, Sequence, override
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 
-from base import serialization
-from ..providers import nasdaq, aggregate
+from base import dates
+from base.classes import get_full_classname
+from base.serialization import serializable, Serializable, serializer
 from trading.utils import plotutils
-from base.serialization import serializable
-from trading.core.work_calendar import TimingConfig, XNAS
-from trading.core.interval import Interval, get_full_classname
-from .abstract import AbstractModel, PriceEstimator
-from .generators.abstract import AbstractGenerator
+from trading.core.work_calendar import TimingConfig
+from trading.core import Interval
+from trading.core.securities import Security
+from trading.providers.aggregate import AggregateProvider
+from trading.models.abstract import AbstractModel, PriceEstimator
+from trading.models.generators.abstract import AbstractGenerator
 logger = logging.getLogger()
 
 WIN = 'win'
@@ -32,8 +34,8 @@ if not FOLDER.exists(): FOLDER.mkdir()
 
 @serializable()
 class Result:
-    def __init__(self, ticker: nasdaq.NasdaqSecurity, output: float):
-        self.ticker = ticker
+    def __init__(self, security: Security, output: float):
+        self.security = security
         self.output = output
         self.data = {}
 
@@ -45,7 +47,7 @@ class SelectionStrategy:
         self.top_count = top_count
     def insert(self, result: Result):
         bisect.insort_right(self.results, result, key=lambda it: -it.output)
-    def get_selected(self) -> list[Result]:
+    def get_selected(self) -> Sequence[Result]:
         """
         Returns results sorted from best to worst.
         """
@@ -60,7 +62,7 @@ class MarketCapSelector(SelectionStrategy):
         self.select_at = select_at
     def insert(self, result):
         try:
-            market_cap = aggregate.get_market_cap(result.ticker)
+            market_cap = AggregateProvider.instance.get_market_cap(result.security)
         except:
             market_cap = 0
         result.data['market_cap'] = market_cap
@@ -72,7 +74,8 @@ class MarketCapSelector(SelectionStrategy):
 class RandomSelector(SelectionStrategy):
     def __init__(self, top_count: int = 10):
         super().__init__(top_count)
-    def get_selected(self) -> Result:
+    @override
+    def get_selected(self) -> list[Result]:
         selection = self.results[:self.top_count]
         random.shuffle(selection)
         return selection
@@ -81,7 +84,7 @@ class FirstTradeTimeSelector(SelectionStrategy):
     def __init__(self, top_count: int = 10):
         super().__init__(top_count)
     def insert(self, result):
-        result.data['first_trade_time'] = aggregate.get_first_trade_time(result.ticker)
+        result.data['first_trade_time'] = AggregateProvider.instance.get_first_trade_time(result.security)
         return super().insert(result)
     def get_selected(self):
         return sorted(self.results[:self.top_count], key=lambda it: it.data['first_trade_time'])
@@ -115,58 +118,56 @@ class Evaluator:
 
     def evaluate(
         self,
-        tickers: list[nasdaq.NasdaqSecurity]|None = None,
+        securities: list[Security],
         unix_time: float|None = None,
         selector: SelectionStrategy = SelectionStrategy(),
         on_update: Callable[[SelectionStrategy], Any]|None = None,
         log: bool = True
     ) -> SelectionStrategy:
         """
-        Evaluate model results for all tickers, on unix_time or live (if None).
+        Evaluate model results for all securities, on unix_time or live (if None).
         On update is invoked with an updated sorted list with each new result.
         """
-        tickers = tickers or aggregate.get_sorted_tickers()
-        logger.info(f"Evaluating {len(tickers)} tickers for {XNAS.unix_to_datetime(unix_time) if unix_time else 'live'}.")
-        if isinstance(selector, RandomSelector) and selector.top_count >= len(tickers):
-            for ticker in tickers: selector.insert(Result(ticker, 0))
+        logger.info(f"Evaluating {len(securities)} securities for {dates.unix_to_datetime(unix_time, tz=dates.CET) if unix_time else 'live'}.")
+        if isinstance(selector, RandomSelector) and selector.top_count >= len(securities):
+            for security in securities: selector.insert(Result(security, 0))
             return selector
         self.model.eval()
         with torch.no_grad():
-            for ticker in tqdm(tickers, leave=True, desc=f"Evaluating for {XNAS.unix_to_datetime(unix_time)}"):
+            for security in tqdm(securities, leave=True, desc=f"Evaluating for {dates.unix_to_datetime(unix_time, tz=dates.CET) if unix_time else 'now'}"):
                 try:
-                    example = {key:value.to(dtype=self.dtype, device=self.device) for key,value in self.generator.generate_example(ticker, unix_time or time.time(), with_output=False).items()}
-                    tensors = self.model.extract_tensors(example)
-                    output = self.model(*tensors).squeeze().item()
-                    selector.insert(Result(ticker, output))
+                    example = {key:value.to(dtype=self.dtype, device=self.device) for key,value in self.generator.generate_example(security, unix_time or time.time(), with_output=False).items()}
+                    tensors = self.model.extract_tensors(example, with_output=False)
+                    output = self.model(**tensors).squeeze().item()
+                    selector.insert(Result(security, output))
                     if on_update: on_update(selector)
-                    if log: logger.info(f"Evaluated {ticker.symbol} with output {output}.")
+                    if log: logger.info(f"Evaluated {security.symbol} with output {output}.")
                 except KeyboardInterrupt:
                     raise
                 except:
-                    if log: logger.error(f"Failed to evaluate {ticker.symbol}.", exc_info=True)
+                    if log: logger.error(f"Failed to evaluate {security.symbol}.", exc_info=True)
         return selector
 
     def backtest(
         self,
         unix_from: float,
         unix_to: float,
+        securities: list[Security],
         timing: TimingConfig,
         estimator: PriceEstimator,
         selector: SelectionStrategy = SelectionStrategy(),
-        commission: float = 0.0035,
-        tickers: list[nasdaq.NasdaqSecurity]|None = None
-    ) -> float:
+        commission: float = 0.0035
+    ) -> dict[str, list[float]]:
         """
         Returns total gain in percentages
         """
-        logger.info(f"Backtesting from {XNAS.unix_to_datetime(unix_from)} to {XNAS.unix_to_datetime(unix_to)}")
+        logger.info(f"Backtesting from {dates.unix_to_datetime(unix_from, tz=dates.CET)} to {dates.unix_to_datetime(unix_to, tz=dates.CET)}")
         unix_time = unix_from
-        tickers = tickers or aggregate.get_sorted_tickers()
         history = {
-            WIN: [1],
-            REAL_WIN: [1],
-            LAST_WIN: [1],
-            REAL_LAST_WIN: [1]
+            WIN: [1.0],
+            REAL_WIN: [1.0],
+            LAST_WIN: [1.0],
+            REAL_LAST_WIN: [1.0]
         }
         plt.ion()
         fig1, ax1 = plt.subplots(1,1)
@@ -192,25 +193,27 @@ class Evaluator:
                 break
             try:
                 selector.clear()
-                self.evaluate(tickers, unix_time=unix_time, log=False, selector=selector)
+                self.evaluate(securities, unix_time=unix_time, log=False, selector=selector)
                 
                 results = selector.get_selected()
-                result = None
+                result: Result|None = None
+                sell_price: float = 1.0
+                last_price: float = 1.0
                 for it in results:
                     try:
-                        sell_price = estimator.estimate(it.ticker, unix_time)
-                        last_price = aggregate.get_pricing(it.ticker, unix_from=unix_time-24*3600, unix_to=unix_time, interval=Interval.M5, return_quotes=['close'])[0][-1]
+                        sell_price = estimator.estimate(it.security, unix_time)
+                        last_price = AggregateProvider.instance.get_pricing(unix_time-24*3600, unix_time, it.security, Interval.M5)[-1].c
                         result = it
                         break
                     except:
-                        logger.warning(f"Failed to estimate sell price for {it.ticker.symbol}", exc_info=True)
+                        logger.warning(f"Failed to estimate sell price for {it.security.symbol}", exc_info=True)
                 if not result: raise Exception(f"Failed to estimate sell price for all selected entries.")
 
                 history[LAST_WIN].append(sell_price/last_price)
                 history[REAL_LAST_WIN].append((sell_price-commission*sell_price-commission*last_price)/last_price)
                 history[WIN].append(history[WIN][-1]*history[LAST_WIN][-1])
                 history[REAL_WIN].append(history[REAL_WIN][-1]*history[REAL_LAST_WIN][-1])
-                logger.info(f"Buying {result.ticker.symbol} at {XNAS.unix_to_datetime(unix_time)}.")
+                logger.info(f"Buying {result.security.symbol} at {dates.unix_to_datetime(unix_time,tz=dates.CET)}.")
                 logger.info(f"Output: {result.output}. Data: {result.data}.")
                 logger.info(f"WIN: {history[LAST_WIN][-1]}. REAL WIN {history[REAL_LAST_WIN][-1]}")
 
@@ -223,14 +226,14 @@ class Evaluator:
             except KeyboardInterrupt:
                 raise
             except:
-                logger.error(f"Failed to evaluate at {XNAS.unix_to_datetime(unix_time)}.", exc_info=True)
+                logger.error(f"Failed to evaluate at {dates.unix_to_datetime(unix_time,tz=dates.CET)}.", exc_info=True)
         plt.ioff()
         selector.clear()
         backtest_result = BacktestResult(
             history, unix_from, unix_to, get_full_classname(self.model), selector, estimator, commission
         )
         path = FOLDER / f"backtest_{self.model.get_name()}_t{int(time.time())}.json"
-        path.write_text(serialization.serialize(backtest_result))
+        path.write_text(serializer.serialize(backtest_result))
         plt.show(block = True)
         return history
 
@@ -247,7 +250,7 @@ class Evaluator:
         ax_left = fig.add_subplot(gs[1:,0])
         ax_right = fig.add_subplot(gs[1:,1])
         ax_title.text(0.5, 1, f"""\
-Model {data['model']}, hour {data['hour']}, from {XNAS.unix_to_datetime(data['unix_from'])} to {XNAS.unix_to_datetime(data['unix_to'])}.
+Model {data['model']}, hour {data['hour']}, from {dates.unix_to_datetime(data['unix_from'],tz=dates.CET)} to {dates.unix_to_datetime(data['unix_to'],tz=dates.CET)}.
 Selector {data['selector']}.
 Estimator {data['estimator']}.\
         """, ha='center', va='top', fontsize=10)

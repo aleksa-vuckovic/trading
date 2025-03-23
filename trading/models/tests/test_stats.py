@@ -1,3 +1,4 @@
+from typing import override
 import unittest
 import torch
 from ..stats import StatCollector, StatContainer
@@ -14,8 +15,9 @@ class TestStats(unittest.TestCase):
         class TestCollectorFloat(StatCollector):
             def __init__(self):
                 super().__init__('float')
-            def _calculate(self, expect, output):
-                return torch.logical_or(expect, output).sum().item()
+            @override
+            def _calculate(self, expect: torch.Tensor, output: torch.Tensor) -> torch.Tensor:
+                return torch.logical_or(expect, output).sum()
             
         output1 = torch.Tensor([True, True, False])
         expect1 = torch.Tensor([True, False, False])

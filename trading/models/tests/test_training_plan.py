@@ -1,54 +1,80 @@
+from pathlib import Path
+from typing import override
 import unittest
 import torch
-from ..training_plan import TrainingPlan
-from ..stats import StatCollector, StatContainer
-from ..utils import Batches
+
+from fix import TimingConfig
+from main import DataConfig, ModelConfig, PriceEstimator, PriceTarget
+from trading.core import Interval
+from trading.models.abstract import AbstractModel, Aggregation, Quote
+from trading.models.training_plan import TrainingPlan
+from trading.models.stats import StatCollector, StatContainer
+from trading.models.utils import Batches
+
+config = ModelConfig(
+    PriceEstimator(Quote.C, Interval.H1, slice(1,2), Aggregation.AVG),
+    PriceTarget.LINEAR_0_10,
+    TimingConfig.Builder().at(9).build(),
+    DataConfig({Interval.H1: 10}),
+    Path('./test')
+)
+class Model(AbstractModel):
+    pass
+
+model = Model(config)
+optimizer = torch.optim.SGD(model.parameters())
 
 class TestTrainingPlan(unittest.TestCase):
     def test_triggers(self):
-        stat_trigger = TrainingPlan.StatTrigger(key = 'count', lower_bound=1.5, lower_bound_inclusive=False, upper_bound=4, upper_bound_inclusive=True, event='enter', trigger_once=True)
+        stat_trigger = TrainingPlan.StatTrigger('val', 'count', (1.5,4), event='enter', trigger_once=True)
         stat_history = TrainingPlan.StatHistoryAction()
         class CountCollector(StatCollector):
             def __init__(self):
                 super().__init__('count')
                 self.i = 0
-            def _calculate(self, expect, output):
+            @override
+            def _calculate(self, expect: torch.Tensor, output: torch.Tensor) -> torch.Tensor:
                 self.i += 1
-                return self.i
-        stats = StatContainer(CountCollector())
+                return torch.tensor(self.i, dtype=torch.float32)
+        stats = StatContainer(CountCollector(), name='test')
+        class Model(AbstractModel):
+            pass
+
         def make_plan(stats: StatContainer):
             model = torch.nn.Linear(1,1)
-            return TrainingPlan.Builder(model)\
-                .with_optimizer(model.parameters())\
+            return TrainingPlan.Builder(Model(config))\
+                .with_optimizer(torch.optim.SGD(model))\
                 .with_batches('train', Batches([]), stats=stats, backward=True)\
                 .with_batches('val', Batches([]), stats=stats)\
                 .build()
         plan = make_plan(stats)
-        stats.update(None, None)
+        expect = torch.tensor([1,2,3])
+        output = torch.tensor([1,2,4])
+        stats.update(expect, output)
         stat_history.execute(plan)
-        stats.update(None, None)
+        stats.update(expect, output)
         self.assertFalse(stat_trigger.check(plan))
         stat_history.execute(plan)
-        stats.update(None, None)
+        stats.update(expect, output)
         self.assertTrue(stat_trigger.check(plan))
         stat_history.execute(plan)
-        stats.update(None, None)
+        stats.update(expect, output)
         self.assertFalse(stat_trigger.check(plan))
 
-        stats = StatContainer(CountCollector())
-        stats.update(None, None)
+        stats = StatContainer(CountCollector(), name='test')
+        stats.update(expect, output)
         plan = make_plan(stats)
         plan.epoch = 2
         stat_history.execute(plan)
-        stats.update(None, None)
+        stats.update(expect, output)
         or_trigger = TrainingPlan.EpochTrigger(2, trigger_once=True) \
-            | TrainingPlan.StatTrigger('count', lower_bound=2, trigger_once=True)
+            | TrainingPlan.StatTrigger('val', 'count', (2, float('+inf')), trigger_once=True)
         self.assertTrue(or_trigger.check(plan))
         stat_history.execute(plan)
-        stats.update(None, None)
+        stats.update(expect, output)
         plan.epoch = 3
         self.assertTrue(or_trigger.check(plan))
         stat_history.execute(plan)
-        stats.update(None, None)
+        stats.update(expect, output)
         self.assertFalse(or_trigger.check(plan))
 

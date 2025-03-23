@@ -1,23 +1,29 @@
 
 import logging
 import torch
-import matplotlib
 import random
 import time
+import matplotlib
+from typing import Sequence, override
+from matplotlib.axes import Axes
+from matplotlib import pyplot as plt
 from torch import Tensor
 from pathlib import Path
-from matplotlib import pyplot as plt
-from .trading.utils.dateutils import TimingConfig, XNAS
-from ...providers import nasdaq, aggregate
-from ..abstract import PriceEstimator, DataConfig, QUOTES, CLOSE_I, AFTER_KEY_PREFIX
-from trading.utils import check_tensors, PriceTarget, BatchFile
-from .abstract import AbstractGenerator
 
+from trading.core import Interval
+from trading.core.securities import Security
+from trading.core.work_calendar import TimingConfig
+from trading.providers.aggregate import AggregateProvider
+from trading.models.abstract import Aggregation, Quote, AFTER, PriceEstimator, DataConfig, PriceTarget
+from trading.models.utils import check_tensors, BatchFile
+from trading.models.generators.abstract import AbstractGenerator
 
 logger = logging.getLogger(__name__)
 
 class Generator(AbstractGenerator):
-    def __init__(self,
+    def __init__(
+        self,
+        securities: Sequence[Security],
         data_config: DataConfig,
         after_data_config: DataConfig,
         timing: TimingConfig,
@@ -28,27 +34,40 @@ class Generator(AbstractGenerator):
         self.timing = timing
         self.folder = folder
 
-        self.tickers = [
+        # securities with the first unix time that an example can be generated for them
+        self.securities = [
             (
                 it,
-                XNAS.add_intervals(
-                    aggregate.get_first_trade_time(it),
-                    self.data_config.max_interval,
-                    self.data_config.max_interval_count
+                max(
+                    it.exchange.calendar.add_intervals(
+                        AggregateProvider.instance.get_first_trade_time(it),
+                        interval,
+                        self.data_config.counts[interval]
+                    )
+                    for interval in self.data_config.intervals
                 )
             )
-            for it in aggregate.get_sorted_tickers()
+            for it in securities
         ]
+
+        exchanges = set(it.exchange for it in securities)
+        
+        # the time frame for the entire generator loop depends mainly on the providers' data time frames
         self.time_frame = (
-            XNAS.add_intervals(
-                self.data_config.min_interval.start_unix(), 
-                self.data_config.min_interval, 
-                self.data_config.min_Interval_count
+            max(
+                exchange.calendar.add_intervals(
+                    AggregateProvider.instance.get_interval_start(interval), 
+                    interval, 
+                    self.data_config.counts[interval]
+                ) for interval in self.data_config.intervals for exchange in exchanges
             ),
-            XNAS.add_intervals(
-                time.time(), 
-                self.after_data_config.max_interval,
-                -self.after_data_config.max_interval_count
+            min(
+                exchange.calendar.add_intervals(
+                    time.time(),
+                    interval,
+                    -self.after_data_config.counts[interval]
+                )
+                for interval in self.data_config.intervals for exchange in exchanges
             )
         )
 
@@ -56,56 +75,60 @@ class Generator(AbstractGenerator):
         self._run_loop(
             folder = self.folder,
             timing = self.timing,
-            tickers_fn=lambda unix_time: [it[0] for it in self.tickers if it[1] <= unix_time],
+            securities_fn=lambda unix_time: [it[0] for it in self.securities if it[1] <= unix_time],
             time_frame=self.time_frame
         )
 
+    @override
     def generate_example(
         self,
-        ticker: nasdaq.NasdaqSecurity,
+        security: Security,
         end_time: float,
         with_output: bool = True
     ) -> dict[str, Tensor]:
         #1. Get the prices
         data = {}
         for interval, count in self.data_config:
-            start_time = XNAS.add_intervals(end_time, interval, -count)
-            pricing = aggregate.get_interpolated_pricing(ticker, start_time, end_time, interval, return_quotes=QUOTES, max_fill_ratio=1/5)
-            if len(pricing[0]) != count:
-                raise Exception(f"Unexpected number of timestamps for start_time {start_time} end time {end_time} interval {interval} count {count}. Got {len(pricing[0])}.")
-            data[interval.name] = torch.stack([torch.tensor(it, dtype=torch.float64) for it in pricing], dim=1)
+            start_time = security.exchange.calendar.add_intervals(end_time, interval, -count)
+            pricing = AggregateProvider.instance.get_pricing(start_time, end_time, security, interval, interpolate=True, max_fill_ratio=1/5)
+            if len(pricing) != count: 
+                raise Exception(f"Unexpected number of timestamps for start_time {start_time} end time {end_time} interval {interval} count {count}. Got {len(pricing)}.")
+            data[interval.name] = [[it[quote.name] for quote in Quote] for it in pricing]
         check_tensors(list(data.values()), allow_zeros=False)
         if not with_output: return data
 
         after_data = {}
         for interval, count in self.after_data_config:
-            start_time = XNAS.add_intervals(end_time, interval, -count)
-            pricing = aggregate.get_interpolated_pricing(ticker, start_time, end_time, interval, return_quotes=QUOTES, max_fill_ratio=1/5)
-            if len(pricing[0]) != count:
-                raise Exception(f"Unexpected number of timestamps for start_time {start_time} end time {end_time} interval {interval} count {count}. Got {len(pricing[0])}.")
-            after_data[f"{AFTER_KEY_PREFIX}_{interval.name}"] = torch.stack([torch.tensor(it, dtype=torch.float64) for it in pricing], dim=1)
+            start_time = security.exchange.calendar.add_intervals(end_time, interval, -count)
+            pricing = AggregateProvider.instance.get_pricing(start_time, end_time, security, interval, interpolate=True, max_fill_ratio=1/5)
+            if len(pricing) != count:
+                raise Exception(f"Unexpected number of timestamps for start_time {start_time} end time {end_time} interval {interval} count {count}. Got {len(pricing)}.")
+            
+            after_data[f"{AFTER}_{interval.name}"] = torch.tensor([[it[quote.name] for quote in Quote] for it in pricing], dtype=torch.float64)
         check_tensors(list(after_data.values()), allow_zeros=False)
         return {**data, **after_data}
 
+    @override
     def plot_statistics(
         self,
-        estimator: PriceEstimator,
+        estimator: PriceEstimator = PriceEstimator(Quote.C, Interval.H1, slice(0,7), Aggregation.LAST),
         targets: list[PriceTarget] = list(PriceTarget),
-        title: str = ""
+        title: str = "",
+        **kwargs
     ):
         #Bin distribution of after values
-        temp = []
+        temp: list[Tensor] = []
         files = [it.path for it in BatchFile.load(self.folder) if it.unix_time in self.timing]
         random.shuffle(files)
         for file in files[:20]:
-            example = torch.load(file, weights_only=True)
-            close = example[self.min_interval.name][:,-1:,CLOSE_I]
+            example: dict[str, Tensor] = torch.load(file, weights_only=True)
+            close = example[self.data_config.min_interval.name][:,-1:,Quote.C.value]
             data = (estimator.estimate_example(example) - close)/close
             temp.append(data)
         data = torch.concat(temp, dim=0)
         fig, axes = plt.subplots(1, 1+len(targets), figsize=(5,3+3*len(targets)))
         fig.suptitle(title)
-        axes: list[matplotlib.axes.Axes] = axes
+        axes: list[Axes] = axes
         
         axes[0].set_title(f'Raw')
         axes[0].set_xlabel('Percentage change')

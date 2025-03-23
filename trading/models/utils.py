@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Iterable, Iterator, Mapping, Sequence, Any
 import torch
 import math
 import logging
@@ -12,10 +13,10 @@ from matplotlib import pyplot as plt
 
 logger = logging.getLogger(__name__)
 
-def check_tensors(tensors: list[Tensor] | tuple[Tensor] | dict[object, Tensor], allow_zeros=True):
-    if isinstance(tensors, (list, tuple)):
+def check_tensors(tensors: Sequence[Tensor] | tuple[Tensor] | Mapping[Any, Tensor], allow_zeros=True):
+    if isinstance(tensors, (Sequence, tuple)):
         for tensor in tensors: check_tensor(tensor)
-    elif isinstance(tensors, dict):
+    elif isinstance(tensors, Mapping):
         for tensor in tensors.values(): check_tensor(tensor)
     else: raise ValueError("Expecting list, tuple or dict in check_tensors.")
 def check_tensor(tensor: Tensor, allow_zeros=True):
@@ -157,14 +158,14 @@ class BatchFile:
     def load(root: Path) -> list[BatchFile]:
         return sorted([BatchFile(root/it) for it in os.listdir(root) if it.endswith('.pt')], key=lambda it: (it.unix_time, it.entry))
 
-class Batches:
+class Batches(Iterable[dict[str, Tensor]]):
     def __init__(self, files: list[BatchFile], merge: int = 1, device: str = "cpu", dtype = torch.float32):
         self.files = files
         self.merge = merge
         self.device = device
         self.dtype = dtype
 
-    def to(self, device: str | None = None, dtype: str | None = None):
+    def to(self, device: torch.device|None = None, dtype: torch.dtype|None = None):
         if device: self.device = device
         if dtype: self.dtype = dtype
         return self
@@ -172,25 +173,21 @@ class Batches:
     def __len__(self):
         return math.ceil(len(self.files)/self.merge)
 
-    class Iterator:
+    class Iterator(Iterator[dict[str, Tensor]]):
         batches: Batches
         def __init__(self, batches):
             self.batches = batches
             self.i = 0
-        def __next__(self):
+        def __next__(self) -> dict[str, Tensor]:
             if self.i >= len(self.batches.files):
                 raise StopIteration()
             files = self.batches.files[self.i:self.i+self.batches.merge]
-            data = [torch.load(it.path, weights_only=True) for it in files]
-            if isinstance(data[0], dict):
-                data = {key:torch.cat([it[key] for it in data], dim=0).to(device=self.batches.device, dtype=self.batches.dtype) for key in data[0].keys()}
-                shapes = {key:data[key].shape for key in data.keys()}
-                logger.debug(f"Loaded batch with shape {shapes}")
-            else:
-                data = torch.cat(data, dim=0).to(device = self.batches.device, dtype=self.batches.dtype)
-                logger.debug(f"Loaded batch with shape {data.shape}")
+            data: list[dict[str, Tensor]] = [torch.load(it.path, weights_only=True) for it in files]
+            merged_data = {key:torch.cat([it[key] for it in data], dim=0).to(device=self.batches.device, dtype=self.batches.dtype) for key in data[0].keys()}
+            shapes = {key:merged_data[key].shape for key in merged_data}
+            logger.debug(f"Loaded batch with shape {shapes}")
             self.i += len(files)
-            return data
+            return merged_data
 
     def __iter__(self):
         return Batches.Iterator(self)

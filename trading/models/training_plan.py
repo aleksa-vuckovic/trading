@@ -1,16 +1,17 @@
 from __future__ import annotations
 import torch
+from torch import Tensor
 import logging
 from tqdm import tqdm
 from pathlib import Path
-from typing import Callable, NamedTuple
+from typing import Callable, Literal, NamedTuple, Sequence, override
 from matplotlib import pyplot as plt
-from trading.core import interval
+from base.classes import get_full_classname
 from trading.utils import plotutils
 from trading.core.work_calendar import TimingConfig
-from .stats import StatContainer
-from .utils import Batches, BatchFile
-from .abstract import AbstractModel
+from trading.models.stats import StatContainer
+from trading.models.utils import Batches, BatchFile
+from trading.models.abstract import AbstractModel
 
 logger = logging.getLogger(__name__)
 STAT_HISTORY = 'stat_history'
@@ -27,16 +28,17 @@ class TrainingPlan:
     class Trigger:
         def check(self, plan: TrainingPlan) -> bool:
             return False
-        def __or__(self, value):
+        def __or__(self, value) -> TrainingPlan.OrTrigger:
             return TrainingPlan.OrTrigger(self, value)
-        def __and__(self, value):
+        def __and__(self, value) -> TrainingPlan.AndTrigger:
             return TrainingPlan.AndTrigger(self, value)
     class OrTrigger(Trigger):
-        def __init__(self, *args, trigger_once: bool = False):
+        def __init__(self, *args: TrainingPlan.Trigger, trigger_once: bool = False):
             self.criteria = list(args)
             self.trigger_once = trigger_once
             self.triggered = False
-        def check(self, plan: TrainingPlan):
+        @override
+        def check(self, plan: TrainingPlan) -> bool:
             if self.trigger_once and self.triggered: return False
             for it in self.criteria:
                 if it.check(plan):
@@ -44,69 +46,82 @@ class TrainingPlan:
                     return True
             return False
     class AndTrigger(Trigger):
-        def __init__(self, *args, trigger_once: bool = False):
+        def __init__(self, *args: TrainingPlan.Trigger, trigger_once: bool = False):
             self.criteria = list(args)
             self.trigger_once = trigger_once
             self.triggered = False
-        def check(self, plan):
-            if self.trigger_once and self.triggered: return
+        @override
+        def check(self, plan: TrainingPlan) -> bool:
+            if self.trigger_once and self.triggered: return False
             for it in self.criteria:
                 if not it.check(plan):
                     return False
             self.triggered = True
             return True
         
-    class StatTrigger(Trigger):
-        def __init__(self,
-            key: str,
-            group: str = 'val',
-            lower_bound: float | None = None,
-            lower_bound_inclusive: bool = True,
-            upper_bound: float | None = None,
-            upper_bound_inclusive: bool = True,
-            event: str = 'enter', #enter/exit/both/in/out
+    class BoundedTrigger(Trigger):
+        is_trigger: Callable[[bool|None, bool]]
+        in_bounds: bool|None
+
+        def __init__(
+            self,
+            bounds: tuple[float,float],
+            event: Literal['enter','exit','both','in','out'] = 'enter',
             trigger_once: bool = False
         ):
-            self.key = key
-            self.group = group
-            self.lower_bound = lower_bound
-            self.upper_bound = upper_bound
+            self.bounds = bounds
+            self.event = event
             self.trigger_once = trigger_once
             self.triggered = False
-            self.prev_in_bounds = None
 
-            lower_bound = lower_bound if lower_bound is None or lower_bound_inclusive else lower_bound + 1e-10
-            upper_bound = upper_bound if upper_bound is None or upper_bound_inclusive else upper_bound - 1e-10
-            if not lower_bound and not upper_bound: self.in_bounds = lambda it: None
-            elif not lower_bound: self.in_bounds = lambda it: it <= upper_bound
-            elif not upper_bound: self.in_bounds = lambda it: it >= lower_bound
-            else: self.in_bounds = lambda it: (it <= upper_bound and it >= lower_bound)
+            self.in_bounds = None
 
-            if event == 'enter': self.is_trigger = lambda prev, cur: not prev and cur
-            elif event == 'exit': self.is_trigger = lambda prev, cur: (prev is None or prev) and not cur
-            elif event == 'both': self.is_trigger = lambda prev, cur: prev is None or prev ^ cur
+            if event == 'enter': self.is_trigger = lambda prev, cur: prev == False and cur
+            elif event == 'exit': self.is_trigger = lambda prev, cur: prev == True and not cur
+            elif event == 'both': self.is_trigger = lambda prev, cur: prev is not None and prev ^ cur
             elif event == 'in': self.is_trigger = lambda prev, cur: cur
             elif event == 'out': self.is_trigger = lambda prev, cur: not cur
             else: raise Exception(f'Unknown event {event}.')
-
-        def check(self, plan) -> bool:
+        
+        def get_value(self, plan: TrainingPlan) -> float: ...
+        @override
+        def check(self, plan: TrainingPlan) -> bool:
             if self.trigger_once and self.triggered: return False
-            stats = [it.stats for it in plan.batch_groups if it.name == self.group][0]
-            prev = self.prev_in_bounds
-            cur = self.in_bounds(stats[self.key])
-            self.prev_in_bounds = cur
-            if self.is_trigger(prev, cur):
-                logger.info(f"Triggered stat trigger for '{self.group}.{self.key}', with value {stats[self.key]}. (lower bound {self.lower_bound}, upper bound {self.upper_bound})")
+            value = self.get_value(plan)
+            in_bounds = value > self.bounds[0] and value < self.bounds[1]
+            result = self.is_trigger(self.in_bounds, in_bounds)
+            self.in_bounds = in_bounds
+            if result: 
+                logger.info(f"Triggered bounded {self}, with value {value}. Bounds: {self.bounds}.")
                 self.triggered = True
-                return True
-            else: return False
+            return result
+        
+    class StatTrigger(BoundedTrigger):
+        def __init__(self,
+            group: str,
+            key: str,
+            bounds: tuple[float, float],
+            event: Literal['enter','exit','both','in','out'] = 'enter',
+            trigger_once: bool = False
+        ):
+            super().__init__(bounds, event, trigger_once)
+            self.key = key
+            self.group = group
+
+        @override
+        def get_value(self, plan: TrainingPlan) -> float:
+            stats = [it.stats for it in plan.batch_groups if it.name == self.group][0]
+            return stats[self.key]
+        
+        def __str__(self) -> str:
+            return f"{self.__class__.__name__}(key='{self.key}',group='{self.group}')"
         
     class StatHistoryTrigger(Trigger):
         def __init__(self,
             key: str,
             group: str = 'val',
             count: int = 10,
-            criteria: Callable[[list[object]], bool] = lambda values: True,
+            criteria: Callable[[Sequence[float]], bool] = lambda values: True,
             trigger_once: bool = True,
             desc: str|None = None
         ):
@@ -161,7 +176,7 @@ class TrainingPlan:
         def execute(self, plan: TrainingPlan):
             if STAT_HISTORY not in plan.data:
                 plan.data[STAT_HISTORY] = []
-            entry = {it.name:it.stats.to_dict() for it in plan.batch_groups}
+            entry: dict = {it.name:it.stats.to_dict() for it in plan.batch_groups}
             entry['epoch'] = plan.epoch
             plan.data[STAT_HISTORY].append(entry)
     
@@ -225,13 +240,13 @@ class TrainingPlan:
         stats: StatContainer
         backward: bool = False
 
-    device: str
-    dtype: str
+    device: torch.device
+    dtype: torch.dtype
     model: AbstractModel
     optimizer: torch.optim.Optimizer
     batch_groups: list[_BatchGroup]
     rules: list[_Rule]
-    primary_checkpoint: CheckpointAction
+    primary_checkpoint: CheckpointAction|None
     epoch: int
     data: dict
     stop: bool
@@ -285,7 +300,7 @@ class TrainingPlan:
             logger.info(f"Using {len(self.batch_groups)} batch groups.")
             for entry in self.batch_groups:
                 logger.info(f"Batch group {entry.name} with {len(entry.batches)} batches.")
-            logger.info(f"Model {interval.get_full_classname(self.model)}.")
+            logger.info(f"Model {get_full_classname(self.model)}.")
             logger.info(f"Optimizer {type(self.optimizer)}.")
             
             while not self.stop and self.epoch < max_epoch:
@@ -296,11 +311,9 @@ class TrainingPlan:
                         self.model.train()
                         with tqdm(batch_group.batches, desc=f"Epoch {self.epoch} ({batch_group.name})", leave=True) as bar:
                             for batch in bar:
-                                tensors = self.model.extract_tensors(batch)
-                                input = tensors[:-1]
-                                expect = tensors[-1]
+                                input, expect = self.model.extract_tensors(batch, with_output=True)
                                 self.optimizer.zero_grad()
-                                output = self.model(*input).squeeze()
+                                output: Tensor = self.model(*input).squeeze()
                                 loss = batch_group.stats.update(expect, output)
                                 loss.backward()
                                 self.optimizer.step()
@@ -374,17 +387,17 @@ def add_triggers(
         .then(TrainingPlan.StatHistoryAction())
     
     for loss, lr_factor in lr_steps:
-        builder.when(TrainingPlan.StatTrigger('loss', upper_bound=loss, trigger_once=True))\
+        builder.when(TrainingPlan.StatTrigger('val', 'loss', (float('-inf'), loss), trigger_once=True))\
             .then(TrainingPlan.CheckpointAction(checkpoints_folder / f'loss_{int(loss*100)}_checkpoint.pth'))\
             .then(TrainingPlan.LearningRateAction(initial_lr*lr_factor))
     for precision in range(5, 100, 5):
-        builder.when(TrainingPlan.StatTrigger('precision', lower_bound=precision/100, trigger_once=True))\
+        builder.when(TrainingPlan.StatTrigger('val', 'precision', (precision/100, float('+inf')), trigger_once=True))\
             .then(TrainingPlan.CheckpointAction(checkpoints_folder / f"precision_{precision}_checkpoint.pth"))
     for accuracy in range(5, 100, 5):
-        builder.when(TrainingPlan.StatTrigger('accuracy', lower_bound=accuracy/100, trigger_once=True))\
+        builder.when(TrainingPlan.StatTrigger('val', 'accuracy', (accuracy/100, float('+inf')), trigger_once=True))\
             .then(TrainingPlan.CheckpointAction(checkpoints_folder / f"accuracy_{accuracy}_checkpoint.pth"))
         
-    def loss_plateau(values: list[float]) -> bool:
+    def loss_plateau(values: Sequence[float]) -> bool:
         high = max(values)
         last = values[-1]
         return last>=high or (high-last)/high < 0.001

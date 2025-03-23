@@ -77,6 +77,17 @@ class PricingProvider:
                 Only used when interpolate=True.
         """
         raise NotImplementedError()
+    def get_intervals(self) -> Sequence[Interval]:
+        """
+        Get all intervals supported by this pricing provider.
+        """
+        raise NotImplementedError()
+    def get_interval_start(self, interval: Interval) -> float:
+        """
+        Get the unix timestamp of the start-of-availability for the given interval.
+        """
+        raise NotImplementedError()
+
 
 def merge_pricing(
     data: Sequence[OHLCV],
@@ -175,7 +186,6 @@ class BasePricingProvider(PricingProvider):
             return self.get_pricing_raw(unix_from, unix_to, security, interval)
 
     #region Abstract
-    def get_interval_start(self, interval: Interval) -> float: raise NotImplementedError()
     def get_pricing_persistor(self, security: Security, interval: Interval) -> Persistor: raise NotImplementedError()
     def get_pricing_delay(self, security: Security, interval: Interval) -> float: raise NotImplementedError()
     def get_pricing_raw(self, unix_from: float, unix_to: float, security: Security, interval: Interval) -> Sequence[OHLCV]:

@@ -1,35 +1,30 @@
 import torch
 from torch import Tensor
-from typing import Callable
+from typing import Callable, override
+from base.serialization import serializable, Serializable
 
-class StatCollector:
+@serializable()
+class StatCollector(Serializable):
     def __init__(self, name: str):
         self.name = name
         self.clear()
     
-    def update(self, expect: Tensor, output: Tensor) -> Tensor | float | int:
+    def update(self, expect: Tensor, output: Tensor) -> Tensor:
         result = self._calculate(expect, output)
-        if isinstance(result, (int, float)): self.__update(result)
-        else: self.__update(float(result.item()))
-        return result
-
-    def _calculate(self, expect: Tensor, output: Tensor) -> Tensor | float | int:
-        pass
-
-    def __update(self, value: float | int):
+        value = float(result.item())
         self.last = value
         self.count += 1
         self.total += value
         self.running = self.total / self.count
+        return result
+
+    def _calculate(self, expect: Tensor, output: Tensor) -> Tensor: ...
     
     def clear(self):
         self.last = None
         self.count = 0
         self.total = 0
         self.running = 0
-
-    def to_dict(self) -> dict:
-        return {'last': self.last, 'count': self.count, 'running': self.running}
     
     def __str__(self):
         return f"{self.name}={self.running:.4f}({self.last:.2f})"
@@ -37,15 +32,12 @@ class StatCollector:
 class StatContainer:
     stats: dict[str, StatCollector]
     primary: str
-    def __init__(self, *args, name: str | None = None):
-        for arg in args:
-            if not isinstance(arg, StatCollector):
-                raise Exception(f'Unexpected arg type {type(arg)}')
+    def __init__(self, *args: StatCollector, name: str):
         self.stats = {it.name:it for it in args}
         self.primary = args[0].name
         self.name = name
 
-    def update(self, expect: Tensor, output: Tensor) -> Tensor | float | int | None:
+    def update(self, expect: Tensor, output: Tensor) -> Tensor:
         result = {key:self.stats[key].update(expect, output) for key in self.stats}
         return result[self.primary]
     
@@ -77,13 +69,13 @@ class Accuracy(StatCollector):
         self.to_bool_output = to_bool_output
         self.to_bool_expect = to_bool_expect or to_bool_output
     
-    def _calculate(self, expect, output):
+    @override
+    def _calculate(self, expect: Tensor, output: Tensor) -> Tensor:
         output = self.to_bool_output(output)
         expect = self.to_bool_expect(expect)
-        hits = torch.logical_and(output, expect).sum().item()
-        output_n = output.sum().item()
-        expect_n = expect.sum().item()
-        return hits / output_n if output_n else 1
+        hits = torch.logical_and(output, expect).sum()
+        output_n = output.sum()
+        return hits / output_n
     
 class Precision(StatCollector):
     """
@@ -98,17 +90,18 @@ class Precision(StatCollector):
         self.to_bool_output = to_bool_output
         self.to_bool_expect = to_bool_expect or to_bool_output
 
-    def _calculate(self, expect, output):
+    def _calculate(self, expect, output) -> Tensor:
         output = self.to_bool_output(output)
         expect = self.to_bool_expect(expect)
-        hits = torch.logical_and(output, expect).sum().item()
-        expect_n = expect.sum().item()
-        return hits / expect_n if expect_n else 1
+        hits = torch.logical_and(output, expect).sum()
+        expect_n = expect.sum()
+        return hits / expect_n
     
 class TanhLoss(StatCollector):
     def __init__(self):
         super().__init__('loss')
-    def _calculate(self, expect, output):
+    @override
+    def _calculate(self, expect: Tensor, output: Tensor) -> Tensor:
         eps = 1e-5
         loss = -torch.log(1 + eps - torch.abs(output - expect) / (1+torch.abs(expect)))
         return loss.mean()
@@ -116,11 +109,13 @@ class TanhLoss(StatCollector):
 class SigmoidLoss(StatCollector):
     def __init__(self):
         super().__init__('loss')
-    def _calculate(self, expect, output):
+    @override
+    def _calculate(self, expect: Tensor, output: Tensor) -> Tensor:
         return -torch.log(torch.abs(expect - output)).mean()
     
 class LinearLoss(StatCollector):
     def __init__(self):
         super().__init__('loss')
-    def _calculate(self, expect, output):
+    @override
+    def _calculate(self, expect: Tensor, output: Tensor) -> Tensor:
         return torch.nn.functional.mse_loss(expect, output)

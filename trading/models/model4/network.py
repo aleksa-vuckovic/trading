@@ -1,10 +1,11 @@
+from typing import Literal, overload, override
 import torch
 import torchinfo
 import config
 from torch import Tensor
-from .trading.utils.common import Interval
-from ..abstract import AbstractModel, ModelConfig, OPEN_I, HIGH_I, LOW_I, CLOSE_I
-from trading.utils import get_moving_average, get_time_relativized, check_tensors, check_tensor
+from trading.core import Interval
+from trading.models.abstract import AbstractModel, ModelConfig, Quote
+from trading.models.utils import get_moving_average, get_time_relativized, check_tensors, check_tensor
 
 INPUT_FEATURES = 'input_features'
 MVG_WINDOW = 'mvg_window'
@@ -73,35 +74,30 @@ class Model(AbstractModel):
             self.config.target.get_layer()
         )
 
-    def forward(self, *args: Tensor | dict[str, Tensor]):
-        if len(args) == 1:
-            data: dict[str, Tensor] = args[0]
-            output = torch.cat(
-                [
-                    *(self.conv_layers[interval](data[interval]) for interval in data),
-                    *(self.layers[interval](data[interval]) for interval in data)
-                ],
-                dim=1
-            )
-        else:
-            output = torch.cat(
-                [
-                    *(self.conv_layers[interval.name](tensor) for interval, tensor in zip(self.config.data_config.intervals(), args)),
-                    *(self.layers[interval.name](tensor) for interval, tensor in zip(self.config.data_config.intervals(), args))
-                ],
-                dim=1
-            )
-                
+    @override
+    def forward(self, tensors: dict[str, Tensor]) -> Tensor:
+        output = torch.cat(
+            [
+                *(self.conv_layers[interval](tensors[interval]) for interval in tensors),
+                *(self.layers[interval](tensors[interval]) for interval in tensors)
+            ],
+            dim=1
+        )  
         return self.dense(output)
 
-    def extract_tensors(self, example: dict[str, Tensor], with_output: bool = True):
-        if len(next(example.values()).shape) < 3:
+    @overload
+    def extract_tensors(self, example: dict[str, Tensor], with_output: Literal[False]) -> dict[str,Tensor]: ...
+    @overload
+    def extract_tensors(self, example: dict[str, Tensor], with_output: Literal[True]=...) -> tuple[dict[str,Tensor],Tensor]: ...
+    @override
+    def extract_tensors(self, example: dict[str, Tensor], with_output: bool = True) -> dict[str, Tensor]|tuple[dict[str, Tensor], Tensor]:
+        if len(next(iter(example.values())).shape) < 3: # Make sure there's a batch dimension
             example = { key: example[key].unsqueeze(dim=0) for key in example }
 
-        def process(tensor: Tensor, data_points: int):
-            tensor = tensor[:,-data_points-self.config.other[MVG_WINDOW]:,:]
+        def process(tensor: Tensor, count: int):
+            tensor = tensor[:,-count-self.config.other[MVG_WINDOW]:,:]
             #1 Get high-low relative to low (relative span)
-            tensor[:,:,OPEN_I] = (tensor[:,:,HIGH_I] - tensor[:,:,LOW_I]) / tensor[:,:,LOW_I]
+            tensor[:,:,Quote.O.value] = (tensor[:,:,Quote.H.value] - tensor[:,:,Quote.L.value]) / tensor[:,:,Quote.L.value]
             #2 Get moving averages for everything
             mvg = get_moving_average(tensor, dim=1, window=self.config.other[MVG_WINDOW])
             #3 Concat everything
@@ -109,7 +105,7 @@ class Model(AbstractModel):
             #4 Relativize all except relative span
             tensor[:,:,1:5] = get_time_relativized(tensor[:,:,1:5], dim=1)
             tensor[:,:,6:10] = get_time_relativized(tensor[:,:,6:10], dim=1)
-            return tensor[:,-data_points:,:].transpose(1,2)
+            return tensor[:,-count:,:].transpose(1,2)
         
         tensors = { 
             key : process(example[key], self.config.data_config[key])
@@ -118,7 +114,7 @@ class Model(AbstractModel):
         check_tensors(tensors)
         if with_output:
             after = self.config.estimator.estimate_example(example)
-            close = example[self.config.data_config.min_interval.name][:,-1,CLOSE_I]
+            close = example[self.config.data_config.min_interval.name][:,-1,Quote.C.value]
             after = (after[:,-1] - close) / close
             after = self.config.target.get_price(after)
             check_tensor(after)
@@ -127,7 +123,7 @@ class Model(AbstractModel):
 
     def print_summary(self, merge:int = 10):
         input = [
-            (config.batch_size*merge, self.config.other[INPUT_FEATURES], count)
+            (config.models.batch_size*merge, self.config.other[INPUT_FEATURES], count)
             for interval, count in self.config.data_config
         ]
         torchinfo.summary(self, input_size=input)

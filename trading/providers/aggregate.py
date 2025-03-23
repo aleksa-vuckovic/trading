@@ -29,7 +29,7 @@ class AggregateProvider(PricingProvider, NewsProvider, DataProvider):
         raise Exception("No methods to invoke.")
 
     @override
-    def get_pricing(self, unix_from: float, unix_to: float, security: Security, interval: Interval, *, interpolate: bool, max_fill_ratio: float) -> Sequence[OHLCV]:
+    def get_pricing(self, unix_from: float, unix_to: float, security: Security, interval: Interval, *, interpolate: bool = False, max_fill_ratio: float = 1) -> Sequence[OHLCV]:
         try:
             return self.pricing_providers[0].get_pricing(unix_from, unix_to, security, interval, interpolate=interpolate, max_fill_ratio=max_fill_ratio)
         except:
@@ -46,6 +46,10 @@ class AggregateProvider(PricingProvider, NewsProvider, DataProvider):
                 return result
             else:
                 return recent
+            
+    @override
+    def get_interval_start(self, interval: Interval) -> float:
+        return min([it.get_interval_start(interval) for it in self.pricing_providers])
     
     @override
     def get_news(self, unix_from: float, unix_to: float, security: Security) -> Sequence[News]:

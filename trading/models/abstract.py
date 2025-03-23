@@ -1,59 +1,75 @@
 from __future__ import annotations
 import logging
+from typing import Literal, overload, Iterable, Iterator
 import torch
 from torch import Tensor
 from pathlib import Path
-from enum import Enum
-from base import serialization
+from enum import Enum, auto
+from base.serialization import serializable, Serializable, serializer
+from base.classes import equatable
+from trading.core import Interval
 from trading.core.work_calendar import TimingConfig
-from trading.core.interval import Interval, equatable
+from trading.core.securities import Security
+from trading.models.utils import PriceTarget
+from trading.providers.aggregate import AggregateProvider
+
 from base.serialization import serializable
 
 logger = logging.getLogger(__name__)
 
-OPEN_I = 0
-HIGH_I = 1
-LOW_I = 2
-CLOSE_I = 3
-VOLUME_I = 4
-
-QUOTES = ['open', 'high', 'low', 'close', 'volume']
-QUOTE_I = {it[0]:i for i,it in enumerate(QUOTES)}
-
-AFTER_KEY_PREFIX = "OUTPUT"
+class Quote(Enum):
+    O = 0
+    H = 1
+    L = 2
+    C = 3
+    V = 4
+    
+AFTER = "AFTER"
 
 class Aggregation(Enum):
-    FIRST = 'first'
-    LAST = 'last'
-    AVG = 'avg'
-    MAX = 'max'
-    MIN = 'min'
-    def apply_tensor(self, tensor: Tensor, dim:int=-1) -> Tensor:
-        dims = len(tensor.shape)
-        while dim<0: dim+=dims
-        if self==Aggregation.FIRST: return tensor[tuple(slice(None,None) if it!=dim else 0 for it in range(dims))]
-        if self==Aggregation.LAST: return tensor[tuple(slice(None,None) if it!=dim else -1 for it in range(dims))]
-        if self==Aggregation.AVG: return tensor.mean(dim=dim)
-        if self==Aggregation.MAX: return tensor.max(dim=dim)
-        if self==Aggregation.MIN: return tensor.min(dim=dim)
+    FIRST = auto()
+    LAST = auto()
+    AVG = auto()
+    MAX = auto()
+    MIN = auto()
+    @overload
+    def apply(self, data: Tensor, dim:int=...) -> Tensor: ...
+    @overload
+    def apply(self, data: list, dim:int=...) -> list|float: ...
+    def apply(self, data: Tensor|list, dim:int=-1) -> Tensor|list|float:
+        if isinstance(data, list): return self.apply(torch.tensor(data, dtype=torch.float64), dim=dim).tolist()
+        dims = len(data.shape)
+        dim %= dims
+        if self==Aggregation.FIRST: return data[tuple(slice(None,None) if it!=dim else 0 for it in range(dims))]
+        if self==Aggregation.LAST: return data[tuple(slice(None,None) if it!=dim else -1 for it in range(dims))]
+        if self==Aggregation.AVG: return data.mean(dim=dim)
+        if self==Aggregation.MAX: return data.max(dim=dim).values
+        if self==Aggregation.MIN: return data.min(dim=dim).values
         raise Exception(f"Unknown aggregation {self}")
-    def apply_list(self, data: list, dim:int=-1) -> list|float:
-        tensor = torch.tensor(data, dtype=torch.float64)
-        return self.apply_tensor(tensor, dim=dim).tolist()
 
 @serializable()
 @equatable()
-class PriceEstimator:
+class PriceEstimator(Serializable):
+    """
+    Estimates the sell price within a timeframe,
+    in a way defined by the parameters.
+
+    Args:
+        quote: The quote used in the prediction.
+        interval: The interval used in the prediction.
+        index: The slice within a timeframe used to predict the price.
+        agg: The aggregation applied to the prices within the slice.
+        max_fill_ratio: The value is passed directly over to PricingProvider.get_pricing. 
+    """
     def __init__(
         self,
-        quote: str,
+        quote: Quote,
         interval: Interval,
         index: slice,
         agg: Aggregation,
         max_fill_ratio: float = 1
     ):
         self.quote = quote
-        self.quote_index = QUOTE_I[quote[0].lower()]
         self.interval = interval
         self.index = index
         self.agg = agg
@@ -61,37 +77,45 @@ class PriceEstimator:
 
     def estimate_tensor(self, tensor: Tensor) -> Tensor:
         dims = len(tensor.shape)
-        index = tuple(slice(None,None) if it < dims-2 else self.index if it < dims - 1 else self.quote_index for it in range(dims))
-        return self.agg.apply_tensor(tensor[index])
+        index = tuple(slice(None,None) if it < dims-2 else self.index if it < dims - 1 else self.quote.value for it in range(dims))
+        return self.agg.apply(tensor[index])
     
     def estimate_example(self, example: dict[str, Tensor]) -> Tensor:
-        key = f"{AFTER_KEY_PREFIX}_{self.interval.name}"
+        key = f"{AFTER}_{self.interval.name}"
         if key not in example: raise Exception(f"Can't estimate without {key}.")
         return self.estimate_tensor(example[key])
 
-    def estimate(self, ticker: nasdaq.NasdaqSecurity, unix_time: float) -> float:
-        end_time = XNAS.add_intervals(unix_time, self.interval, self.index.stop)
-        prices, = aggregate.get_interpolated_pricing(ticker, unix_time, end_time, self.interval, return_quotes=[self.quote], max_fill_ratio=self.max_fill_ratio)
-        tensor = torch.tensor(prices, dtype=torch.float64)
-        self.agg.apply_tensor(tensor, dim=-1).item()
-
+    def estimate(self, security: Security, unix_time: float) -> float:
+        end_time = security.exchange.calendar.add_intervals(unix_time, self.interval, self.index.stop)
+        prices = AggregateProvider.instance.get_pricing(unix_time, end_time, security, self.interval, interpolate=True, max_fill_ratio=self.max_fill_ratio)
+        tensor = torch.tensor([it[self.quote.name] for it in prices], dtype=torch.float64)
+        return float(self.agg.apply(tensor, dim=-1).item())
 
 @equatable()
-class DataConfig:
+class DataConfig(Serializable):
     def __init__(self, counts: dict[Interval, int]):
         self.counts = counts
-        self.max_interval = sorted(counts.keys())[-1]
-        self.min_interval = sorted(counts.keys())[0]
-        self.max_interval_count = counts[self.max_interval]
-        self.min_Interval_count = counts[self.min_interval]
 
-    def to_dict(self) -> dict:
-        return {interval.name:count for interval, count in self.counts.items()}
-    
-    class Iterator:
+    @property
+    def intervals(self) -> Iterable[Interval]:
+        return sorted(self.counts.keys(), reverse=True)
+    @property
+    def min_interval(self) -> Interval:
+        return sorted(self.intervals)[-1]
+    @property
+    def max_interval(self) -> Interval:
+        return sorted(self.intervals)[0]
+    @property
+    def min_interval_count(self) -> int:
+        return self.counts[self.min_interval]
+    @property
+    def max_interval_count(self) -> int:
+        return self.counts[self.max_interval]
+
+    class Iterator(Iterator[tuple[Interval, int]]):
         def __init__(self, data_config: DataConfig):
             self.data_config = data_config
-            self.intervals = list(data_config.intervals())
+            self.intervals = list(data_config.intervals)
             self.i = 0
         def __next__(self) -> tuple[Interval, int]:
             if self.i >= len(self.intervals):
@@ -99,13 +123,13 @@ class DataConfig:
             self.i += 1
             return self.intervals[self.i-1], self.data_config.counts[self.intervals[self.i-1]]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[tuple[Interval, int]]:
         return DataConfig.Iterator(self)
     
     def __len__(self):
         return len(self.counts)
     
-    def __getitem__(self, key: Interval|str):
+    def __getitem__(self, key: Interval|str) -> int:
         if isinstance(key, Interval):
             return self.counts[key]
         if isinstance(key, str) and any(it for it in Interval if it.name == key):
@@ -119,14 +143,10 @@ class DataConfig:
             return Interval[key] in self.counts
         return False
     
-    def intervals(self):
-        return sorted(self.counts.keys())
-
+    def to_dict(self) -> dict: return {'counts': self.counts}
     @staticmethod
     def from_dict(data: dict) -> DataConfig:
-        data_points = {Interval[interval]:count for interval, count in data.items()}
-        return DataConfig(data_points)
-
+        return DataConfig({Interval[key]: data[key] for key in data['counts']})
 
 @serializable(skip_keys=['examples_folder'])
 @equatable(skip_keys=['examples_folder'])
@@ -149,12 +169,12 @@ class ModelConfig:
     
     def __str__(self) -> str:
         return f"""
-estimator = {serialization.serialize(self.estimator, typed=False, indent=2)}
+estimator = {serializer.serialize(self.estimator, typed=False, indent=2)}
 target = {self.target.name}
-output = {self.output.name}
-timing = {serialization.serialize(self.timing, typed=False, indent=2)}
-inputs = {serialization.serialize(self.inputs, typed=False, indent=2)}
-data = {self.other}
+timing = {serializer.serialize(self.timing, typed=False, indent=2)}
+data_config = {serializer.serialize(self.data_config, typed=False, indent=2)}
+examples = {self.examples_folder}
+other = {self.other}
 """
 
         
@@ -162,10 +182,14 @@ class AbstractModel(torch.nn.Module):
     def __init__(self, config: ModelConfig):
         super().__init__()
         self.config = config
-    def extract_tensors(self, example: dict[str, Tensor], with_output: bool = True) -> tuple[dict[str, Tensor]]|tuple[dict[str,Tensor],Tensor]:
-        pass
-    def print_summary(self, merge: int = 10):
-        pass
+    @overload
+    def extract_tensors(self, example: dict[str, Tensor], with_output: Literal[False]) -> dict[str,Tensor]: ...
+    @overload
+    def extract_tensors(self, example: dict[str, Tensor], with_output: Literal[True]=...) -> tuple[dict[str,Tensor],Tensor]: ...
+    def extract_tensors(self, example: dict[str, Tensor], with_output: bool = True) -> dict[str, Tensor]|tuple[dict[str,Tensor],Tensor]:
+        raise NotImplementedError()
+    def forward(self, tensors: dict[str, Tensor]) -> Tensor: ...
+    def print_summary(self, merge: int = 10): ...
 
     def get_device(self) -> torch.device:
         return next(self.parameters()).device
