@@ -4,12 +4,12 @@ import json
 from enum import Enum
 from base.serialization import serializable, TypedSerializer
 from base.classes import equatable
+from base import dates
 
 class MyEnum(Enum):
     A = 'a'
     B = 'b'
 
-serializer = TypedSerializer()
 @serializable(skip_keys=['b'])
 @equatable(skip_keys=['b'])
 class A:
@@ -32,7 +32,8 @@ class B(A):
 
 class TestJsonutils(unittest.TestCase):
 
-    def test_serializable(self):
+    def test_typed_serializer(self):
+        serializer = TypedSerializer()
         a = A(1, 'hello', [1,2,3], None)
         b = A(2, 'world', [], a)
         b_s = serializer.serialize(b)
@@ -49,3 +50,15 @@ class TestJsonutils(unittest.TestCase):
         b = json.loads(a_s)
         self.assertFalse('x' in b)
         self.assertTrue('y' in b)
+
+    def test_typed_serializer_datetime(self):
+        serializer = TypedSerializer()
+        data = {
+            'somedate': dates.now(tz=dates.ET),
+            'otherdate': dates.str_to_datetime('2020-01-01 00:00:00', tz=dates.CET)
+        }
+        serialized = serializer.serialize(data)
+        result = serializer.deserialize(serialized)
+
+        self.assertEqual(data, result)
+    

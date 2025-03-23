@@ -1,8 +1,10 @@
 #2
 from __future__ import annotations
-import json
 from typing import Any, Callable, override, Self
+import json
 from enum import Enum
+import datetime
+import zoneinfo
 from base.classes import get_full_classname, get_class_by_full_classname
 
 _TYPE = '$$type'
@@ -60,7 +62,7 @@ class TypedSerializer(Serializer):
     def _serialize_default(self, obj: object, typed:bool) -> dict:
         if hasattr(obj, 'to_dict'): result = obj.to_dict() # type: ignore
         elif isinstance(obj, Enum): result = {'name': obj.name}
-        elif type(obj).__module__ == 'builtins': result = {'value': repr(obj)}
+        elif isinstance(obj, datetime.datetime) or type(obj).__module__ == 'builtins': result = {'value': repr(obj)}
         else: raise Exception(f"Can't serialize {obj} of type {type(obj)}.")
         if typed: return {_TYPE: get_full_classname(obj), **result}
         else: return result
@@ -81,8 +83,8 @@ class TypedSerializer(Serializer):
             del obj[_TYPE]
             if hasattr(cls, 'from_dict'): return cls.from_dict(obj)
             if issubclass(cls, Enum): return cls[obj['name']]
-            if cls.__module__ == 'builtins': return eval(obj['value'])
-            raise Exception(f"Can't deserialize {obj}.")
+            if cls == datetime.datetime or cls.__module__ == 'builtins': return eval(obj['value'])
+        raise Exception(f"Can't deserialize {obj}.")
     @override
     def deserialize(self, data: str, assert_type: type|None = None) -> Any:
         ret = self._deserialize(json.loads(data))
