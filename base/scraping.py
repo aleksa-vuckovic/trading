@@ -1,10 +1,11 @@
+from numbers import Number
 import requests
 import logging
 import json
 import re
 import time
 import config
-from typing import Callable, TypeVar, ParamSpec, Any
+from typing import Callable, Any, override
 from base import text
 from http import HTTPStatus
 from enum import Flag, auto
@@ -41,36 +42,55 @@ def assert_response(url: str, response: requests.Response):
     if response.status_code != 200:
         raise BadResponseException(url, response)
 
+class Scraper:
+    def get(
+        self,
+        url: str,
+        *, 
+        cookies: dict = {}, 
+        headers: dict = {}, 
+        params: dict|None = None, 
+        origin: str|None = None, 
+        check_response: bool = True
+    ) -> requests.Response: ...
+    def post(
+        self,
+        url: str,
+        body: dict|list|str|Number|bool|None,
+        *,
+        cookies: dict = {}, 
+        headers: dict = {}, 
+        params: dict|None = None, 
+        origin: str|None = None, 
+        check_response: bool = True
+    ) -> requests.Response: ...
+
 _CHROME_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     'Accept': '*/*'
 }
-def get_as_browser(
-    url: str,
-    *,
-    cookies: dict = {},
-    params: dict|None = None,
-    origin: str|None = None,
-    headers: dict = {},
-    check_reponse: bool = True
-) -> requests.Response:
-    cookie = ";".join([f"{key}={value}" for key,value in cookies.items()]) if cookies else None
-    response = requests.get(url, headers = {**_CHROME_HEADERS, 'Cookie': cookie, **headers}, params=params)
-    logger.info(f"GET {url} ? {params} -> {response.status_code}")
-    if config.http.log_response: logger.info(response.text)
-    elif config.http.log_response_short: logger.info(text.shorter(response.text))
-    if check_reponse: assert_response(url, response)
-    return response
-
-def post_as_browser(url: str, body: object, check_response: bool = True) -> requests.Response:
-    response = requests.post(url, json=body, headers={**_CHROME_HEADERS})
-    logger.info(f"POST {url} -> {response.status_code}")
-    if config.http.log_request: logger.info("->" + json.dumps(body, indent = 4))
-    elif config.http.log_request_short: logger.info("->" + text.shorter(json.dumps(body, indent=4)))
-    if config.http.log_response: logger.info("<-" + response.text)
-    elif config.http.log_response_short: logger.info("<-" + text.shorter(response.text))
-    if check_response: assert_response(url, response)
-    return response
+class BrowserImpersonator(Scraper):
+    @override
+    def get(self, url: str, *, cookies: dict = {}, headers: dict = {}, params: dict | None = None, origin: str | None = None, check_response: bool = True) -> requests.Response:
+        cookie = ";".join([f"{key}={value}" for key,value in cookies.items()]) if cookies else None
+        response = requests.get(url, headers = {**_CHROME_HEADERS, 'Cookie': cookie, **headers}, params=params)
+        logger.info(f"GET {url} ? {params} -> {response.status_code}")
+        if config.http.log_response: logger.info(response.text)
+        elif config.http.log_response_short: logger.info(text.shorter(response.text))
+        if check_response: assert_response(url, response)
+        return response
+    @override
+    def post(self, url: str, body: dict|list|str|Number|bool|None, *, cookies: dict = {}, headers: dict = {}, params: dict | None = None, origin: str | None = None, check_response: bool = True) -> requests.Response:
+        response = requests.post(url, json=body, headers={**_CHROME_HEADERS, **headers})
+        logger.info(f"POST {url} -> {response.status_code}")
+        if config.http.log_request: logger.info("->" + json.dumps(body, indent = 4))
+        elif config.http.log_request_short: logger.info("->" + text.shorter(json.dumps(body, indent=4)))
+        if config.http.log_response: logger.info("<-" + response.text)
+        elif config.http.log_response_short: logger.info("<-" + text.shorter(response.text))
+        if check_response: assert_response(url, response)
+        return response
+    
+scraper = BrowserImpersonator()
 
 class BackupBehavior(Flag):
     DEFAULT = 0

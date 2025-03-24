@@ -17,7 +17,7 @@ from base import text
 from base.classes import ClassDict, get_full_classname
 from base.serialization import serializable, Serializable, serializer
 from main import ModelConfig
-from trading.utils import plotutils
+from base import plotutils
 from trading.core.work_calendar import TimingConfig
 from trading.core import Interval
 from trading.core.securities import Security

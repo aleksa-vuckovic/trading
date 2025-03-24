@@ -6,7 +6,7 @@ import math
 from typing import Literal, Sequence, override
 import config
 from base import dates
-from trading.utils import httputils 
+from base.scraping import scraper, backup_timeout
 from trading.core.interval import Interval
 from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
 from base.caching import cached_scalar, Persistor, FilePersistor, SqlitePersistor, NullPersistor
@@ -62,13 +62,13 @@ class FinancialTimes(BasePricingProvider):
     def _get_info(self, security: Security) -> dict:
         url = f"https://markets.ft.com/data/searchapi/searchsecurities"
         id = self._get_identifier(security)
-        resp = httputils.get_as_browser(url, params={'query': id})
+        resp = scraper.get(url, params={'query': id})
         data = json.loads(resp.text)
         data = [it for it in data['data']['security'] if 'symbol' in it and it['symbol'] == id]
         if not data: return {}
         return data[0]
 
-    @httputils.backup_timeout()
+    @backup_timeout()
     def _fetch_pricing(self, xid: str, days: int, data_period: str, data_interval: int, realtime: bool):
         """
         FT timestamps represent the start of the relevant interval BUT
@@ -102,7 +102,7 @@ class FinancialTimes(BasePricingProvider):
                 }
             ]
         }
-        resp = httputils.post_as_browser(url, request)
+        resp = scraper.post(url, request)
         return json.loads(resp.text)
     
     def _fix_timestamps(self, timestamps: Sequence[float|None], interval: Interval, security: Security) -> list[float|None]:

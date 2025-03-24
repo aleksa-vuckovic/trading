@@ -10,7 +10,7 @@ from base.caching import NullPersistor, cached_scalar, Persistor, FilePersistor,
 from trading.core import Interval
 from trading.core.securities import Security, DataProvider
 from trading.core.pricing import OHLCV, BasePricingProvider
-from trading.utils import httputils
+from base.scraping import scraper, backup_timeout, BadResponseException
 from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
 
 
@@ -42,7 +42,7 @@ class Yahoo(BasePricingProvider, DataProvider):
             else SqlitePersistor(config.caching.db_path, f"{_MODULE}_pricing") if storage == 'db'\
             else NullPersistor()
 
-    @httputils.backup_timeout()
+    @backup_timeout()
     def _fetch_pricing(
         self,
         start_time: float, #unix
@@ -56,7 +56,7 @@ class Yahoo(BasePricingProvider, DataProvider):
         result += f"?period1={int(start_time)}&period2={math.ceil(end_time)}&interval={interval}"
         result += f"&incldePrePost={str(include_pre_post).lower()}&events={"|".join(events)}"
         result += f"&&lang=en-US&region=US"
-        resp = httputils.get_as_browser(result)
+        resp = scraper.get(result)
         return json.loads(resp.text)
 
     def _get_interval(self, interval: Interval) -> str:
@@ -112,7 +112,7 @@ class Yahoo(BasePricingProvider, DataProvider):
         if query_to <= query_from: return []
         try:
             data = self._fetch_pricing(query_from, query_to, security.symbol, self._get_interval(interval))
-        except httputils.BadResponseException:
+        except BadResponseException:
             logger.error(f"Bad response for {security.symbol} from {unix_from} to {unix_to} at {interval}. PERMANENT EMPTY RETURN!", exc_info=True)
             return []
         def get_series(data: dict, unix_from: float, unix_to: float, interval: Interval) -> list[OHLCV]:
@@ -161,7 +161,7 @@ class Yahoo(BasePricingProvider, DataProvider):
         mock_time = int(time.time() - 15*24*3600)
         try:
             meta = self._fetch_pricing(mock_time-3*24*3600, mock_time, security.symbol, self._get_interval(Interval.D1))['chart']['result'][0]['meta']
-        except httputils.BadResponseException:
+        except BadResponseException:
             logger.error(f"Bad response for {security.symbol} in _get_info. PERMANENT EMPTY RETURN!", exc_info=True)
             meta = {}
         return {**info, **meta}

@@ -5,7 +5,7 @@ from typing import Literal, override
 from datetime import timedelta
 import config
 from base import dates
-from trading.utils import httputils
+from base.scraping import scraper, backup_timeout
 from trading.core.interval import Interval
 from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
 from base.caching import FilePersistor, NullPersistor, Persistor, SqlitePersistor
@@ -31,7 +31,7 @@ class WallStreetJournal(BasePricingProvider):
             else SqlitePersistor(config.caching.db_path, f"{_MODULE}_pricing") if storage == 'db'\
             else NullPersistor()
 
-    @httputils.backup_timeout()
+    @backup_timeout()
     def _fetch_pricing(self, key: str, step: str, time_frame: str, **kwargs):
         """
         WSJ timestamps represent the start of the relevant interval.
@@ -66,7 +66,7 @@ class WallStreetJournal(BasePricingProvider):
                 }
             ]
         }
-        resp = httputils.get_as_browser(url, params={'json': json.dumps(request), 'ckey': _CKEY}, headers={_TOKEN_KEY: _TOKEN_VALUE})
+        resp = scraper.get(url, params={'json': json.dumps(request), 'ckey': _CKEY}, headers={_TOKEN_KEY: _TOKEN_VALUE})
         return json.loads(resp.text)
     
     def _get_interval(self, interval: Interval) -> str:

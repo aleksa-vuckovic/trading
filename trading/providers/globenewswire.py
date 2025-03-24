@@ -3,7 +3,7 @@ from typing import Literal, Sequence, override
 from urllib import parse
 from bs4 import BeautifulSoup
 import config
-from trading.utils import httputils
+from base.scraping import scraper, backup_timeout
 from base.caching import NullPersistor, Persistor, FilePersistor, SqlitePersistor
 from trading.core.securities import Security
 from trading.core.news import News, BaseNewsProvider
@@ -20,7 +20,7 @@ def _format_for_url(input: str) -> str:
 class GlobeNewswireNews(News):
     def __init__(self, time: float, title: str, url: str, preview: str):
         try:
-            content = httputils.get_as_browser(url).text
+            content = scraper.get(url).text
             self.error = None
         except Exception as e:
             content = preview
@@ -35,7 +35,7 @@ class GlobeNewswire(BaseNewsProvider):
             else SqlitePersistor(config.caching.db_path, f"{_MODULE}_news") if storage == 'db'\
             else NullPersistor()
 
-    @httputils.backup_timeout()
+    @backup_timeout()
     def _fetch_news(self,  unix_from: float, unix_to: float, orgs: list[str], keywords: list[str]) -> list[GlobeNewswireNews]:
         url = f"{_BASE_URL}/en/search/"
         if orgs:
@@ -53,9 +53,9 @@ class GlobeNewswire(BaseNewsProvider):
         page = 1
         while True:
             if page > 1:
-                resp = httputils.get_as_browser(f"{url}/load/more", params={'pageSize': 50, 'page': page})
+                resp = scraper.get(f"{url}/load/more", params={'pageSize': 50, 'page': page})
             else:
-                resp = httputils.get_as_browser(url, params={'pageSize': 50})
+                resp = scraper.get(url, params={'pageSize': 50})
             
             soup = BeautifulSoup(resp.text, 'html.parser')
             divs = soup.find_all("div", class_="pagging-list-item-text-container")

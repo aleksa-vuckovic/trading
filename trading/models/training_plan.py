@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Callable, Literal, NamedTuple, Sequence, final, override
 from matplotlib import pyplot as plt
 from base.classes import get_full_classname
-from trading.utils import plotutils
+from base import plotutils
 from trading.core.work_calendar import TimingConfig
 from trading.models.stats import StatContainer
 from trading.models.utils import Batches, BatchFile

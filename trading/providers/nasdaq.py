@@ -4,7 +4,7 @@ import re
 from typing import override
 from enum import Enum
 from base import dates
-from trading.utils import httputils
+from base.scraping import scraper
 from trading.core.work_calendar import HolidaySchedule, BasicWorkCalendar
 from base.serialization import serializable
 from trading.core.securities import Security, SecurityType, Exchange
@@ -55,7 +55,7 @@ class Nasdaq(Exchange):
         self.securities = None
     
     def _get_entries(self) -> list[str]:
-        response = httputils.get_as_browser("https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt")
+        response = scraper.get("https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt")
         return response.text.splitlines(False)
 
     @override

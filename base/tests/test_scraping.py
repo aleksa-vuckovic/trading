@@ -1,6 +1,6 @@
 import unittest
 import time
-from trading.utils.httputils import backup_timeout, BackupBehavior, BackupException
+from base.scraping import backup_timeout, BackupBehavior, BackupException
 
 class TestHttputils(unittest.TestCase):
     def test_backup_timeout_decorator(self):
