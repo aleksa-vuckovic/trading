@@ -10,7 +10,7 @@ from base.caching import NullPersistor, cached_scalar, Persistor, FilePersistor,
 from trading.core import Interval
 from trading.core.securities import Security, DataProvider
 from trading.core.pricing import OHLCV, BasePricingProvider
-from base.scraping import scraper, backup_timeout, BadResponseException
+from base.scraping import scraper, backup_timeout, BadResponseException, TooManyRequestsException
 from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
 
 
@@ -155,9 +155,7 @@ class Yahoo(BasePricingProvider, DataProvider):
         try:
             info = yfinance.Ticker(security.symbol).info
         except json.JSONDecodeError:
-            #raise httputils.TooManyRequestsException()
-            logger.warning(f"YFINANCE TICKER ERROR", exc_info=True)
-            info = {'BAD_YFINANCE_TICKER': True}
+            raise TooManyRequestsException()
         mock_time = int(time.time() - 15*24*3600)
         try:
             meta = self._fetch_pricing(mock_time-3*24*3600, mock_time, security.symbol, self._get_interval(Interval.D1))['chart']['result'][0]['meta']

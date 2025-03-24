@@ -8,7 +8,6 @@ logs*
 /main.py
 examples/
 examples_*/
-/ttest*.py
 .vscode
 **/*loop_state.json
 config.py
@@ -20,3 +19,4 @@ result.json
 backtests/
 *.db
 *.db-journal
+/blank*.py
