@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Iterable, Iterator, Mapping, Sequence, Any
+from typing import Iterable, Iterator, Mapping, Self, Sequence, Any
 import torch
 import math
 import logging
@@ -164,7 +164,7 @@ class Batches(Iterable[dict[str, Tensor]]):
         self.device = device
         self.dtype = dtype
 
-    def to(self, device: torch.device|None = None, dtype: torch.dtype|None = None):
+    def to(self, device: torch.device|None = None, dtype: torch.dtype|None = None) -> Self:
         if device: self.device = device
         if dtype: self.dtype = dtype
         return self

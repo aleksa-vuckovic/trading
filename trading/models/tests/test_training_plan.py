@@ -26,7 +26,7 @@ optimizer = torch.optim.SGD(model.parameters())
 
 class TestTrainingPlan(unittest.TestCase):
     def test_triggers(self):
-        stat_trigger = StatTrigger('val', 'count', (1.5,4), event='enter', trigger_once=True)
+        stat_trigger = StatTrigger('val', 'count', (1.5,4), event='enter', once=True)
         stat_history = StatHistoryAction()
         class CountCollector(StatCollector):
             def __init__(self):
@@ -67,8 +67,8 @@ class TestTrainingPlan(unittest.TestCase):
         plan.epoch = 2
         stat_history.execute(plan)
         stats.update(expect, output)
-        or_trigger = EpochTrigger(2, trigger_once=True) \
-            | StatTrigger('val', 'count', (2, float('+inf')), trigger_once=True)
+        or_trigger = EpochTrigger(2, once=True) \
+            | StatTrigger('val', 'count', (2, float('+inf')), once=True)
         self.assertTrue(or_trigger.check(plan))
         stat_history.execute(plan)
         stats.update(expect, output)

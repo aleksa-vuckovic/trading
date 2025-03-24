@@ -1,10 +1,11 @@
 from __future__ import annotations
+from unittest.mock import Base
 import torch
 from torch import Tensor
 import logging
 from tqdm import tqdm
 from pathlib import Path
-from typing import Callable, Literal, NamedTuple, Sequence, override
+from typing import Callable, Literal, NamedTuple, Sequence, final, override
 from matplotlib import pyplot as plt
 from base.classes import get_full_classname
 from trading.utils import plotutils
@@ -18,52 +19,77 @@ STAT_HISTORY = 'stat_history'
 
 #region Rules
 class Trigger:
-    def check(self, plan: TrainingPlan) -> bool:
-        return False
+    def check(self, plan: TrainingPlan) -> bool: ...
+    def state_dict(self) -> dict: ...
+    def load_state_dict(self, data: dict): ...
     def __or__(self, value) -> OrTrigger:
         return OrTrigger(self, value)
     def __and__(self, value) -> AndTrigger:
         return AndTrigger(self, value)
-class OrTrigger(Trigger):
-    def __init__(self, *args: Trigger, trigger_once: bool = False):
-        self.criteria = list(args)
-        self.trigger_once = trigger_once
+class BaseTrigger(Trigger):
+    def __init__(self, once: bool = False):
+        self.once = once
         self.triggered = False
     @override
+    @final
     def check(self, plan: TrainingPlan) -> bool:
-        if self.trigger_once and self.triggered: return False
-        for it in self.criteria:
-            if it.check(plan):
-                self.triggered = True
-                return True
+        if self.once and self.triggered: return False
+        if self._check(plan):
+            self.triggered = True
+            return True
         return False
-class AndTrigger(Trigger):
-    def __init__(self, *args: Trigger, trigger_once: bool = False):
+    def _check(self, plan: TrainingPlan) -> bool: ...
+    def state_dict(self) -> dict:
+        return {'triggered': self.triggered}
+    def load_state_dict(self, data: dict) -> None:
+        self.triggered = data['triggered']
+
+class OrTrigger(BaseTrigger):
+    def __init__(self, *args: Trigger, once: bool = False):
+        super().__init__(once)
         self.criteria = list(args)
-        self.trigger_once = trigger_once
-        self.triggered = False
     @override
-    def check(self, plan: TrainingPlan) -> bool:
-        if self.trigger_once and self.triggered: return False
+    def _check(self, plan: TrainingPlan) -> bool:
         for it in self.criteria:
-            if not it.check(plan):
-                return False
-        self.triggered = True
+            if it.check(plan): return True
+        return False
+    @override
+    def state_dict(self) -> dict:
+        return {**super().state_dict(), 'criteria': [it.state_dict() for it in self.criteria]}
+    @override
+    def load_state_dict(self, data: dict) -> None:
+        super().load_state_dict(data)
+        for criteria, state_dict in zip(self.criteria, data['criteria']): criteria.load_state_dict(state_dict)
+
+class AndTrigger(BaseTrigger):
+    def __init__(self, *args: Trigger, once: bool = False):
+        super().__init__(once)
+        self.criteria = list(args)
+    @override
+    def _check(self, plan: TrainingPlan) -> bool:
+        for it in self.criteria:
+            if not it.check(plan): return False
         return True
+    @override
+    def state_dict(self) -> dict:
+        return {**super().state_dict(), 'criteria': [it.state_dict() for it in self.criteria]}
+    @override
+    def load_state_dict(self, data: dict) -> None:
+        super().load_state_dict(data)
+        for criteria, state_dict in zip(self.criteria, data['criteria']): criteria.load_state_dict(state_dict)
     
-class BoundedTrigger(Trigger):
+class BoundedTrigger(BaseTrigger):
     in_bounds: bool|None
 
     def __init__(
         self,
         bounds: tuple[float,float],
         event: Literal['enter','exit','both','in','out'] = 'enter',
-        trigger_once: bool = False
+        once: bool = False
     ):
+        super().__init__(once)
         self.bounds = bounds
         self.event = event
-        self.trigger_once = trigger_once
-        self.triggered = False
         self.in_bounds = None
 
     def is_trigger(self, cur:bool) -> bool:
@@ -76,15 +102,12 @@ class BoundedTrigger(Trigger):
 
     def get_value(self, plan: TrainingPlan) -> float: ...
     @override
-    def check(self, plan: TrainingPlan) -> bool:
-        if self.trigger_once and self.triggered: return False
+    def _check(self, plan: TrainingPlan) -> bool:
         value = self.get_value(plan)
         in_bounds = value > self.bounds[0] and value < self.bounds[1]
         result = self.is_trigger(in_bounds)
         self.in_bounds = in_bounds
-        if result: 
-            logger.info(f"Triggered bounded {self}, with value {value}. Bounds: {self.bounds}.")
-            self.triggered = True
+        if result: logger.info(f"Triggered bounded {self}, with value {value}. Bounds: {self.bounds}.")
         return result
     
 class StatTrigger(BoundedTrigger):
@@ -93,9 +116,9 @@ class StatTrigger(BoundedTrigger):
         key: str,
         bounds: tuple[float, float],
         event: Literal['enter','exit','both','in','out'] = 'enter',
-        trigger_once: bool = False
+        once: bool = False
     ):
-        super().__init__(bounds, event, trigger_once)
+        super().__init__(bounds, event, once)
         self.group = group
         self.key = key
         
@@ -107,56 +130,48 @@ class StatTrigger(BoundedTrigger):
     def __str__(self) -> str:
         return f"{self.__class__.__name__}(key='{self.key}',group='{self.group}')"
     
-class StatHistoryTrigger(Trigger):
+class StatHistoryTrigger(BaseTrigger):
     def __init__(self,
         key: str,
         group: str = 'val',
         count: int = 10,
         criteria: Callable[[Sequence[float]], bool] = lambda values: True,
-        trigger_once: bool = True,
-        desc: str|None = None
+        desc: str|None = None,
+        once: bool = False
     ):
+        super().__init__(once)
         self.key = key
         self.group = group
         self.count = count
         self.criteria = criteria
-        self.trigger_once = trigger_once
-        self.triggered = False
         self.desc = desc
-    def check(self, plan) -> bool:
-        if self.triggered and self.trigger_once: return False
+    @override
+    def _check(self, plan) -> bool:
         if STAT_HISTORY not in plan.data: return False
         history = plan.data[STAT_HISTORY]
         if len(history) < self.count: return False
         values = [it[self.group][self.key] for it in history[-self.count:]]
-        if self.criteria(values):
+        result = self.criteria(values)
+        if result:
             logger.info(f"Triggered stat history trigger ({self.desc or 'no description'}) with values {values}.")
-            self.triggered = True
-            return True
-        return False
+        return result
 
-class EpochTrigger(Trigger):
-    def __init__(self, threshold: int, trigger_once: bool = True):
+class EpochTrigger(BaseTrigger):
+    def __init__(self, threshold: int, once: bool = True):
+        super().__init__(once)
         self.threshold = threshold
-        self.trigger_once = trigger_once
-        self.triggered = False
-    def check(self, plan: TrainingPlan):
-        epoch = plan.epoch
-        if self.trigger_once and self.triggered: return False
-        if epoch >= self.threshold:
-            logger.info(f"Triggered EpochTrigger for epoch {epoch}.")
-            self.triggered = True
+    @override
+    def _check(self, plan: TrainingPlan):
+        if plan.epoch >= self.threshold:
+            logger.info(f"Triggered EpochTrigger for epoch {plan.epoch}.")
             return True
         else: return False
     
-class AlwaysTrigger(Trigger):
-    def __init__(self, trigger_once = False):
-        self.trigger_once = trigger_once
-        self.triggered = False
-    def check(self, plan):
-        if self.triggered and self.trigger_once:
-            return False
-        self.triggered = True
+class AlwaysTrigger(BaseTrigger):
+    def __init__(self, once = False):
+        super().__init__(once)
+    @override
+    def _check(self, plan: TrainingPlan) -> bool:
         return True
     
 class Action:
@@ -164,6 +179,7 @@ class Action:
         pass
 
 class StatHistoryAction(Action):
+    @override
     def execute(self, plan: TrainingPlan):
         if STAT_HISTORY not in plan.data:
             plan.data[STAT_HISTORY] = []
@@ -175,6 +191,7 @@ class CheckpointAction(Action):
     def __init__(self, path: Path):
         self.path = path
         path.parent.mkdir(parents=True, exist_ok=True)
+    @override
     def execute(self, plan: TrainingPlan):
         if self.path.exists():
             logger.info(f"Skipping non primary checkpoint because '{self.path}' already exists.")
@@ -182,39 +199,30 @@ class CheckpointAction(Action):
             self.save(plan)
             logger.info(f"Saved checkpoint to '{self.path}'.")
     def save(self, plan: TrainingPlan):
-        save_dict = {
-            'model_state_dict': plan.model.state_dict(),
-            'optimizer_state_dict': plan.optimizer.state_dict(),
-            'epoch': plan.epoch,
-            'data': plan.data,
-            'stop': plan.stop
-        }
-        torch.save(save_dict, self.path)
+        torch.save(plan.state_dict(), self.path)
     def restore(self, plan: TrainingPlan):
         if not self.path.exists():
             logger.info(f"No prior state, starting from scratch.")
             return
-        save_dict = torch.load(self.path, weights_only=True, map_location=plan.device)
-        plan.model.load_state_dict(save_dict['model_state_dict'])
-        plan.optimizer.load_state_dict(save_dict['optimizer_state_dict'])
-        plan.epoch = save_dict['epoch'] + 1
-        plan.data = {**plan.data, **save_dict['data']}
-        if 'stop' in save_dict: plan.stop = save_dict['stop']
-        logger.info(f"Loaded state from epoch {save_dict['epoch']}.")
+        state_dict = torch.load(self.path, weights_only=True, map_location=plan.device)
+        plan.load_state_dict(state_dict)
+        logger.info(f"Loaded state from epoch {plan.epoch}.")
 
 class LearningRateAction(Action):
     def __init__(self, value: float):
         self.value = value
+    @override
     def execute(self, plan: TrainingPlan):
         for param_group in plan.optimizer.param_groups:
             param_group['lr'] = self.value
         logger.info(f"Updated learning rate to {self.value}.")
 
 class StopAction(Action):
+    @override
     def execute(self, plan: TrainingPlan):
         plan.stop = True
 
-class Rule(Action):
+class Rule:
     actions: list[Action]
     def __init__(self, criteria: Trigger):
         self.criteria = criteria
@@ -223,6 +231,10 @@ class Rule(Action):
         if self.criteria.check(plan):
             for action in self.actions:
                 action.execute(plan)
+    def state_dict(self) -> dict:
+        return {'criteria': self.criteria.state_dict()}
+    def load_state_dict(self, data: dict):
+        self.criteria.load_state_dict(data['criteria'])
 #endregion
 
 class BatchGroup(NamedTuple):
@@ -248,6 +260,23 @@ class TrainingPlan:
     epoch: int
     data: dict
     stop: bool
+
+    def state_dict(self) -> dict:
+        return {
+            'model': self.model.state_dict(),
+            'optimizer': self.optimizer.state_dict(),
+            'rules': [it.state_dict() for it in self.rules],
+            'epoch': self.epoch,
+            'data': self.data,
+            'stop': self.stop
+        }
+    def load_state_dict(self, data: dict):
+        self.model.load_state_dict(data['model'])
+        self.optimizer.load_state_dict(data['optimizer'])
+        for rule, state_dict in zip(self.rules, data['rules']): rule.load_state_dict(state_dict)
+        self.epoch = data['epoch']
+        self.data = data['data']
+        self.stop = data['stop']
 
     class _ActionBuilder:
         def __init__(self, rule: Rule):
@@ -359,6 +388,7 @@ class TrainingPlan:
         plt.show()
 
 
+
 def add_train_val_test_batches(
     builder: TrainingPlan.Builder,
     examples_folder: Path,
@@ -385,14 +415,14 @@ def add_triggers(
         .then(StatHistoryAction())
     
     for loss, lr_factor in lr_steps:
-        builder.when(StatTrigger('val', 'loss', (float('-inf'), loss), trigger_once=True))\
+        builder.when(StatTrigger('val', 'loss', (float('-inf'), loss), once=True))\
             .then(CheckpointAction(checkpoints_folder / f'loss_{int(loss*100)}_checkpoint.pth'))\
             .then(LearningRateAction(initial_lr*lr_factor))
     for precision in range(5, 100, 5):
-        builder.when(StatTrigger('val', 'precision', (precision/100, float('+inf')), trigger_once=True))\
+        builder.when(StatTrigger('val', 'precision', (precision/100, float('+inf')), once=True))\
             .then(CheckpointAction(checkpoints_folder / f"precision_{precision}_checkpoint.pth"))
     for accuracy in range(5, 100, 5):
-        builder.when(StatTrigger('val', 'accuracy', (accuracy/100, float('+inf')), trigger_once=True))\
+        builder.when(StatTrigger('val', 'accuracy', (accuracy/100, float('+inf')), once=True))\
             .then(CheckpointAction(checkpoints_folder / f"accuracy_{accuracy}_checkpoint.pth"))
         
     def loss_plateau(values: Sequence[float]) -> bool:
