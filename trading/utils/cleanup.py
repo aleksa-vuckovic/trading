@@ -8,5 +8,3 @@ def cleanBadYahooInfos():
         for key in provider.info_persistor.keys():
             info: dict = provider.info_persistor.read(key)
             print(info)
-
-cleanBadYahooInfos()

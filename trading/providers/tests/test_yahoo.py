@@ -85,7 +85,20 @@ class TestYahoo(unittest.TestCase):
         self.assertEqual(calendar.str_to_unix("2025-02-11 15:05:00"), data[0].t)
         self.assertAlmostEqual(133.56972407440978, data[0].c)
     
-    def test_get_info(self):
+    def test_info(self):
         tnya = Nasdaq.instance.get_security('TNYA')
         self.assertEqual(1627651800, provider.get_first_trade_time(tnya))
+
+        result = provider.get_market_cap(tnya)
+        expect = 115612776
+        self.assertGreater(result, expect*0.8)
+        self.assertLess(result, expect*1.2)
+
+        result = provider.get_summary(tnya)
+        self.assertTrue(result.startswith("Tenaya Therapeutics, Inc., a biotechnology company, discovers, develops, and delivers therapies"))
+
+        result = provider.get_outstanding_parts(tnya)
+        expect = 162583008
+        self.assertGreater(result, expect*0.8)
+        self.assertLess(result,expect*1.2)
 
