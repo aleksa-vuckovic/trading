@@ -1,6 +1,6 @@
 import torch
 from unittest import TestCase
-from .utils import get_moving_average, get_normalized_by_largest, get_time_relativized
+from trading.models.utils import get_moving_average, get_normalized_by_largest, get_time_relativized
 
 
 class TestUtils(TestCase):
