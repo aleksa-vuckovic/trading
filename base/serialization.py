@@ -1,10 +1,9 @@
 #2
 from __future__ import annotations
-from typing import Any, Callable, override, Self
+from typing import Any, Callable, overload, override, Self
 import json
 from enum import Enum
 import datetime
-import zoneinfo
 from base.classes import get_full_classname, get_class_by_full_classname
 
 _TYPE = '$$type'
@@ -18,6 +17,10 @@ class Serializable:
 class Serializer:
     def serialize(self, obj: object) -> str:
         raise NotImplementedError()
+    @overload
+    def deserialize[T](self, data: str, assert_type: type[T]) -> T: ...
+    @overload
+    def deserialize(self, data: str) -> Any: ...
     def deserialize(self, data: str, assert_type: type|None = None) -> Any:
         raise NotImplementedError()
 
@@ -25,6 +28,10 @@ class BasicSerializer(Serializer):
     @override
     def serialize(self, obj: object) -> str:
         return json.dumps(obj)
+    @overload
+    def deserialize[T](self, data: str, assert_type: type[T]) -> T: ...
+    @overload
+    def deserialize(self, data: str) -> Any: ...
     @override
     def deserialize(self, data, assert_type: type|None = None):
         ret = json.loads(data)
@@ -85,10 +92,14 @@ class TypedSerializer(Serializer):
             if issubclass(cls, Enum): return cls[obj['name']]
             if cls == datetime.datetime or cls.__module__ == 'builtins': return eval(obj['value'])
         raise Exception(f"Can't deserialize {obj}.")
+    @overload
+    def deserialize[T](self, data: str, assert_type: type[T]) -> T: ...
+    @overload
+    def deserialize(self, data: str) -> Any: ...
     @override
     def deserialize(self, data: str, assert_type: type|None = None) -> Any:
         ret = self._deserialize(json.loads(data))
         if assert_type: assert isinstance(ret, assert_type)
         return ret
-    
+
 serializer = TypedSerializer()

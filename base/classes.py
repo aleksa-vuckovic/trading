@@ -1,6 +1,6 @@
 #1
 import importlib
-from typing import Callable
+from typing import Callable, Iterable
 
 def equatable[T: type](skip_keys: list[str] = []) -> Callable[[T], T]:
     """
@@ -28,3 +28,20 @@ def get_class_by_full_classname(full_classname: str) -> type:
     module_name, class_name = full_classname.rsplit('.', 1) 
     module = importlib.import_module(module_name)
     return getattr(module, class_name)
+
+
+class ClassDict[T]:
+    def __init__(self, key: Callable[[str], str] = lambda x:x):
+        self.key = key
+    
+    def __getitem__(self, key: str) -> T:
+        key = self.key(key)
+        return self.__dict__[key]
+    
+    def __setitem__(self, key: str, value: T):
+        key = self.key(key)
+        if not key in self.__dict__: raise Exception(f"Key {key} does not exist in {self}.")
+        self.__dict__[key] = value
+
+    def keys(self) -> Iterable[str]:
+        return self.__dict__.keys()

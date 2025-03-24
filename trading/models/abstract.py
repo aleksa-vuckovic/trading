@@ -13,8 +13,6 @@ from trading.core.securities import Security
 from trading.models.utils import PriceTarget
 from trading.providers.aggregate import AggregateProvider
 
-from base.serialization import serializable
-
 logger = logging.getLogger(__name__)
 
 class Quote(Enum):
@@ -150,7 +148,7 @@ class DataConfig(Serializable):
 
 @serializable(skip_keys=['examples_folder'])
 @equatable(skip_keys=['examples_folder'])
-class ModelConfig:
+class ModelConfig(Serializable):
     def __init__(
         self, 
         estimator: PriceEstimator,
@@ -177,7 +175,6 @@ examples = {self.examples_folder}
 other = {self.other}
 """
 
-        
 class AbstractModel(torch.nn.Module):
     def __init__(self, config: ModelConfig):
         super().__init__()

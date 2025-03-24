@@ -1,20 +1,22 @@
+from __future__ import annotations
 import logging
 import time
 import bisect
-import matplotlib.lines
 import torch
 import matplotlib
-import json
 import random
 from tqdm import tqdm
 from pathlib import Path
 from typing import Callable, Any, Sequence, override
+import matplotlib.lines
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 
 from base import dates
-from base.classes import get_full_classname
+from base import text
+from base.classes import ClassDict, get_full_classname
 from base.serialization import serializable, Serializable, serializer
+from main import ModelConfig
 from trading.utils import plotutils
 from trading.core.work_calendar import TimingConfig
 from trading.core import Interval
@@ -24,23 +26,18 @@ from trading.models.abstract import AbstractModel, PriceEstimator
 from trading.models.generators.abstract import AbstractGenerator
 logger = logging.getLogger()
 
-WIN = 'win'
-REAL_WIN = 'real_win'
-LAST_WIN = 'last_win'
-REAL_LAST_WIN = 'real_last_win'
-
 FOLDER = Path(__file__).parent / 'backtests'
 if not FOLDER.exists(): FOLDER.mkdir()
 
 @serializable()
-class Result:
+class Result(Serializable):
     def __init__(self, security: Security, output: float):
         self.security = security
         self.output = output
         self.data = {}
 
 @serializable()
-class SelectionStrategy:
+class SelectionStrategy(Serializable):
     results: list[Result]
     def __init__(self, top_count:int = 10):
         self.results = []
@@ -67,10 +64,11 @@ class MarketCapSelector(SelectionStrategy):
             market_cap = 0
         result.data['market_cap'] = market_cap
         return super().insert(result)
-    def get_selected(self):
+    @override
+    def get_selected(self) -> Sequence[Result]:
         selection = sorted(self.results[:self.top_count], key=lambda it: -it.data['market_cap'])
         return selection[round(self.select_at*(len(selection)-1)):]
-    
+
 class RandomSelector(SelectionStrategy):
     def __init__(self, top_count: int = 10):
         super().__init__(top_count)
@@ -81,22 +79,41 @@ class RandomSelector(SelectionStrategy):
         return selection
 
 class FirstTradeTimeSelector(SelectionStrategy):
+    KEY = 'first_trade_time'
     def __init__(self, top_count: int = 10):
         super().__init__(top_count)
     def insert(self, result):
-        result.data['first_trade_time'] = AggregateProvider.instance.get_first_trade_time(result.security)
+        result.data[FirstTradeTimeSelector.KEY] = AggregateProvider.instance.get_first_trade_time(result.security)
         return super().insert(result)
     def get_selected(self):
-        return sorted(self.results[:self.top_count], key=lambda it: it.data['first_trade_time'])
+        return sorted(self.results[:self.top_count], key=lambda it: it.data[FirstTradeTimeSelector.KEY])
+
+@serializable()
+class BacktestFrame(Serializable, ClassDict[float]):
+    def __init__(self, win: float, total_win: float, real_win: float, total_real_win: float):
+        self.win = win
+        self.total_win = total_win
+        self.real_win = real_win
+        self.total_real_win = total_real_win
+    
+    @staticmethod
+    def create(buy_price: float, sell_price: float, commission: float, prev: BacktestFrame|None) -> BacktestFrame:
+        win = sell_price/buy_price
+        real_win = (sell_price-commission*sell_price-commission*buy_price)/buy_price
+        total_win = prev.total_win*win if prev else win
+        total_real_win = prev.total_real_win*real_win if prev else real_win
+        return BacktestFrame(win, total_win, real_win, total_real_win)
+
 
 @serializable()
 class BacktestResult:
     def __init__(
         self,
-        history: dict[str, list[float]],
+        history: list[BacktestFrame],
         unix_from: float,
         unix_to: float,
         model: str,
+        config: ModelConfig,
         selector: SelectionStrategy,
         estimator: PriceEstimator,
         commission: float
@@ -105,9 +122,19 @@ class BacktestResult:
         self.unix_from = unix_from
         self.unix_to = unix_to
         self.model = model
+        self.config = config
         self.selector = selector
         self.estimator = estimator
         self.commission = commission
+    
+    def __str__(self) -> str:
+        return f"""\
+model={self.model},
+config=\n{text.tab(str(self.config))},
+from {dates.unix_to_datetime(self.unix_from,tz=dates.CET)} to {dates.unix_to_datetime(self.unix_to,tz=dates.CET)}.
+Selector {self.selector}.
+Estimator {self.estimator}.\
+"""
 
 class Evaluator:
     def __init__(self, generator: AbstractGenerator, model: AbstractModel):
@@ -121,17 +148,17 @@ class Evaluator:
         securities: list[Security],
         unix_time: float|None = None,
         selector: SelectionStrategy = SelectionStrategy(),
-        on_update: Callable[[SelectionStrategy], Any]|None = None,
+        on_update: Callable[[SelectionStrategy], None]|None = None,
         log: bool = True
-    ) -> SelectionStrategy:
+    ) -> None:
         """
         Evaluate model results for all securities, on unix_time or live (if None).
-        On update is invoked with an updated sorted list with each new result.
+        On update is invoked with each new result.
         """
         logger.info(f"Evaluating {len(securities)} securities for {dates.unix_to_datetime(unix_time, tz=dates.CET) if unix_time else 'live'}.")
         if isinstance(selector, RandomSelector) and selector.top_count >= len(securities):
             for security in securities: selector.insert(Result(security, 0))
-            return selector
+            return
         self.model.eval()
         with torch.no_grad():
             for security in tqdm(securities, leave=True, desc=f"Evaluating for {dates.unix_to_datetime(unix_time, tz=dates.CET) if unix_time else 'now'}"):
@@ -146,7 +173,7 @@ class Evaluator:
                     raise
                 except:
                     if log: logger.error(f"Failed to evaluate {security.symbol}.", exc_info=True)
-        return selector
+        return
 
     def backtest(
         self,
@@ -157,18 +184,13 @@ class Evaluator:
         estimator: PriceEstimator,
         selector: SelectionStrategy = SelectionStrategy(),
         commission: float = 0.0035
-    ) -> dict[str, list[float]]:
+    ) -> BacktestResult:
         """
         Returns total gain in percentages
         """
         logger.info(f"Backtesting from {dates.unix_to_datetime(unix_from, tz=dates.CET)} to {dates.unix_to_datetime(unix_to, tz=dates.CET)}")
         unix_time = unix_from
-        history = {
-            WIN: [1.0],
-            REAL_WIN: [1.0],
-            LAST_WIN: [1.0],
-            REAL_LAST_WIN: [1.0]
-        }
+        history: list[BacktestFrame] = []
         plt.ion()
         fig1, ax1 = plt.subplots(1,1)
         fig2, ax2 = plt.subplots(1,1)
@@ -178,10 +200,10 @@ class Evaluator:
         ax2.set_xlabel('Days')
         mock = [1,2]
         lines: dict[str, matplotlib.lines.Line2D] = {
-            LAST_WIN: ax1.plot(mock, mock, color = 'blue', label = LAST_WIN, marker='o', markersize=2, linestyle='')[0],
-            REAL_LAST_WIN: ax1.plot(mock, mock, color='red', label = REAL_LAST_WIN, marker='o', markersize=2, linestyle='')[0],
-            WIN: ax2.plot(mock, mock, color = 'blue', label = WIN)[0],
-            REAL_WIN: ax2.plot(mock, mock, color = 'red', label = REAL_WIN)[0],
+            'win': ax1.plot(mock, mock, color = 'blue', label = 'Win', marker='o', markersize=2, linestyle='')[0],
+            'real_win': ax1.plot(mock, mock, color='red', label = 'Real Win', marker='o', markersize=2, linestyle='')[0],
+            'total_win': ax2.plot(mock, mock, color = 'blue', label = 'Total Win')[0],
+            'real_win': ax2.plot(mock, mock, color = 'red', label = 'Real Win')[0],
         }
         ax1.legend()
         ax2.legend()
@@ -198,30 +220,25 @@ class Evaluator:
                 results = selector.get_selected()
                 result: Result|None = None
                 sell_price: float = 1.0
-                last_price: float = 1.0
+                buy_price: float = 1.0
                 for it in results:
                     try:
                         sell_price = estimator.estimate(it.security, unix_time)
-                        last_price = AggregateProvider.instance.get_pricing(unix_time-24*3600, unix_time, it.security, Interval.M5)[-1].c
+                        buy_price = AggregateProvider.instance.get_pricing(unix_time-24*3600, unix_time, it.security, Interval.M5)[-1].c
                         result = it
                         break
                     except:
                         logger.warning(f"Failed to estimate sell price for {it.security.symbol}", exc_info=True)
                 if not result: raise Exception(f"Failed to estimate sell price for all selected entries.")
 
-                history[LAST_WIN].append(sell_price/last_price)
-                history[REAL_LAST_WIN].append((sell_price-commission*sell_price-commission*last_price)/last_price)
-                history[WIN].append(history[WIN][-1]*history[LAST_WIN][-1])
-                history[REAL_WIN].append(history[REAL_WIN][-1]*history[REAL_LAST_WIN][-1])
+                history.append(BacktestFrame.create(buy_price, sell_price, commission, history[-1] if history else None))
                 logger.info(f"Buying {result.security.symbol} at {dates.unix_to_datetime(unix_time,tz=dates.CET)}.")
                 logger.info(f"Output: {result.output}. Data: {result.data}.")
-                logger.info(f"WIN: {history[LAST_WIN][-1]}. REAL WIN {history[REAL_LAST_WIN][-1]}")
+                logger.info(f"REAL WIN: {history[-1].win}")
 
-                x = list(range(len(history[LAST_WIN])))
-                lines[LAST_WIN].set_data(x, history[LAST_WIN])
-                lines[REAL_LAST_WIN].set_data(x, history[REAL_LAST_WIN])
-                lines[WIN].set_data(x, history[WIN])
-                lines[REAL_WIN].set_data(x, history[REAL_WIN])
+                x = list(range(len(history)))
+                for key in lines.keys():
+                    lines[key].set_data(x, [it[key] for it in history])
                 plotutils.refresh_interactive_figures(fig1, fig2)
             except KeyboardInterrupt:
                 raise
@@ -230,30 +247,26 @@ class Evaluator:
         plt.ioff()
         selector.clear()
         backtest_result = BacktestResult(
-            history, unix_from, unix_to, get_full_classname(self.model), selector, estimator, commission
+            history, unix_from, unix_to, get_full_classname(self.model), self.model.config, selector, estimator, commission
         )
         path = FOLDER / f"backtest_{self.model.get_name()}_t{int(time.time())}.json"
         path.write_text(serializer.serialize(backtest_result))
         plt.show(block = True)
-        return history
+        return backtest_result
 
     @staticmethod
     def show_backtest_file(file: Path, block: bool = True):
-        data = json.loads(file.read_text())
+        data = serializer.deserialize(file.read_text(), BacktestResult)
         Evaluator.show_backtest(data, block=block)
     @staticmethod
-    def show_backtest(data: dict, block: bool = True):
-        history = data['history']
+    def show_backtest(data: BacktestResult, block: bool = True):
+        history = data.history
         fig = plt.figure(figsize=(6,4))
         gs = GridSpec(4, 2, figure=fig)
         ax_title = fig.add_subplot(gs[0,:])
         ax_left = fig.add_subplot(gs[1:,0])
         ax_right = fig.add_subplot(gs[1:,1])
-        ax_title.text(0.5, 1, f"""\
-Model {data['model']}, hour {data['hour']}, from {dates.unix_to_datetime(data['unix_from'],tz=dates.CET)} to {dates.unix_to_datetime(data['unix_to'],tz=dates.CET)}.
-Selector {data['selector']}.
-Estimator {data['estimator']}.\
-        """, ha='center', va='top', fontsize=10)
+        ax_title.text(0.5, 1, str(data), ha='center', va='top', fontsize=10)
         ax_title.grid(False)
         ax_title.axis('off')
         
@@ -262,11 +275,11 @@ Estimator {data['estimator']}.\
         ax_left.set_xlabel('Days')
         ax_right.set_xlabel('Days')
 
-        x = range(len(history[LAST_WIN]))
-        ax_left.plot(x, history[LAST_WIN], color = 'blue', label = LAST_WIN, marker='o', markersize=2, linestyle='')
-        ax_left.plot(x, history[REAL_LAST_WIN], color='red', label = REAL_LAST_WIN, marker='o', markersize=2, linestyle='')
-        ax_right.plot(x, history[WIN], color = 'blue', label = WIN)
-        ax_right.plot(x, history[REAL_WIN], color = 'red', label = REAL_WIN)
+        x = range(len(history))
+        ax_left.plot(x, [it.win for it in history], color = 'blue', label = 'Win', marker='o', markersize=2, linestyle='')
+        ax_left.plot(x, [it.real_win for it in history], color='red', label = 'Real Win', marker='o', markersize=2, linestyle='')
+        ax_right.plot(x, [it.total_win for it in history], color = 'blue', label = 'Total Win')
+        ax_right.plot(x, [it.total_real_win for it in history], color = 'red', label = 'Total Real Win')
         ax_left.legend()
         ax_right.legend()
 
