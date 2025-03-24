@@ -5,12 +5,12 @@ import torch
 from torch import Tensor
 from pathlib import Path
 from enum import Enum, auto
+from matplotlib import pyplot as plt
 from base.serialization import serializable, Serializable, serializer
 from base.classes import equatable
 from trading.core import Interval
 from trading.core.work_calendar import TimingConfig
 from trading.core.securities import Security
-from trading.models.utils import PriceTarget
 from trading.providers.aggregate import AggregateProvider
 
 logger = logging.getLogger(__name__)
@@ -88,6 +88,64 @@ class PriceEstimator(Serializable):
         prices = AggregateProvider.instance.get_pricing(unix_time, end_time, security, self.interval, interpolate=True, max_fill_ratio=self.max_fill_ratio)
         tensor = torch.tensor([it[self.quote.name] for it in prices], dtype=torch.float64)
         return float(self.agg.apply(tensor, dim=-1).item())
+
+class PriceTarget(Enum):
+    LINEAR_0_5 = 'Linear 0 to 5%'
+    LINEAR_0_10 = 'Linear 0 to 10%'
+    LINEAR_5_5 = 'Linear -5 to 5%'
+    LINEAR_10_10 = 'Linear -10 to 10%'
+    SIGMOID_0_5 = 'Sigmoid 0 to 5%'
+    SIGMOID_0_10 = 'Sigmoid 0 to 10%'
+    TANH_5_5 = 'Tanh -5 to 5%'
+    TANH_10_10 = 'Tanh -10 to 10%'
+
+    def get_price(self, normalized_values: Tensor):
+        x = normalized_values
+        if self == PriceTarget.LINEAR_0_5:
+            return torch.clamp(x, min=0, max=0.05)
+        if self == PriceTarget.LINEAR_0_10:
+            return torch.clamp(x, min=0, max=0.1)
+        if self == PriceTarget.LINEAR_5_5:
+            return torch.clamp(x, min=-0.05, max=0.05)
+        if self == PriceTarget.LINEAR_10_10:
+            return torch.clamp(x, min=-0.1, max=0.1)
+        if self == PriceTarget.SIGMOID_0_5:
+            x = torch.clamp(x, min=-0.2, max=0.2)
+            x = torch.exp(300*x-6)
+            return x/(1+x)
+        if self == PriceTarget.SIGMOID_0_10:
+            x = torch.exp(150*x-7.5)
+            return x/(1+x)
+        if self == PriceTarget.TANH_5_5:
+            x = torch.exp(-150*x)
+            return (1-x)/(1+x)
+        if self == PriceTarget.TANH_10_10:
+            x = torch.exp(-60*x)
+            return (1-x)/(1+x)
+        raise Exception("Unknown price target type")
+    
+    def get_layer(self):
+        if self in [PriceTarget.LINEAR_0_10, PriceTarget.LINEAR_0_5, PriceTarget.LINEAR_10_10, PriceTarget.LINEAR_5_5]:
+            return torch.nn.Identity()
+        if self in [PriceTarget.SIGMOID_0_10, PriceTarget.SIGMOID_0_5]:
+            return torch.nn.Sigmoid()
+        if self in [PriceTarget.TANH_10_10, PriceTarget.TANH_5_5]:
+            return torch.nn.Tanh()
+        raise Exception(f"Unknown PriceTarget {self}.")
+    
+    @staticmethod
+    def plot():
+        x = torch.linspace(-0.15, 0.15, 100, dtype=torch.float32)
+        for i, pt in enumerate(PriceTarget):
+            fig = plt.figure(i // 4)
+            fig.suptitle(f'Window {i//4}')
+            axes = fig.add_subplot(2,2,i%4 + 1)
+            axes.plot(x, pt.get_price(x), label=pt.name)
+            axes.set_title(pt.name)
+            axes.grid(True)
+
+        [plt.figure(it).tight_layout() for it in plt.get_fignums()]
+        plt.show()
 
 @equatable()
 class DataConfig(Serializable):

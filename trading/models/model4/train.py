@@ -1,11 +1,12 @@
 import logging
 import torch
 from pathlib import Path
-from ..training_plan import TrainingPlan, add_train_val_test_batches, add_triggers
-from ..stats import StatContainer, Accuracy, Precision, TanhLoss
-from ..abstract import ModelConfig
-from ..generators import generator
-from .network import Model
+from trading.models.training_plan import TrainingPlan
+from trading.models.stats import StatContainer, Accuracy, Precision, TanhLoss
+from trading.models.abstract import ModelConfig
+from trading.models.generators import generator
+from trading.models.model4.network import Model
+from trading.models.training_plan_utils import add_train_val_test_batches, add_triggers
 
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ def get_plan(config: ModelConfig) -> TrainingPlan:
     model = Model(config)
     plan = TrainingPlan.Builder(model)
     plan.with_optimizer(torch.optim.Adam(model.parameters()))
-    add_train_val_test_batches(plan, examples_folder=generator.FOLDER, make_stats=make_stats, timing=config.timing, merge=5)
+    add_train_val_test_batches(plan, examples_folder=Path(), make_stats=make_stats, timing=config.timing, merge=5)
     add_triggers(
         plan,
         checkpoints_folder=Path(__file__).parent / f"checkpoints_{None}",

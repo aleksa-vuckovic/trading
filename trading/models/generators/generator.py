@@ -3,7 +3,6 @@ import logging
 import torch
 import random
 import time
-import matplotlib
 from typing import Sequence, override
 from matplotlib.axes import Axes
 from matplotlib import pyplot as plt
@@ -15,7 +14,8 @@ from trading.core.securities import Security
 from trading.core.work_calendar import TimingConfig
 from trading.providers.aggregate import AggregateProvider
 from trading.models.abstract import Aggregation, Quote, AFTER, PriceEstimator, DataConfig, PriceTarget
-from trading.models.utils import check_tensors, BatchFile
+from trading.models.utils import check_tensors
+from trading.models.batches import BatchFile
 from trading.models.generators.abstract import AbstractGenerator
 
 logger = logging.getLogger(__name__)

@@ -4,12 +4,11 @@ import unittest
 import torch
 
 from fix import TimingConfig
-from main import DataConfig, ModelConfig, PriceEstimator, PriceTarget
 from trading.core import Interval
-from trading.models.abstract import AbstractModel, Aggregation, Quote
+from trading.models.abstract import AbstractModel, Aggregation, Quote, DataConfig, ModelConfig, PriceEstimator, PriceTarget
 from trading.models.training_plan import TrainingPlan, StatTrigger, EpochTrigger, StatHistoryAction
 from trading.models.stats import StatCollector, StatContainer
-from trading.models.utils import Batches
+from trading.models.batches import Batches
 
 config = ModelConfig(
     PriceEstimator(Quote.C, Interval.H1, slice(1,2), Aggregation.AVG),
