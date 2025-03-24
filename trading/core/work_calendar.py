@@ -5,7 +5,7 @@ from typing import overload, TypeVar, override
 from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta
 from base.classes import equatable
-from base.caching import cached_series, MemoryPersistor
+from base.caching import Persistor, cached_series, MemoryPersistor
 from base import dates
 from base.serialization import serializable
 from trading.core import Interval
@@ -112,13 +112,17 @@ class WorkCalendar:
     @staticmethod
     def _get_timestamps_timestamp_fn(it: datetime) -> float: return it.timestamp()
     def _get_timestamps_key_fn(self, interval: Interval) -> str: return interval.name
+    def _get_timestamps_persistor_fn(self, interval: Interval) -> Persistor:
+        KEY = "_basic_work_calendar_persistor_"
+        if KEY not in self.__dict__: self.__dict__[KEY] = MemoryPersistor()
+        return self.__dict__[KEY]
     def _get_timestamps_time_step_fn(self, interval: Interval) -> float:
         if interval >= Interval.D1: return 1000*interval.time()
         else: return 4000*interval.time()
     @cached_series(
         timestamp_fn=_get_timestamps_timestamp_fn,
         key_fn=_get_timestamps_key_fn,
-        persistor_fn=MemoryPersistor(),
+        persistor_fn=_get_timestamps_persistor_fn,
         time_step_fn=_get_timestamps_time_step_fn,
         live_delay_fn=None
     )

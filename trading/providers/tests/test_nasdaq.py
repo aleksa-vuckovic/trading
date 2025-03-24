@@ -20,6 +20,7 @@ class TestNasdaq(unittest.TestCase):
         self.assertIs(Nasdaq.instance, nvda.exchange)
 
 class TestNasdaqCalendar(TestCalendar):
+    @override
     def get_calendar(self) -> WorkCalendar:
         return Nasdaq.instance.calendar
     

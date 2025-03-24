@@ -85,7 +85,6 @@ def get_moving_average(tensor: Tensor, start_index: int = 0, count: int = -1, di
         index = tuple(slice(None) if it!=dim else slice(i-offset,j-offset) for it in range(total_dims))
         result += tensor[index]
     return result/window
-    
 
 class PriceTarget(Enum):
     LINEAR_0_5 = 'Linear 0 to 5%'

@@ -1,9 +1,10 @@
 #2
 from __future__ import annotations
-from typing import Any, Callable, overload, override, Self
+from typing import Any, Callable, overload, override
 import json
 from enum import Enum
 import datetime
+import zoneinfo
 from base.classes import get_full_classname, get_class_by_full_classname
 
 _TYPE = '$$type'

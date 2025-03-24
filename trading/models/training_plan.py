@@ -16,6 +16,221 @@ from trading.models.abstract import AbstractModel
 logger = logging.getLogger(__name__)
 STAT_HISTORY = 'stat_history'
 
+#region Rules
+class Trigger:
+    def check(self, plan: TrainingPlan) -> bool:
+        return False
+    def __or__(self, value) -> OrTrigger:
+        return OrTrigger(self, value)
+    def __and__(self, value) -> AndTrigger:
+        return AndTrigger(self, value)
+class OrTrigger(Trigger):
+    def __init__(self, *args: Trigger, trigger_once: bool = False):
+        self.criteria = list(args)
+        self.trigger_once = trigger_once
+        self.triggered = False
+    @override
+    def check(self, plan: TrainingPlan) -> bool:
+        if self.trigger_once and self.triggered: return False
+        for it in self.criteria:
+            if it.check(plan):
+                self.triggered = True
+                return True
+        return False
+class AndTrigger(Trigger):
+    def __init__(self, *args: Trigger, trigger_once: bool = False):
+        self.criteria = list(args)
+        self.trigger_once = trigger_once
+        self.triggered = False
+    @override
+    def check(self, plan: TrainingPlan) -> bool:
+        if self.trigger_once and self.triggered: return False
+        for it in self.criteria:
+            if not it.check(plan):
+                return False
+        self.triggered = True
+        return True
+    
+class BoundedTrigger(Trigger):
+    in_bounds: bool|None
+
+    def __init__(
+        self,
+        bounds: tuple[float,float],
+        event: Literal['enter','exit','both','in','out'] = 'enter',
+        trigger_once: bool = False
+    ):
+        self.bounds = bounds
+        self.event = event
+        self.trigger_once = trigger_once
+        self.triggered = False
+        self.in_bounds = None
+
+    def is_trigger(self, cur:bool) -> bool:
+        if self.event == 'enter': return self.in_bounds == False and cur
+        elif self.event == 'exit': return self.in_bounds == True and not cur
+        elif self.event == 'both': return self.in_bounds is not None and self.in_bounds ^ cur
+        elif self.event == 'in': return cur
+        elif self.event == 'out': return not cur
+        else: raise Exception(f'Unknown event {self.event}.')
+
+    def get_value(self, plan: TrainingPlan) -> float: ...
+    @override
+    def check(self, plan: TrainingPlan) -> bool:
+        if self.trigger_once and self.triggered: return False
+        value = self.get_value(plan)
+        in_bounds = value > self.bounds[0] and value < self.bounds[1]
+        result = self.is_trigger(in_bounds)
+        self.in_bounds = in_bounds
+        if result: 
+            logger.info(f"Triggered bounded {self}, with value {value}. Bounds: {self.bounds}.")
+            self.triggered = True
+        return result
+    
+class StatTrigger(BoundedTrigger):
+    def __init__(self,
+        group: str,
+        key: str,
+        bounds: tuple[float, float],
+        event: Literal['enter','exit','both','in','out'] = 'enter',
+        trigger_once: bool = False
+    ):
+        super().__init__(bounds, event, trigger_once)
+        self.group = group
+        self.key = key
+        
+    @override
+    def get_value(self, plan: TrainingPlan) -> float:
+        stats = [it.stats for it in plan.batch_groups if it.name == self.group][0]
+        return stats[self.key]
+    
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}(key='{self.key}',group='{self.group}')"
+    
+class StatHistoryTrigger(Trigger):
+    def __init__(self,
+        key: str,
+        group: str = 'val',
+        count: int = 10,
+        criteria: Callable[[Sequence[float]], bool] = lambda values: True,
+        trigger_once: bool = True,
+        desc: str|None = None
+    ):
+        self.key = key
+        self.group = group
+        self.count = count
+        self.criteria = criteria
+        self.trigger_once = trigger_once
+        self.triggered = False
+        self.desc = desc
+    def check(self, plan) -> bool:
+        if self.triggered and self.trigger_once: return False
+        if STAT_HISTORY not in plan.data: return False
+        history = plan.data[STAT_HISTORY]
+        if len(history) < self.count: return False
+        values = [it[self.group][self.key] for it in history[-self.count:]]
+        if self.criteria(values):
+            logger.info(f"Triggered stat history trigger ({self.desc or 'no description'}) with values {values}.")
+            self.triggered = True
+            return True
+        return False
+
+class EpochTrigger(Trigger):
+    def __init__(self, threshold: int, trigger_once: bool = True):
+        self.threshold = threshold
+        self.trigger_once = trigger_once
+        self.triggered = False
+    def check(self, plan: TrainingPlan):
+        epoch = plan.epoch
+        if self.trigger_once and self.triggered: return False
+        if epoch >= self.threshold:
+            logger.info(f"Triggered EpochTrigger for epoch {epoch}.")
+            self.triggered = True
+            return True
+        else: return False
+    
+class AlwaysTrigger(Trigger):
+    def __init__(self, trigger_once = False):
+        self.trigger_once = trigger_once
+        self.triggered = False
+    def check(self, plan):
+        if self.triggered and self.trigger_once:
+            return False
+        self.triggered = True
+        return True
+    
+class Action:
+    def execute(self, plan: TrainingPlan):
+        pass
+
+class StatHistoryAction(Action):
+    def execute(self, plan: TrainingPlan):
+        if STAT_HISTORY not in plan.data:
+            plan.data[STAT_HISTORY] = []
+        entry: dict = {it.name:it.stats.to_dict() for it in plan.batch_groups}
+        entry['epoch'] = plan.epoch
+        plan.data[STAT_HISTORY].append(entry)
+
+class CheckpointAction(Action):
+    def __init__(self, path: Path):
+        self.path = path
+        path.parent.mkdir(parents=True, exist_ok=True)
+    def execute(self, plan: TrainingPlan):
+        if self.path.exists():
+            logger.info(f"Skipping non primary checkpoint because '{self.path}' already exists.")
+        else:
+            self.save(plan)
+            logger.info(f"Saved checkpoint to '{self.path}'.")
+    def save(self, plan: TrainingPlan):
+        save_dict = {
+            'model_state_dict': plan.model.state_dict(),
+            'optimizer_state_dict': plan.optimizer.state_dict(),
+            'epoch': plan.epoch,
+            'data': plan.data,
+            'stop': plan.stop
+        }
+        torch.save(save_dict, self.path)
+    def restore(self, plan: TrainingPlan):
+        if not self.path.exists():
+            logger.info(f"No prior state, starting from scratch.")
+            return
+        save_dict = torch.load(self.path, weights_only=True, map_location=plan.device)
+        plan.model.load_state_dict(save_dict['model_state_dict'])
+        plan.optimizer.load_state_dict(save_dict['optimizer_state_dict'])
+        plan.epoch = save_dict['epoch'] + 1
+        plan.data = {**plan.data, **save_dict['data']}
+        if 'stop' in save_dict: plan.stop = save_dict['stop']
+        logger.info(f"Loaded state from epoch {save_dict['epoch']}.")
+
+class LearningRateAction(Action):
+    def __init__(self, value: float):
+        self.value = value
+    def execute(self, plan: TrainingPlan):
+        for param_group in plan.optimizer.param_groups:
+            param_group['lr'] = self.value
+        logger.info(f"Updated learning rate to {self.value}.")
+
+class StopAction(Action):
+    def execute(self, plan: TrainingPlan):
+        plan.stop = True
+
+class Rule(Action):
+    actions: list[Action]
+    def __init__(self, criteria: Trigger):
+        self.criteria = criteria
+        self.actions = []
+    def execute(self, plan: TrainingPlan):
+        if self.criteria.check(plan):
+            for action in self.actions:
+                action.execute(plan)
+#endregion
+
+class BatchGroup(NamedTuple):
+    name: str
+    batches: Batches
+    stats: StatContainer
+    backward: bool = False
+
 class TrainingPlan:
     """
     - Keeps track of statistics, the model, and optimizer.
@@ -23,238 +238,21 @@ class TrainingPlan:
     - Allows actions to be triggered based on conditions, evaluated at the end of each epoch.
         This includes learning rate updates, saving checkpoints and custom actions derived from Action.
     """
-
-    #region Rules
-    class Trigger:
-        def check(self, plan: TrainingPlan) -> bool:
-            return False
-        def __or__(self, value) -> TrainingPlan.OrTrigger:
-            return TrainingPlan.OrTrigger(self, value)
-        def __and__(self, value) -> TrainingPlan.AndTrigger:
-            return TrainingPlan.AndTrigger(self, value)
-    class OrTrigger(Trigger):
-        def __init__(self, *args: TrainingPlan.Trigger, trigger_once: bool = False):
-            self.criteria = list(args)
-            self.trigger_once = trigger_once
-            self.triggered = False
-        @override
-        def check(self, plan: TrainingPlan) -> bool:
-            if self.trigger_once and self.triggered: return False
-            for it in self.criteria:
-                if it.check(plan):
-                    self.triggered = True
-                    return True
-            return False
-    class AndTrigger(Trigger):
-        def __init__(self, *args: TrainingPlan.Trigger, trigger_once: bool = False):
-            self.criteria = list(args)
-            self.trigger_once = trigger_once
-            self.triggered = False
-        @override
-        def check(self, plan: TrainingPlan) -> bool:
-            if self.trigger_once and self.triggered: return False
-            for it in self.criteria:
-                if not it.check(plan):
-                    return False
-            self.triggered = True
-            return True
-        
-    class BoundedTrigger(Trigger):
-        is_trigger: Callable[[bool|None, bool]]
-        in_bounds: bool|None
-
-        def __init__(
-            self,
-            bounds: tuple[float,float],
-            event: Literal['enter','exit','both','in','out'] = 'enter',
-            trigger_once: bool = False
-        ):
-            self.bounds = bounds
-            self.event = event
-            self.trigger_once = trigger_once
-            self.triggered = False
-
-            self.in_bounds = None
-
-            if event == 'enter': self.is_trigger = lambda prev, cur: prev == False and cur
-            elif event == 'exit': self.is_trigger = lambda prev, cur: prev == True and not cur
-            elif event == 'both': self.is_trigger = lambda prev, cur: prev is not None and prev ^ cur
-            elif event == 'in': self.is_trigger = lambda prev, cur: cur
-            elif event == 'out': self.is_trigger = lambda prev, cur: not cur
-            else: raise Exception(f'Unknown event {event}.')
-        
-        def get_value(self, plan: TrainingPlan) -> float: ...
-        @override
-        def check(self, plan: TrainingPlan) -> bool:
-            if self.trigger_once and self.triggered: return False
-            value = self.get_value(plan)
-            in_bounds = value > self.bounds[0] and value < self.bounds[1]
-            result = self.is_trigger(self.in_bounds, in_bounds)
-            self.in_bounds = in_bounds
-            if result: 
-                logger.info(f"Triggered bounded {self}, with value {value}. Bounds: {self.bounds}.")
-                self.triggered = True
-            return result
-        
-    class StatTrigger(BoundedTrigger):
-        def __init__(self,
-            group: str,
-            key: str,
-            bounds: tuple[float, float],
-            event: Literal['enter','exit','both','in','out'] = 'enter',
-            trigger_once: bool = False
-        ):
-            super().__init__(bounds, event, trigger_once)
-            self.key = key
-            self.group = group
-
-        @override
-        def get_value(self, plan: TrainingPlan) -> float:
-            stats = [it.stats for it in plan.batch_groups if it.name == self.group][0]
-            return stats[self.key]
-        
-        def __str__(self) -> str:
-            return f"{self.__class__.__name__}(key='{self.key}',group='{self.group}')"
-        
-    class StatHistoryTrigger(Trigger):
-        def __init__(self,
-            key: str,
-            group: str = 'val',
-            count: int = 10,
-            criteria: Callable[[Sequence[float]], bool] = lambda values: True,
-            trigger_once: bool = True,
-            desc: str|None = None
-        ):
-            self.key = key
-            self.group = group
-            self.count = count
-            self.criteria = criteria
-            self.trigger_once = trigger_once
-            self.triggered = False
-            self.desc = desc
-        def check(self, plan) -> bool:
-            if self.triggered and self.trigger_once: return False
-            if STAT_HISTORY not in plan.data: return False
-            history = plan.data[STAT_HISTORY]
-            if len(history) < self.count: return False
-            values = [it[self.group][self.key] for it in history[-self.count:]]
-            if self.criteria(values):
-                logger.info(f"Triggered stat history trigger ({self.desc or 'no description'}) with values {values}.")
-                self.triggered = True
-                return True
-            return False
-    
-    class EpochTrigger(Trigger):
-        def __init__(self, threshold: int, trigger_once: bool = True):
-            self.threshold = threshold
-            self.trigger_once = trigger_once
-            self.triggered = False
-        def check(self, plan: TrainingPlan):
-            epoch = plan.epoch
-            if self.trigger_once and self.triggered: return False
-            if epoch >= self.threshold:
-                logger.info(f"Triggered EpochTrigger for epoch {epoch}.")
-                self.triggered = True
-                return True
-            else: return False
-        
-    class AlwaysTrigger(Trigger):
-        def __init__(self, trigger_once = False):
-            self.trigger_once = trigger_once
-            self.triggered = False
-        def check(self, plan):
-            if self.triggered and self.trigger_once:
-                return False
-            self.triggered = True
-            return True
-        
-    class Action:
-        def execute(self, plan: TrainingPlan):
-            pass
-    
-    class StatHistoryAction(Action):
-        def execute(self, plan: TrainingPlan):
-            if STAT_HISTORY not in plan.data:
-                plan.data[STAT_HISTORY] = []
-            entry: dict = {it.name:it.stats.to_dict() for it in plan.batch_groups}
-            entry['epoch'] = plan.epoch
-            plan.data[STAT_HISTORY].append(entry)
-    
-    class CheckpointAction(Action):
-        def __init__(self, path: Path):
-            self.path = path
-            path.parent.mkdir(parents=True, exist_ok=True)
-        def execute(self, plan: TrainingPlan):
-            if self.path.exists():
-                logger.info(f"Skipping non primary checkpoint because '{self.path}' already exists.")
-            else:
-                self.save(plan)
-                logger.info(f"Saved checkpoint to '{self.path}'.")
-        def save(self, plan: TrainingPlan):
-            save_dict = {
-                'model_state_dict': plan.model.state_dict(),
-                'optimizer_state_dict': plan.optimizer.state_dict(),
-                'epoch': plan.epoch,
-                'data': plan.data,
-                'stop': plan.stop
-            }
-            torch.save(save_dict, self.path)
-        def restore(self, plan: TrainingPlan):
-            if not self.path.exists():
-                logger.info(f"No prior state, starting from scratch.")
-                return
-            save_dict = torch.load(self.path, weights_only=True, map_location=plan.device)
-            plan.model.load_state_dict(save_dict['model_state_dict'])
-            plan.optimizer.load_state_dict(save_dict['optimizer_state_dict'])
-            plan.epoch = save_dict['epoch'] + 1
-            plan.data = {**plan.data, **save_dict['data']}
-            if 'stop' in save_dict: plan.stop = save_dict['stop']
-            logger.info(f"Loaded state from epoch {save_dict['epoch']}.")
-    
-    class LearningRateAction(Action):
-        def __init__(self, value: float):
-            self.value = value
-        def execute(self, plan: TrainingPlan):
-            for param_group in plan.optimizer.param_groups:
-                param_group['lr'] = self.value
-            logger.info(f"Updated learning rate to {self.value}.")
-
-    class StopAction(Action):
-        def execute(self, plan: TrainingPlan):
-            plan.stop = True
-
-    class _Rule(Action):
-        actions: list[TrainingPlan.Action]
-        def __init__(self, criteria: TrainingPlan.Trigger):
-            self.criteria = criteria
-            self.actions = []
-        def execute(self, plan: TrainingPlan):
-            if self.criteria.check(plan):
-                for action in self.actions:
-                    action.execute(plan)
-    #endregion
-
-    class _BatchGroup(NamedTuple):
-        name: str
-        batches: Batches
-        stats: StatContainer
-        backward: bool = False
-
     device: torch.device
     dtype: torch.dtype
     model: AbstractModel
     optimizer: torch.optim.Optimizer
-    batch_groups: list[_BatchGroup]
-    rules: list[_Rule]
+    batch_groups: list[BatchGroup]
+    rules: list[Rule]
     primary_checkpoint: CheckpointAction|None
     epoch: int
     data: dict
     stop: bool
 
     class _ActionBuilder:
-        def __init__(self, rule: TrainingPlan._Rule):
+        def __init__(self, rule: Rule):
             self.rule = rule
-        def then(self, action: TrainingPlan.Action) -> TrainingPlan._ActionBuilder:
+        def then(self, action: Action) -> TrainingPlan._ActionBuilder:
             self.rule.actions.append(action)
             return self
 
@@ -276,15 +274,15 @@ class TrainingPlan:
             return self
         
         def with_batches(self, name: str, batches: Batches, stats: StatContainer, backward: bool = False) -> TrainingPlan.Builder:
-            self.plan.batch_groups.append(TrainingPlan._BatchGroup(name, batches.to(device = self.plan.device, dtype = self.plan.dtype), stats, backward=backward))
+            self.plan.batch_groups.append(BatchGroup(name, batches.to(device = self.plan.device, dtype = self.plan.dtype), stats, backward=backward))
             return self
     
-        def when(self, trigger: TrainingPlan.Trigger) -> TrainingPlan._ActionBuilder:
-            rule = TrainingPlan._Rule(trigger)
+        def when(self, trigger: Trigger) -> TrainingPlan._ActionBuilder:
+            rule = Rule(trigger)
             self.plan.rules.append(rule)
             return TrainingPlan._ActionBuilder(rule)
 
-        def with_primary_checkpoint(self, checkpoint: TrainingPlan.CheckpointAction) -> TrainingPlan.Builder:
+        def with_primary_checkpoint(self, checkpoint: CheckpointAction) -> TrainingPlan.Builder:
             self.plan.primary_checkpoint = checkpoint
             return self
         
@@ -383,25 +381,25 @@ def add_triggers(
     initial_lr: float,
     lr_steps = [(100, 10), (0.4, 5), (0.35, 2), (0.3, 1), (0.25, 0.5), (0.2, 0.1), (0.15, 0.05), (0.1, 0.01)]
 ) -> TrainingPlan.Builder:
-    builder.when(TrainingPlan.AlwaysTrigger())\
-        .then(TrainingPlan.StatHistoryAction())
+    builder.when(AlwaysTrigger())\
+        .then(StatHistoryAction())
     
     for loss, lr_factor in lr_steps:
-        builder.when(TrainingPlan.StatTrigger('val', 'loss', (float('-inf'), loss), trigger_once=True))\
-            .then(TrainingPlan.CheckpointAction(checkpoints_folder / f'loss_{int(loss*100)}_checkpoint.pth'))\
-            .then(TrainingPlan.LearningRateAction(initial_lr*lr_factor))
+        builder.when(StatTrigger('val', 'loss', (float('-inf'), loss), trigger_once=True))\
+            .then(CheckpointAction(checkpoints_folder / f'loss_{int(loss*100)}_checkpoint.pth'))\
+            .then(LearningRateAction(initial_lr*lr_factor))
     for precision in range(5, 100, 5):
-        builder.when(TrainingPlan.StatTrigger('val', 'precision', (precision/100, float('+inf')), trigger_once=True))\
-            .then(TrainingPlan.CheckpointAction(checkpoints_folder / f"precision_{precision}_checkpoint.pth"))
+        builder.when(StatTrigger('val', 'precision', (precision/100, float('+inf')), trigger_once=True))\
+            .then(CheckpointAction(checkpoints_folder / f"precision_{precision}_checkpoint.pth"))
     for accuracy in range(5, 100, 5):
-        builder.when(TrainingPlan.StatTrigger('val', 'accuracy', (accuracy/100, float('+inf')), trigger_once=True))\
-            .then(TrainingPlan.CheckpointAction(checkpoints_folder / f"accuracy_{accuracy}_checkpoint.pth"))
+        builder.when(StatTrigger('val', 'accuracy', (accuracy/100, float('+inf')), trigger_once=True))\
+            .then(CheckpointAction(checkpoints_folder / f"accuracy_{accuracy}_checkpoint.pth"))
         
     def loss_plateau(values: Sequence[float]) -> bool:
         high = max(values)
         last = values[-1]
         return last>=high or (high-last)/high < 0.001
-    builder.when(TrainingPlan.StatHistoryTrigger('loss', group='val', count=10, criteria=loss_plateau) | TrainingPlan.EpochTrigger(threshold=100))\
-        .then(TrainingPlan.StopAction())
+    builder.when(StatHistoryTrigger('loss', group='val', count=10, criteria=loss_plateau) | EpochTrigger(threshold=100))\
+        .then(StopAction())
         
-    return builder.with_primary_checkpoint(TrainingPlan.CheckpointAction(checkpoints_folder / 'primary_checkpoint.pth'))
+    return builder.with_primary_checkpoint(CheckpointAction(checkpoints_folder / 'primary_checkpoint.pth'))

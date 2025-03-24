@@ -6,8 +6,7 @@ config.__dict__.update(config_test.__dict__)
 from trading import log
 log.configure_logging()
 
-#start_dir = "." if len(sys.argv) < 2 else sys.argv[1]
-start_dir = "trading/providers" if len(sys.argv) < 2 else sys.argv[1]
+start_dir = "." if len(sys.argv) < 2 else sys.argv[1]
 loader = unittest.TestLoader()
 suite = loader.discover(start_dir=start_dir, pattern="test_*.py", top_level_dir=".")
 
