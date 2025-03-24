@@ -91,7 +91,7 @@ class SqlitePersistor(Persistor):
     @override
     def persist(self, key: str, data: object):
         self.conn.execute(f"""
-            insert into [{self.table}](key, value) values (?, ?)
+            insert or replace into [{self.table}](key, value) values (?, ?)
         """, (key, self.serializer.serialize(data)))
     @override
     def read(self, key: str) -> Any:
