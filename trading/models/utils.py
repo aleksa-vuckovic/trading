@@ -1,15 +1,9 @@
 from __future__ import annotations
-from typing import Iterable, Iterator, Mapping, Self, Sequence, Any
+from typing import Mapping, Sequence, Any
 import torch
-import math
 import logging
-import re
-import os
+import functools
 from torch import Tensor
-from pathlib import Path
-from enum import Enum
-from pathlib import Path
-from matplotlib import pyplot as plt
 
 logger = logging.getLogger(__name__)
 
@@ -85,4 +79,39 @@ def get_moving_average(tensor: Tensor, start_index: int = 0, count: int = -1, di
         index = tuple(slice(None) if it!=dim else slice(i-offset,j-offset) for it in range(total_dims))
         result += tensor[index]
     return result/window
+
+def shuffle(tensor: Tensor, dim: int = 0) -> Tensor:
+    dims = len(tensor.shape)
+    indices = torch.randperm(tensor.shape[dim])
+    index = tuple(indices if it == dim else slice(None) for it in range(dims))
+    return tensor[index]
+
+def __get_sampled(tensor: Tensor, count: int) -> Tensor:
+    indices = torch.where(tensor)[0] #indices of True values
+    indices = shuffle(indices, 0)[:count] #select random count indices
+    result = torch.full(tensor.shape, False, dtype=torch.bool)
+    result[indices] = True
+    return result
+
+def get_sampled(tensor: Tensor, bins: Sequence[tuple[float, float]], ratios: Sequence[float]) -> Tensor:
+    """
+    Sample the given tensor so that the ratio of the number of values within the given bins corresponds to the ratios argument.
+    Args:
+        tensor: The one dimensional tensor to sample from.
+        bins: The bins to categorize the values into. Expected to be disjunctive. (Not checked)
+        ratios: The desired ratios for each bin.
+    Returns:
+        A tensor of booleans for the selected entries.
+    """
+    assert len(bins) == len(ratios)
+
+    ratios = [it/sum(ratios) for it in ratios]
+    selected = [(tensor > lower) & (tensor <= upper) for lower, upper in bins]
+    counts = [it.sum().item() for it in selected]
+    max_counts = [count/ratio for count,ratio in zip(counts, ratios)]
+    total_count = min(max_counts)
+    counts = [int(ratio*total_count) for ratio in ratios]
+    selected = [__get_sampled(selection, count) for selection, count in zip(selected, counts)]
+
+    return functools.reduce(lambda x,y: torch.logical_or(x,y), selected, torch.full(tensor.shape, False, dtype=torch.bool))
 

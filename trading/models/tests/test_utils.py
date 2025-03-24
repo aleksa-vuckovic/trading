@@ -1,6 +1,7 @@
+from numpy import indices
 import torch
 from unittest import TestCase
-from trading.models.utils import get_moving_average, get_normalized_by_largest, get_time_relativized
+from trading.models.utils import get_moving_average, get_normalized_by_largest, get_time_relativized, get_sampled
 
 
 class TestUtils(TestCase):
@@ -51,3 +52,17 @@ class TestUtils(TestCase):
         expect = torch.tensor([[1,5/4,7/4,10/4,14/4,18/4,22/4]], dtype=torch.float32)
         result = get_moving_average(tensor, dim=1, window=4)
         self.assertEqual(7, (expect==result).sum().item())
+
+    
+    def test_get_sampled(self):
+        input = torch.arange(100)#[torch.randperm(100)]
+        bins = [(1,30),(30,40),(50,99)]
+        ratios = [0.2,0.5,0.3]
+
+        result = get_sampled(input, bins, ratios)
+        self.assertEqual(20, result.sum().item())
+        numbers = input[result]
+        self.assertEqual(6, (numbers>50).sum().item())
+        self.assertEqual(4, (numbers<=30).sum().item())
+
+        
