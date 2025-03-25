@@ -2,8 +2,8 @@ from __future__ import annotations
 import unittest
 import json
 from enum import Enum
-from base.serialization import serializable, TypedSerializer
-from base.classes import equatable
+from base.serialization import serializable, TypedSerializer, Serializable
+from base.types import equatable
 from base import dates
 
 class MyEnum(Enum):
@@ -12,7 +12,7 @@ class MyEnum(Enum):
 
 @serializable(skip_keys=['b'])
 @equatable(skip_keys=['b'])
-class A:
+class A(Serializable):
     def __init__(self, a:int|None, b:str|None, c: list|None, d: A|None, e: object = None):
         self.a = a
         self.b = b

@@ -1,6 +1,6 @@
 #1
 import importlib
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Self
 
 def equatable[T: type](skip_keys: list[str] = []) -> Callable[[T], T]:
     """
@@ -45,3 +45,26 @@ class ClassDict[T]:
 
     def keys(self) -> Iterable[str]:
         return self.__dict__.keys()
+    
+
+def get_no_args_cnst[T](cls: type[T]) -> Callable[[], T]:
+    try:
+        cls()
+        return cls
+    except:
+        return lambda: object.__new__(cls)
+
+
+def _clone[T](obj: T) -> T:
+    if isinstance(obj, Cloneable):
+        instance = get_no_args_cnst(type(obj))()
+        for key in obj.__dict__:
+            instance.__dict__[key] = _clone(obj.__dict__[key])
+        return instance
+    elif isinstance(obj, list): return [_clone(it) for it in obj] # type: ignore
+    elif isinstance(obj, tuple): return tuple(_clone(it) for it in obj) # type: ignore
+    elif isinstance(obj, dict): return {key:_clone(value) for key,value in obj.items()} # type: ignore
+    else: return obj
+class Cloneable:
+    def clone(self) -> Self:
+        return _clone(self)

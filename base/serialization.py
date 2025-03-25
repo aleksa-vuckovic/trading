@@ -1,11 +1,11 @@
 #2
 from __future__ import annotations
-from typing import Any, Callable, overload, override
+from typing import Any, Callable, Self, overload, override
 import json
 from enum import Enum
 import datetime
 import zoneinfo
-from base.classes import get_full_classname, get_class_by_full_classname
+from base.types import get_full_classname, get_class_by_full_classname, get_no_args_cnst
 
 _TYPE = '$$type'
 _SKIP_KEYS = '_serializable_skip_keys'
@@ -39,14 +39,9 @@ class BasicSerializer(Serializer):
         if assert_type: assert isinstance(ret, assert_type)
         return ret
 
-def serializable[T: type](skip_keys: list[str] = []) -> Callable[[T], T]:
-    def decorate(cls: T) -> T:
-        create: Callable[[], object]
-        try:
-            cls() # type: ignore
-            create = cls # type: ignore
-        except TypeError:
-            create = lambda: object.__new__(cls) # type: ignore
+def serializable[T: Serializable](skip_keys: list[str] = []) -> Callable[[type[T]], type[T]]:
+    def decorate(cls: type[T]) -> type[T]:
+        create = get_no_args_cnst(cls)
         skips = skip_keys[:]
         for base in cls.__bases__:
             if hasattr(base, _SKIP_KEYS): skips.extend(getattr(base, _SKIP_KEYS))
@@ -57,12 +52,12 @@ def serializable[T: type](skip_keys: list[str] = []) -> Callable[[T], T]:
         else:
             def to_dict(self) -> dict:
                 return {key:self.__dict__[key] for key in self.__dict__ if key not in skips}
-        def from_dict(obj:dict) -> object:
+        def from_dict(data:dict) -> Any:
             result = create()
-            result.__dict__.update(obj) # type: ignore
+            result.__dict__.update(data)
             return result
-        cls.to_dict = to_dict # type: ignore
-        cls.from_dict = from_dict # type: ignore
+        cls.to_dict = to_dict
+        cls.from_dict = from_dict
         return cls
     return decorate
     
