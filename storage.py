@@ -1,7 +1,8 @@
 from pathlib import Path
 from trading.models.abstract import DataConfig
 from trading.core.interval import Interval
-from trading.core.work_calendar import TimingConfig, XNAS
+from trading.core.work_calendar import TimingConfig
+from trading.providers import Nasdaq
 
 class generator:
     data_config = DataConfig({
@@ -21,7 +22,7 @@ class generator:
         .starting(hour = 10, minute = 0)\
         .until(hour = 14, minute=30)\
         .build()\
-        .with_calendar(XNAS)\
+        .with_calendar(Nasdaq.instance.calendar)\
         .with_interval(Interval.M5)
     folder = Path(__file__).parent/"trading"/"models"/"generators"/"examples_w1_m5"
 
@@ -42,6 +43,6 @@ class generator2:
         .starting(hour = 10, minute = 0)\
         .until(hour = 15, minute=30)\
         .build()\
-        .with_calendar(XNAS)\
+        .with_calendar(Nasdaq.instance.calendar)\
         .with_interval(Interval.M15)
     folder = Path(__file__).parent/"trading"/"models"/"generators"/"examples_w1_m15"

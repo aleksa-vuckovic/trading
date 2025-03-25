@@ -8,15 +8,16 @@ from datetime import timedelta
 from pathlib import Path
 from trading.core.work_calendar import TimingConfig
 from trading.core import work_calendar
-from trading.providers import aggregate
+from trading.providers import Nasdaq
 from trading.core.interval import Interval
-from trading.core.work_calendar import XNAS
 from base.caching import FilePersistor, SqlitePersistor
 from tqdm import tqdm
 import shutil
 
 
 logger = logging.getLogger(__name__)
+
+calendar = Nasdaq.instance.calendar
 
 def migrate():
     def migrate_cache(root: Path, db: Path, table: str):
@@ -88,32 +89,32 @@ def fix_timestamps():
                 result = []
                 for entry in data:
                     timestamp = entry['t']
-                    date = XNAS.unix_to_datetime(timestamp)
-                    if XNAS.is_timestamp(timestamp, interval):
+                    date = calendar.unix_to_datetime(timestamp)
+                    if calendar.is_timestamp(timestamp, interval):
                         result.append(entry)
                     elif interval == Interval.L1:
-                        fixed_date = XNAS.get_next_timestamp(date.replace(day=1), interval)
+                        fixed_date = calendar.get_next_timestamp(date.replace(day=1), interval)
                         entry['t'] = fixed_date.timestamp()
                         result.append(entry)
                         logger.info(f"Fixed {interval} from {date} to {fixed_date}")
                     elif interval == Interval.W1:
-                        fixed_date = XNAS.get_next_timestamp(date-timedelta(days=date.weekday()+1), interval)
+                        fixed_date = calendar.get_next_timestamp(date-timedelta(days=date.weekday()+1), interval)
                         entry['t'] = fixed_date.timestamp()
                         result.append(entry)
                         logger.info(f"Fixed {interval} from {date} to {fixed_date}")
                     elif interval == Interval.D1:
-                        if not XNAS.is_workday(date):
+                        if not calendar.is_workday(date):
                             logger.info(f"Deleting {interval} {date}")
                         else:
-                            fixed_date = XNAS.set_close(date)
+                            fixed_date = calendar.set_close(date)
                             entry['t'] = fixed_date.timestamp()
                             result.append(entry)
                             logger.info(f"Fixed {interval} from {date} to {fixed_date}")
                     elif interval == Interval.H1:
-                        if timestamp-1800 == XNAS.set_close(timestamp):
+                        if timestamp-1800 == calendar.set_close(timestamp):
                             entry['t'] = timestamp-1800
                             result.append(entry)
-                            logger.info(f"Fixed {interval} from {date} to {XNAS.unix_to_datetime(timestamp-1800)}")
+                            logger.info(f"Fixed {interval} from {date} to {calendar.unix_to_datetime(timestamp-1800)}")
                         else:
                             logger.info(f"Deleting {interval} {date}")
                     else:
