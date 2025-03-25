@@ -13,10 +13,10 @@ from trading.core import Interval
 from trading.core.securities import Security
 from trading.core.work_calendar import TimingConfig
 from trading.providers.aggregate import AggregateProvider
-from trading.models.abstract import Aggregation, Quote, AFTER, PriceEstimator, DataConfig, PriceTarget
-from trading.models.utils import check_tensors
-from trading.models.batches import BatchFile
-from trading.models.generators.abstract import AbstractGenerator
+from trading.models.base.model_config import Aggregation, Quote, AFTER, PriceEstimator, DataConfig, PriceTarget
+from trading.models.base.tensors import check_tensors
+from trading.models.base.batches import BatchFile
+from trading.models.generators.abstract_generator import AbstractGenerator
 
 logger = logging.getLogger(__name__)
 

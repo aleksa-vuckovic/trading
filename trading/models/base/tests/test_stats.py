@@ -1,7 +1,7 @@
 from typing import override
 import unittest
 import torch
-from trading.models.stats import StatCollector, StatContainer
+from trading.models.base.stats import StatCollector, StatContainer
 
 
 class TestStats(unittest.TestCase):

@@ -1,3 +1,4 @@
+#1
 from __future__ import annotations
 from typing import Iterable, Iterator, Self
 import re
@@ -19,6 +20,9 @@ class BatchFile:
         self.unix_time = int(match.group(1))
         self.entry = int(match.group(2))
         self.iter = int(match.group(3))
+    @staticmethod
+    def get(folder: Path, time: float, entry: int, iter: int) -> BatchFile:
+        return BatchFile(folder / f"{int(time)}_{entry}_{iter}.pt")
     @staticmethod
     def load(root: Path) -> list[BatchFile]:
         return sorted([BatchFile(root/it) for it in os.listdir(root) if it.endswith('.pt')], key=lambda it: (it.unix_time, it.entry))

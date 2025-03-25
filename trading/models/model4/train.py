@@ -1,12 +1,11 @@
 import logging
 import torch
 from pathlib import Path
-from trading.models.training_plan import TrainingPlan
-from trading.models.stats import StatContainer, Accuracy, Precision, TanhLoss
-from trading.models.abstract import ModelConfig
-from trading.models.generators import generator
+from trading.models.base.training_plan import TrainingPlan
+from trading.models.base.stats import StatContainer, Accuracy, Precision, TanhLoss
+from trading.models.base.model_config import ModelConfig
 from trading.models.model4.network import Model
-from trading.models.training_plan_utils import add_train_val_test_batches, add_triggers
+from trading.models.base.training_plan_utils import add_train_val_test_batches, add_triggers
 
 
 logger = logging.getLogger(__name__)

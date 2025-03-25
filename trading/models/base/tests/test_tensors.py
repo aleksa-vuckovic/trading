@@ -1,7 +1,7 @@
 from numpy import indices
 import torch
 from unittest import TestCase
-from trading.models.utils import get_moving_average, get_normalized_by_largest, get_time_relativized, get_sampled
+from trading.models.base.tensors import get_moving_average, get_normalized_by_largest, get_time_relativized, get_sampled
 
 
 class TestUtils(TestCase):
@@ -65,4 +65,3 @@ class TestUtils(TestCase):
         self.assertEqual(6, (numbers>50).sum().item())
         self.assertEqual(4, (numbers<=30).sum().item())
 
-        

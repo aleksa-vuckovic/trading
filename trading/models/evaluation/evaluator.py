@@ -1,3 +1,4 @@
+#1
 from __future__ import annotations
 import logging
 import time
@@ -16,14 +17,14 @@ from base import dates
 from base import text
 from base.classes import ClassDict, get_full_classname
 from base.serialization import serializable, Serializable, serializer
-from main import ModelConfig
 from base import plotutils
 from trading.core.work_calendar import TimingConfig
 from trading.core import Interval
 from trading.core.securities import Security
 from trading.providers.aggregate import AggregateProvider
-from trading.models.abstract import AbstractModel, PriceEstimator
-from trading.models.generators.abstract import AbstractGenerator
+from trading.models.base.model_config import PriceEstimator, ModelConfig
+from trading.models.base.abstract_model import AbstractModel
+from trading.models.generators.abstract_generator import AbstractGenerator
 logger = logging.getLogger()
 
 FOLDER = Path(__file__).parent / 'backtests'

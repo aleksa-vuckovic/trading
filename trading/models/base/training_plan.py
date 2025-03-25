@@ -1,17 +1,17 @@
+#2
 from __future__ import annotations
-from unittest.mock import Base
+from typing import Callable, Literal, NamedTuple, Sequence, final, override
 import torch
 from torch import Tensor
 import logging
 from tqdm import tqdm
 from pathlib import Path
-from typing import Callable, Literal, NamedTuple, Sequence, final, override
 from matplotlib import pyplot as plt
 from base.classes import get_full_classname
 from base import plotutils
-from trading.models.stats import StatContainer
-from trading.models.batches import Batches
-from trading.models.abstract import AbstractModel
+from trading.models.base.stats import StatContainer
+from trading.models.base.batches import Batches
+from trading.models.base.abstract_model import AbstractModel
 
 logger = logging.getLogger(__name__)
 STAT_HISTORY = 'stat_history'

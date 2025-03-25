@@ -4,8 +4,9 @@ import torchinfo
 import config
 from torch import Tensor
 from trading.core import Interval
-from trading.models.abstract import AbstractModel, ModelConfig, Quote
-from trading.models.utils import get_moving_average, get_time_relativized, check_tensors, check_tensor
+from trading.models.base.model_config import ModelConfig, Quote
+from trading.models.base.abstract_model import AbstractModel
+from trading.models.base.tensors import get_moving_average, get_time_relativized, check_tensors, check_tensor
 
 INPUT_FEATURES = 'input_features'
 MVG_WINDOW = 'mvg_window'

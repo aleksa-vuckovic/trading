@@ -11,9 +11,7 @@ from base import dates
 from base.serialization import serializer
 from trading.core.securities import Security
 from trading.core.work_calendar import TimingConfig
-
-
-
+from trading.models.base.batches import BatchFile
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +68,7 @@ class AbstractGenerator:
             total_state = json.loads(state_path.read_text())
             if current:
                 data = {key:torch.stack([it[key] for it in current], dim=0) for key in current[0].keys()}
-                batch_file = folder / f"time{unix_time}_entry{entry}_iter{iter}.pt"
+                batch_file = BatchFile.get(folder, unix_time, entry, iter).path
                 if batch_file.exists(): raise Exception(f"Batch file {batch_file} already exists.")
                 torch.save(data, batch_file)
                 logger.info(f"Wrote batch number {iter} for timestamp {unix_time}.")

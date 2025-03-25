@@ -1,5 +1,5 @@
 from pathlib import Path
-from trading.models.abstract import DataConfig
+from trading.models.base.model_config import DataConfig
 from trading.core.interval import Interval
 from trading.core.work_calendar import TimingConfig
 from trading.providers import Nasdaq
