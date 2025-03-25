@@ -4,10 +4,10 @@ import calendar
 from typing import overload, TypeVar, override
 from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta
-from base.classes import equatable
+from base.types import equatable
 from base.caching import Persistor, cached_series, MemoryPersistor
 from base import dates
-from base.serialization import serializable
+from base.serialization import Serializable, serializable
 from trading.core import Interval
 
 
@@ -276,7 +276,7 @@ class BasicWorkCalendar(WorkCalendar):
 
 @serializable(skip_keys=['interval', 'calendar'])
 @equatable(skip_keys=['interval', 'calendar'])
-class TimingConfig:
+class TimingConfig(Serializable):
     """
     Represents a set of timing intervals or points during a single day.
     The configuration is timezone and date independent, but:

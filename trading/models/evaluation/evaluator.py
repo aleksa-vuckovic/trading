@@ -15,7 +15,7 @@ from matplotlib.gridspec import GridSpec
 
 from base import dates
 from base import text
-from base.classes import ClassDict, get_full_classname
+from base.types import ClassDict, get_full_classname
 from base.serialization import serializable, Serializable, serializer
 from base import plotutils
 from trading.core.work_calendar import TimingConfig
@@ -107,7 +107,7 @@ class BacktestFrame(Serializable, ClassDict[float]):
 
 
 @serializable()
-class BacktestResult:
+class BacktestResult(Serializable):
     def __init__(
         self,
         history: list[BacktestFrame],

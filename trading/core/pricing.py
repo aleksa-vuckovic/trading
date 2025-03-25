@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import Iterable, Mapping, Sequence, override
 from base.algos import interpolate
-from base.classes import equatable
+from base.types import equatable
 from base.serialization import serializable, Serializable
 from base.caching import cached_series, Persistor
 from trading.core import Interval

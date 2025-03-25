@@ -28,7 +28,7 @@ class TestStats(unittest.TestCase):
         c1 = TestCollectorTensor()
         c2 = TestCollectorFloat()
         self.assertIsInstance(c1.update(expect1, output1), torch.Tensor)
-        self.assertIsInstance(c2.update(expect1, output1), (float, int))
+        self.assertIsInstance(c2.update(expect1, output1), torch.Tensor)
         c1.update(expect2, output2)
         c2.update(expect2, output2)
         self.assertEqual(2, c1.count)

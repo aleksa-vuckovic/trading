@@ -5,7 +5,7 @@ from trading.models.base.training_plan import TrainingPlan
 from trading.models.base.stats import StatContainer, Accuracy, Precision, TanhLoss
 from trading.models.base.model_config import ModelConfig
 from trading.models.model4.network import Model
-from trading.models.base.training_plan_utils import add_train_val_test_batches, add_triggers
+from trading.models.base.training_plan_utils import add_triggers
 
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ def get_plan(config: ModelConfig) -> TrainingPlan:
     model = Model(config)
     plan = TrainingPlan.Builder(model)
     plan.with_optimizer(torch.optim.Adam(model.parameters()))
-    add_train_val_test_batches(plan, examples_folder=Path(), make_stats=make_stats, timing=config.timing, merge=5)
+    #add_train_val_test_batches(plan, examples_folder=Path(), make_stats=make_stats, timing=config.timing, merge=5)
     add_triggers(
         plan,
         checkpoints_folder=Path(__file__).parent / f"checkpoints_{None}",

@@ -3,9 +3,9 @@ import torch
 from torch import Tensor
 from typing import Callable, override
 from base.serialization import serializable, Serializable
+from base.types import Cloneable
 
-@serializable()
-class StatCollector(Serializable):
+class StatCollector(Cloneable):
     def __init__(self, name: str):
         self.name = name
         self.clear()
@@ -30,12 +30,12 @@ class StatCollector(Serializable):
     def __str__(self):
         return f"{self.name}={self.running:.4f}({self.last:.2f})"
 
-class StatContainer:
+class StatContainer(Cloneable):
     stats: dict[str, StatCollector]
     primary: str
-    def __init__(self, *args: StatCollector, name: str):
+    def __init__(self, *args: StatCollector, primary: str|None = None, name: str):
         self.stats = {it.name:it for it in args}
-        self.primary = args[0].name
+        self.primary = primary or args[0].name
         self.name = name
 
     def update(self, expect: Tensor, output: Tensor) -> Tensor:
@@ -120,3 +120,4 @@ class LinearLoss(StatCollector):
     @override
     def _calculate(self, expect: Tensor, output: Tensor) -> Tensor:
         return torch.nn.functional.mse_loss(expect, output)
+    

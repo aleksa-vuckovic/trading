@@ -55,13 +55,26 @@ class TestUtils(TestCase):
 
     
     def test_get_sampled(self):
-        input = torch.arange(100)#[torch.randperm(100)]
-        bins = [(1,30),(30,40),(50,99)]
-        ratios = [0.2,0.5,0.3]
+        input = torch.arange(100)
+        bins = [
+            ((1,30), 0.2),
+            ((30,40), 0.5),
+            ((50,99), 0.3)
+        ]
 
-        result = get_sampled(input, bins, ratios)
-        self.assertEqual(20, result.sum().item())
+        result = get_sampled(input, bins)
         numbers = input[result]
+        self.assertEqual(20, result.sum().item())
         self.assertEqual(6, (numbers>50).sum().item())
         self.assertEqual(4, (numbers<=30).sum().item())
+
+        bins = [
+            (5, 1),
+            ((lambda it: it == 10), 1),
+            ((2,4), 2)
+        ]
+        result = get_sampled(input, bins)
+        numbers = input[result]
+        self.assertEqual(4, result.sum().item())
+        self.assertEqual(22, numbers.sum().item())
 

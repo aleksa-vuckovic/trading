@@ -28,7 +28,7 @@ class BatchFile:
         return sorted([BatchFile(root/it) for it in os.listdir(root) if it.endswith('.pt')], key=lambda it: (it.unix_time, it.entry))
 
 class Batches(Iterable[dict[str, Tensor]]):
-    def __init__(self, files: list[BatchFile], merge: int = 1, device: str = "cpu", dtype = torch.float32):
+    def __init__(self, files: list[BatchFile], merge: int = 1, device: torch.device = torch.device("cpu"), dtype = torch.float32):
         self.files = files
         self.merge = merge
         self.device = device

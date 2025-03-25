@@ -6,7 +6,7 @@ from enum import Enum
 from base import dates
 from base.scraping import scraper
 from trading.core.work_calendar import HolidaySchedule, BasicWorkCalendar
-from base.serialization import serializable
+from base.serialization import Serializable, serializable
 from trading.core.securities import Security, SecurityType, Exchange
 
 logger = logging.getLogger(__name__)
@@ -96,7 +96,7 @@ def _yn_to_bool(yn: str) -> bool:
     raise ValueError(f'Invalid Y/N value: {yn}')
 
 @serializable()
-class NasdaqSecurity(Security):
+class NasdaqSecurity(Security, Serializable):
     def __init__(self, symbol, name, type, market: NasdaqMarket, status: FinancialStatus):
         super().__init__(symbol, name, type)
         self.market = market

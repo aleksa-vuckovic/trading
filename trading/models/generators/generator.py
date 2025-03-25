@@ -13,7 +13,7 @@ from trading.core import Interval
 from trading.core.securities import Security
 from trading.core.work_calendar import TimingConfig
 from trading.providers.aggregate import AggregateProvider
-from trading.models.base.model_config import Aggregation, Quote, AFTER, PriceEstimator, DataConfig, PriceTarget
+from trading.models.base.model_config import Aggregation, Quote, AFTER, PriceEstimator, ModelDataConfig, PriceTarget
 from trading.models.base.tensors import check_tensors
 from trading.models.base.batches import BatchFile
 from trading.models.generators.abstract_generator import AbstractGenerator
@@ -24,8 +24,8 @@ class Generator(AbstractGenerator):
     def __init__(
         self,
         securities: Sequence[Security],
-        data_config: DataConfig,
-        after_data_config: DataConfig,
+        data_config: ModelDataConfig,
+        after_data_config: ModelDataConfig,
         timing: TimingConfig,
         folder: Path
     ):

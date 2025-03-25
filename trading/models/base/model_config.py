@@ -8,7 +8,7 @@ from pathlib import Path
 from enum import Enum, auto
 from matplotlib import pyplot as plt
 from base.serialization import serializable, Serializable, serializer
-from base.classes import equatable
+from base.types import equatable
 from trading.core import Interval
 from trading.core.work_calendar import TimingConfig
 from trading.core.securities import Security
@@ -149,7 +149,7 @@ class PriceTarget(Enum):
         plt.show()
 
 @equatable()
-class DataConfig(Serializable):
+class ModelDataConfig(Serializable):
     def __init__(self, counts: dict[Interval, int]):
         self.counts = counts
 
@@ -170,7 +170,7 @@ class DataConfig(Serializable):
         return self.counts[self.max_interval]
 
     class Iterator(Iterator[tuple[Interval, int]]):
-        def __init__(self, data_config: DataConfig):
+        def __init__(self, data_config: ModelDataConfig):
             self.data_config = data_config
             self.intervals = list(data_config.intervals)
             self.i = 0
@@ -181,7 +181,7 @@ class DataConfig(Serializable):
             return self.intervals[self.i-1], self.data_config.counts[self.intervals[self.i-1]]
 
     def __iter__(self) -> Iterator[tuple[Interval, int]]:
-        return DataConfig.Iterator(self)
+        return ModelDataConfig.Iterator(self)
     
     def __len__(self):
         return len(self.counts)
@@ -202,26 +202,24 @@ class DataConfig(Serializable):
     
     def to_dict(self) -> dict: return {'counts': self.counts}
     @staticmethod
-    def from_dict(data: dict) -> DataConfig:
-        return DataConfig({Interval[key]: data[key] for key in data['counts']})
+    def from_dict(data: dict) -> ModelDataConfig:
+        return ModelDataConfig({Interval[key]: data[key] for key in data['counts']})
 
-@serializable(skip_keys=['examples_folder'])
-@equatable(skip_keys=['examples_folder'])
+@serializable()
+@equatable()
 class ModelConfig(Serializable):
     def __init__(
         self, 
         estimator: PriceEstimator,
         target:  PriceTarget,
         timing: TimingConfig,
-        data_config: DataConfig,
-        examples_folder: Path,
+        data_config: ModelDataConfig,
         other: dict = {}
     ):
         self.estimator = estimator
         self.target = target
         self.timing = timing
         self.data_config = data_config
-        self.examples_folder = examples_folder
         self.other = other
     
     def __str__(self) -> str:
@@ -230,7 +228,6 @@ estimator = {serializer.serialize(self.estimator, typed=False, indent=2)}
 target = {self.target.name}
 timing = {serializer.serialize(self.timing, typed=False, indent=2)}
 data_config = {serializer.serialize(self.data_config, typed=False, indent=2)}
-examples = {self.examples_folder}
 other = {self.other}
 """
     

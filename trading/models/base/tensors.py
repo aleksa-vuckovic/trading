@@ -1,6 +1,6 @@
 #1
 from __future__ import annotations
-from typing import Mapping, Sequence, Any
+from typing import Callable, Mapping, Sequence, Any, overload
 import torch
 import logging
 import functools
@@ -94,20 +94,27 @@ def __get_sampled(tensor: Tensor, count: int) -> Tensor:
     result[indices] = True
     return result
 
-def get_sampled(tensor: Tensor, bins: Sequence[tuple[float, float]], ratios: Sequence[float]) -> Tensor:
+
+def get_sampled(
+    tensor: Tensor,
+    bins: Sequence[tuple[float|tuple[float,float]|Callable[[Tensor], Tensor], float]]
+) -> Tensor:
     """
     Sample the given tensor so that the ratio of the number of values within the given bins corresponds to the ratios argument.
     Args:
         tensor: The one dimensional tensor to sample from.
         bins: The bins to categorize the values into. Expected to be disjunctive. (Not checked)
-        ratios: The desired ratios for each bin.
+            The second element of the tuple gives the expected ratio in the output set for the bin.
     Returns:
         A tensor of booleans for the selected entries.
     """
-    assert len(bins) == len(ratios)
-
-    ratios = [it/sum(ratios) for it in ratios]
-    selected = [(tensor > lower) & (tensor <= upper) for lower, upper in bins]
+    ratios = [it[1]/sum(it[1] for it in bins) for it in bins]
+    selected = [
+        it[0](tensor) if callable(it[0])
+        else ((tensor > it[0][0]) & (tensor <= it[0][1])) if isinstance(it[0], tuple)
+        else tensor == it[0]
+        for it in bins
+    ]
     counts = [it.sum().item() for it in selected]
     max_counts = [count/ratio for count,ratio in zip(counts, ratios)]
     total_count = min(max_counts)
