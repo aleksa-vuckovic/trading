@@ -165,6 +165,9 @@ class WorkCalendar:
             return t[-count] # type: ignore
     #endregion
 
+    def __eq__(self, other) -> bool:
+        return isinstance(other, type(self))
+
 class HolidaySchedule:
     """
     Stores data about holidays, as a set of non working and semi working days.
@@ -274,24 +277,16 @@ class BasicWorkCalendar(WorkCalendar):
         return self.set_close(time)
     #endregion
 
-@serializable(skip_keys=['interval', 'calendar'])
-@equatable(skip_keys=['interval', 'calendar'])
+@serializable()
+@equatable()
 class TimingConfig(Serializable):
     """
     Represents a set of timing intervals or points during a single day.
-    The configuration is timezone and date independent, but:
-        To use get_next_time, the interval and calendar must be set.
-        To use __contains__, the calendar must be set.
-    When using datetimes in these methods, the datetime must match the calendar's timezone,
-    otherwise the behavior is undefined.
     """
-    interval: Interval|None
-    calendar: WorkCalendar|None
-    def __init__(self, components: list[float|list[float]]):
+    def __init__(self, components: list[float|tuple[float,float]]):
         self.components = components
-        self.interval = None
-        self.calendar = None
     class Builder:
+        
         def __init__(self):
             self.components = []
         def at(self, hour: int = 9, minute: int = 30) -> TimingConfig.Builder:
@@ -302,41 +297,42 @@ class TimingConfig(Serializable):
                 self._builder = builder
                 self._start = start
             def until(self, hour: int = 16, minute: int = 0) -> TimingConfig.Builder:
-                self._builder.components.append([self._start, float(hour*3600+minute*60)])
+                self._builder.components.append((self._start, float(hour*3600+minute*60)))
                 return self._builder
         def starting(self, hour: int = 9, minute: int = 30) -> TimingConfig.Builder._Interval:
             return TimingConfig.Builder._Interval(self, float(hour*3600+minute*60))
         def around(self, hour: int = 10, minute: int = 0, delta_minute: int = 10):
             if not delta_minute: return self.at(hour = hour, minute = minute)
             time = float(hour*3600 + minute*60)
-            self.components.append([time-delta_minute*60,time+delta_minute*60])
+            self.components.append((time-delta_minute*60,time+delta_minute*60))
             return self
+        def any(self) -> TimingConfig.Builder:
+            return self.starting(0,0).until(0,0)
         def build(self) -> TimingConfig:
             return TimingConfig(self.components)
-    def with_interval(self, interval: Interval) -> TimingConfig:
-        result = TimingConfig(self.components)
-        result.interval = interval
-        result.calendar = self.calendar
-        return result
-    def with_calendar(self, calendar: WorkCalendar) -> TimingConfig:
-        result = TimingConfig(self.components)
-        result.interval = self.interval
-        result.calendar = calendar
-        return result
-    def get_next_time(self, time: T) -> T:
-        if not self.interval or not self.calendar: raise Exception(f"Both the interval and calendar must be set before calling get_next_time.")
-        if not isinstance(time, datetime): return self.get_next_time(self.calendar.unix_to_datetime(time)).timestamp()
-        time = self.calendar.get_next_timestamp(time, self.interval)
-        while time not in self: time = self.calendar.get_next_timestamp(time, self.interval)
-        return time
-    def __contains__(self, time: T) -> bool:
-        if not self.calendar: raise Exception(f"Calendar must be set to call __contains__.")
-        if not isinstance(time, datetime): return self.calendar.unix_to_datetime(time) in self
-        if not self.calendar.is_worktime(time): return False
+
+    @overload
+    def contains(self, time: float, calendar: WorkCalendar) -> bool: ...
+    @overload
+    def contains(self, time: datetime) -> bool: ...
+    def contains(self, time: datetime|float, calendar: WorkCalendar|None = None):
+        if not isinstance(time, datetime):
+            assert calendar is not None
+            return self.contains(calendar.unix_to_datetime(time))
         daysecs = time.hour*3600+time.minute*60+time.second+time.microsecond
         for it in self.components:
-            if isinstance(it, list):
-                if daysecs > it[0] and daysecs <= it[1]: return True
+            if isinstance(it, tuple):
+                if daysecs > it[0] and (daysecs <= it[1] or not it[1]): return True
             else:
                 if daysecs == it: return True
         return False
+    def __contains__(self, time: datetime) -> bool:
+        return self.contains(time)
+    
+    def next(self, time: T,interval: Interval, calendar: WorkCalendar) -> T:
+        if not isinstance(time, datetime):
+            assert calendar is not None
+            return self.next(calendar.unix_to_datetime(time), interval, calendar).timestamp()
+        cur = calendar.get_next_timestamp(time, interval)
+        while cur not in self: cur = calendar.get_next_timestamp(cur, interval)
+        return cur

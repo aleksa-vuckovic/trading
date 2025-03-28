@@ -6,7 +6,6 @@ import json
 import config
 from datetime import timedelta
 from pathlib import Path
-from trading.core.work_calendar import TimingConfig
 from trading.core import work_calendar
 from trading.providers import Nasdaq
 from trading.core.interval import Interval

@@ -4,10 +4,10 @@ from msilib import sequence
 import time
 from typing import Callable, override, ParamSpec, TypeVar, Sequence
 from trading.core import Interval
-from trading.core.securities import Security, DataProvider
+from trading.core.securities import Exchange, Security, DataProvider
 from trading.core.pricing import PricingProvider, OHLCV
 from trading.core.news import News, NewsProvider
-from trading.providers import Yahoo, FinancialTimes, WallStreetJournal, SeekingAlpha, GlobeNewswire
+from trading.providers import Nasdaq, Yahoo, FinancialTimes, WallStreetJournal, SeekingAlpha, GlobeNewswire
 
 logger = logging.getLogger(__name__)
 
@@ -70,4 +70,11 @@ class AggregateProvider(PricingProvider, NewsProvider, DataProvider):
     
     instance: AggregateProvider
 
-AggregateProvider.instance = AggregateProvider([Yahoo(), WallStreetJournal(), FinancialTimes()], [GlobeNewswire(), SeekingAlpha()], [Yahoo()])
+
+exchanges: list[Exchange] = [Nasdaq.instance]
+exchange_by_mic: dict[str, Exchange] = {it.mic: it for it in exchanges}
+pricing_providers: list[PricingProvider] = [Yahoo(), WallStreetJournal(), FinancialTimes()]
+news_providers: list[NewsProvider] = [GlobeNewswire(), SeekingAlpha()]
+data_providers: list[DataProvider] = [Yahoo()]
+
+AggregateProvider.instance = AggregateProvider(pricing_providers, news_providers, data_providers)

@@ -1,7 +1,6 @@
 #3
 from typing import Callable, Sequence
 from pathlib import Path
-from trading.core.work_calendar import TimingConfig
 from trading.models.base.stats import StatContainer
 from trading.models.base.batches import Batches, BatchFile
 from trading.models.base.training_plan import LearningRateAction, TrainingPlan, AlwaysTrigger, StatTrigger,\

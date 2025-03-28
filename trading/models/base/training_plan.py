@@ -252,10 +252,10 @@ class TrainingPlan:
     - Allows actions to be triggered based on conditions, evaluated at the end of each epoch.
         This includes learning rate updates, saving checkpoints and custom actions derived from Action.
     """
-    device: torch.device
-    dtype: torch.dtype
     model: AbstractModel
     optimizer: torch.optim.Optimizer
+    device: torch.device
+    dtype: torch.dtype
 
     folders: list[Path]
     batch_group_configs: list[BatchGroupConfig]
@@ -420,9 +420,11 @@ class TrainingPlan:
         plt.show()
 
     def create_batch_groups(self) -> list[BatchGroup]:
-        files = functools.reduce(lambda files, folder: BatchFile.load(folder), self.folders, [])
+        files: list[BatchFile] = []
+        files = functools.reduce(lambda files, folder: files +  BatchFile.load(folder), self.folders, files)
         files = sorted(files, key=lambda it: it.unix_time)
-        files = [it for it in files if it.unix_time in self.model.config.timing]
+
+        files = [it for it in files if self.model.config.timing.contains(it.unix_time, it.exchange.calendar)]
 
         total = sum(it.ratio for it in self.batch_group_configs)
         counts = [int(it.ratio/total*len(files)) for it in self.batch_group_configs]

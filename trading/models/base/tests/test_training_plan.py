@@ -4,13 +4,12 @@ import unittest
 import torch
 from torch import Tensor
 
-from fix import TimingConfig
 from trading.core import Interval
 from trading.models.base.model_config import Aggregation, Quote, ModelDataConfig, ModelConfig, PriceEstimator, PriceTarget
 from trading.models.base.abstract_model import AbstractModel
-from trading.models.base.training_plan import BatchGroup, BatchGroupConfig, TrainingPlan, StatTrigger, EpochTrigger
+from trading.models.base.training_plan import BatchGroupConfig, TrainingPlan, StatTrigger, EpochTrigger
 from trading.models.base.stats import StatCollector, StatContainer
-from trading.models.base.batches import Batches
+from trading.core.work_calendar import TimingConfig
 
 config = ModelConfig(
     PriceEstimator(Quote.C, Interval.H1, slice(1,2), Aggregation.AVG),

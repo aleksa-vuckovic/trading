@@ -3,14 +3,15 @@ import logging
 import torch
 import random
 import time
-from typing import Sequence, override
+from typing import override
 from matplotlib.axes import Axes
 from matplotlib import pyplot as plt
 from torch import Tensor
 from pathlib import Path
 
+import config
 from trading.core import Interval
-from trading.core.securities import Security
+from trading.core.securities import Exchange, Security
 from trading.core.work_calendar import TimingConfig
 from trading.providers.aggregate import AggregateProvider
 from trading.models.base.model_config import Aggregation, Quote, AFTER, PriceEstimator, ModelDataConfig, PriceTarget
@@ -23,61 +24,52 @@ logger = logging.getLogger(__name__)
 class Generator(AbstractGenerator):
     def __init__(
         self,
-        securities: Sequence[Security],
         data_config: ModelDataConfig,
         after_data_config: ModelDataConfig,
-        timing: TimingConfig,
         folder: Path
     ):
         self.data_config = data_config
         self.after_data_config = after_data_config
-        self.timing = timing
         self.folder = folder
 
-        # securities with the first unix time that an example can be generated for them
-        self.securities = [
-            (
-                it,
+    @override
+    def get_folder(self) -> Path:
+        return self.folder
+    @override
+    def get_interval(self) -> Interval:
+       return self.data_config.min_interval #?
+    @override
+    def get_batch_size(self) -> int:
+        return config.models.batch_size
+    @override
+    def get_time_frame(self, it: Security | Exchange) -> tuple[float, float]:
+        if isinstance(it, Exchange):
+            return (
                 max(
-                    it.exchange.calendar.add_intervals(
-                        AggregateProvider.instance.get_first_trade_time(it),
-                        interval,
+                    it.calendar.add_intervals(
+                        AggregateProvider.instance.get_interval_start(interval), 
+                        interval, 
                         self.data_config.counts[interval]
+                    ) for interval in self.data_config.intervals
+                ),
+                min(
+                    it.calendar.add_intervals(
+                        time.time(),
+                        interval,
+                        -self.after_data_config.counts[interval]
                     )
                     for interval in self.data_config.intervals
                 )
             )
-            for it in securities
-        ]
-
-        exchanges = set(it.exchange for it in securities)
-        
-        # the time frame for the entire generator loop depends mainly on the providers' data time frames
-        self.time_frame = (
-            max(
-                exchange.calendar.add_intervals(
-                    AggregateProvider.instance.get_interval_start(interval), 
-                    interval, 
-                    self.data_config.counts[interval]
-                ) for interval in self.data_config.intervals for exchange in exchanges
-            ),
-            min(
-                exchange.calendar.add_intervals(
-                    time.time(),
+        else:
+            return max(
+                it.exchange.calendar.add_intervals(
+                    AggregateProvider.instance.get_first_trade_time(it),
                     interval,
-                    -self.after_data_config.counts[interval]
+                    self.data_config.counts[interval]
                 )
-                for interval in self.data_config.intervals for exchange in exchanges
-            )
-        )
-
-    def run(self):
-        self._run_loop(
-            folder = self.folder,
-            timing = self.timing,
-            securities_fn=lambda unix_time: [it[0] for it in self.securities if it[1] <= unix_time],
-            time_frame=self.time_frame
-        )
+                for interval in self.data_config.intervals
+            ), time.time()
 
     @override
     def generate_example(
@@ -111,6 +103,8 @@ class Generator(AbstractGenerator):
     @override
     def plot_statistics(
         self,
+        *,
+        timing: TimingConfig = TimingConfig.Builder().any().build(),
         estimator: PriceEstimator = PriceEstimator(Quote.C, Interval.H1, slice(0,7), Aggregation.LAST),
         targets: list[PriceTarget] = list(PriceTarget),
         title: str = "",
@@ -118,7 +112,7 @@ class Generator(AbstractGenerator):
     ):
         #Bin distribution of after values
         temp: list[Tensor] = []
-        files = [it.path for it in BatchFile.load(self.folder) if it.unix_time in self.timing]
+        files = [it.path for it in BatchFile.load(self.folder) if timing.contains(it.unix_time, it.exchange.calendar)]
         random.shuffle(files)
         for file in files[:20]:
             example: dict[str, Tensor] = torch.load(file, weights_only=True)

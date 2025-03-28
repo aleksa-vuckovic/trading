@@ -189,6 +189,8 @@ class Evaluator:
         """
         Returns total gain in percentages
         """
+        calendar = securities[0].exchange.calendar
+        assert all(it.exchange.calendar == calendar for it in securities)
         logger.info(f"Backtesting from {dates.unix_to_datetime(unix_from, tz=dates.CET)} to {dates.unix_to_datetime(unix_to, tz=dates.CET)}")
         unix_time = unix_from
         history: list[BacktestFrame] = []
@@ -210,10 +212,8 @@ class Evaluator:
         ax2.legend()
         plotutils.refresh_interactive_figures(fig1, fig2)
         
-        while True:
-            unix_time = timing.get_next_time(unix_time)
-            if unix_time >= unix_to:
-                break
+        unix_time = timing.next(unix_time, Interval.M5, calendar)
+        while unix_time < unix_to:
             try:
                 selector.clear()
                 self.evaluate(securities, unix_time=unix_time, log=False, selector=selector)
@@ -245,6 +245,8 @@ class Evaluator:
                 raise
             except:
                 logger.error(f"Failed to evaluate at {dates.unix_to_datetime(unix_time,tz=dates.CET)}.", exc_info=True)
+            unix_time = timing.next(unix_time, Interval.M5, calendar)
+            
         plt.ioff()
         selector.clear()
         backtest_result = BacktestResult(

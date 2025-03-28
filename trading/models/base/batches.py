@@ -9,20 +9,23 @@ from pathlib import Path
 from torch import Tensor
 import torch
 
+from trading.core.securities import Exchange
+from trading.providers.aggregate import exchange_by_mic
+
 logger = logging.getLogger(__name__)
 
 class BatchFile:
-    PATTERN = re.compile(r"time(\d+)_entry(\d+)_iter(\d+).pt")
+    PATTERN = re.compile(r"([a-zA-Z]+)_(\d+)_(\d+).pt")
     def __init__(self, path: Path):
         match = BatchFile.PATTERN.fullmatch(path.name)
         if not match: raise Exception(f"File {path.name} does not match the batch file pattern.")
         self.path = path
-        self.unix_time = int(match.group(1))
-        self.entry = int(match.group(2))
-        self.iter = int(match.group(3))
+        self.exchange = exchange_by_mic[match.group(1)]
+        self.unix_time = int(match.group(2))
+        self.entry = int(match.group(3))
     @staticmethod
-    def get(folder: Path, time: float, entry: int, iter: int) -> BatchFile:
-        return BatchFile(folder / f"{int(time)}_{entry}_{iter}.pt")
+    def get(folder: Path, time: float, entry: int, exchange: Exchange) -> BatchFile:
+        return BatchFile(folder / f"{exchange.mic}_{int(time)}_{entry}.pt")
     @staticmethod
     def load(root: Path) -> list[BatchFile]:
         return sorted([BatchFile(root/it) for it in os.listdir(root) if it.endswith('.pt')], key=lambda it: (it.unix_time, it.entry))

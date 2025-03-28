@@ -18,6 +18,9 @@ class NotCachedError(Exception):
         super().__init__()
 
 class Persistor:
+    """
+    Key value storage provider.
+    """
     def persist(self, key: str, data: object):
         raise NotImplementedError()
     def read(self, key: str) -> Any:
@@ -29,6 +32,11 @@ class Persistor:
     def migrate(self, target: Persistor):
         for key in self.keys():
             target.persist(key, self.read(key))
+    def try_read(self, key: str) -> Any:
+        try:
+            return self.read(key)
+        except NotCachedError:
+            return None
 
 class NullPersistor(Persistor):
     @override
