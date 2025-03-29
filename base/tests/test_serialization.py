@@ -2,7 +2,7 @@ from __future__ import annotations
 import unittest
 import json
 from enum import Enum
-from base.serialization import serializable, TypedSerializer, Serializable
+from base.serialization import serializable, TypedSerializer, Serializable, _TYPE, _VALUE
 from base.types import equatable
 from base import dates
 
@@ -30,6 +30,12 @@ class B(A):
         self.x=x
         self.y=y
 
+@serializable()
+@equatable()
+class C(Serializable):
+    def __init__(self, a: tuple):
+        self.a = a
+
 class TestJsonutils(unittest.TestCase):
 
     def test_typed_serializer(self):
@@ -48,8 +54,8 @@ class TestJsonutils(unittest.TestCase):
         a = B(None, None, None, None, None)
         a_s = serializer.serialize(a)
         b = json.loads(a_s)
-        self.assertFalse('x' in b)
-        self.assertTrue('y' in b)
+        self.assertFalse('x' in b[_VALUE])
+        self.assertTrue('y' in b[_VALUE])
 
     def test_typed_serializer_datetime(self):
         serializer = TypedSerializer()
@@ -62,3 +68,15 @@ class TestJsonutils(unittest.TestCase):
 
         self.assertEqual(data, result)
     
+    def test_typed_serializer_tuple(self):
+        serializer = TypedSerializer()
+        data = {
+            't1': (1,2,3),
+            't2': ((10,20,30), 11, 12, 13, [1, 2, 3, (4,5,6)]),
+            't3': {
+                'c': C(('a', 'b', 'c', 1))
+            }
+        }
+        data_s = serializer.serialize(data, True)
+        data_d = serializer.deserialize(data_s, dict)
+        self.assertEqual(data, data_d)

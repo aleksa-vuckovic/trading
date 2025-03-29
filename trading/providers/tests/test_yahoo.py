@@ -95,7 +95,7 @@ class TestYahoo(unittest.TestCase):
         self.assertLess(result, expect*1.2)
 
         result = provider.get_summary(tnya)
-        self.assertTrue(result.startswith("Tenaya Therapeutics, Inc., a biotechnology company, discovers, develops, and delivers therapies"))
+        self.assertTrue(result.startswith("Tenaya Therapeutics, Inc., a clinical-stage biotechnology company, discovers, develops, and delivers therapies"))
 
         result = provider.get_outstanding_parts(tnya)
         expect = 162583008
