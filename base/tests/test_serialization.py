@@ -2,6 +2,7 @@ from __future__ import annotations
 import unittest
 import json
 from enum import Enum
+from pathlib import Path
 from base.serialization import serializable, TypedSerializer, Serializable, _TYPE, _VALUE
 from base.types import equatable
 from base import dates
@@ -78,5 +79,15 @@ class TestJsonutils(unittest.TestCase):
             }
         }
         data_s = serializer.serialize(data, True)
+        data_d = serializer.deserialize(data_s, dict)
+        self.assertEqual(data, data_d)
+
+    def test_typed_serializer_path(self):
+        serializer = TypedSerializer()
+        data = {
+            "p1": Path("./hello.txt"),
+            "p2": Path("D:/test/abc")
+        }
+        data_s = serializer.serialize(data)
         data_d = serializer.deserialize(data_s, dict)
         self.assertEqual(data, data_d)

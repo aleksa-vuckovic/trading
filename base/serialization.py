@@ -6,6 +6,7 @@ import zoneinfo
 import builtins
 from typing import Any, Callable, Self, overload, override
 from enum import Enum
+from pathlib import Path
 from base.types import get_full_classname, get_class_by_full_classname, get_no_args_cnst
 
 _SKIP_KEYS = '_serializable_skip_keys'
@@ -76,6 +77,7 @@ class TypedSerializer(Serializer):
         elif cls.__module__ == 'builtins': obj = repr(obj)
         elif isinstance(obj, Enum): obj = obj.name
         elif isinstance(obj, datetime.datetime): obj = repr(obj)
+        elif isinstance(obj, Path): obj = str(obj)
         elif hasattr(obj, 'to_dict'): obj = obj.to_dict() # type: ignore
         else: raise Exception(f"Can't serialize {obj} of type {cls}.")
 
@@ -103,6 +105,7 @@ class TypedSerializer(Serializer):
         elif cls.__module__ == 'builtins': return eval(value)
         elif issubclass(cls, Enum): return cls[value] 
         elif cls == datetime.datetime: return eval(value)
+        elif issubclass(cls, Path): return Path(value)
         elif hasattr(cls, 'from_dict'): return cls.from_dict(value) # type: ignore
         else: raise Exception(f"Can't deserialize {obj} into type {cls}.")
     @overload
