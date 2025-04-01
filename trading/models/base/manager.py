@@ -5,7 +5,7 @@ import shutil
 import time
 import torch
 import logging
-from typing import Callable, Iterable, Literal, NamedTuple, Sequence, TypedDict, final, override
+from typing import Literal, final, override
 from pathlib import Path
 from tqdm import tqdm
 from matplotlib import pyplot as plt
@@ -45,6 +45,7 @@ class BaseTrigger(Trigger):
         if self.once and self.triggered: return False
         if self._check(manager):
             self.triggered = True
+            logger.info(f"Triggered {repr(self)}.")
             return True
         return False
     def _check(self, manager: ModelManager) -> bool: ...
@@ -52,6 +53,9 @@ class BaseTrigger(Trigger):
         return {'triggered': self.triggered}
     def load_state_dict(self, data: dict) -> None:
         self.triggered = data['triggered']
+    @override
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({",".join(f"{key}={value}"for key,value in self.__dict__.items())})"
 
 class OrTrigger(BaseTrigger):
     def __init__(self, *args: Trigger, once: bool = False):
@@ -69,6 +73,8 @@ class OrTrigger(BaseTrigger):
     def load_state_dict(self, data: dict) -> None:
         super().load_state_dict(data)
         for criteria, state_dict in zip(self.criteria, data['criteria']): criteria.load_state_dict(state_dict)
+    @override
+    def __repr__(self) -> str: return "OrTrigger()"
 
 class AndTrigger(BaseTrigger):
     def __init__(self, *args: Trigger, once: bool = False):
@@ -86,7 +92,9 @@ class AndTrigger(BaseTrigger):
     def load_state_dict(self, data: dict) -> None:
         super().load_state_dict(data)
         for criteria, state_dict in zip(self.criteria, data['criteria']): criteria.load_state_dict(state_dict)
-    
+    @override
+    def __repr__(self) -> str: return "AndTrigger()"
+
 class BoundedTrigger(BaseTrigger):
     type Event = Literal['enter','exit','both','in','out']
     in_bounds: bool|None
@@ -138,11 +146,7 @@ class StatTrigger(BoundedTrigger):
             return manager.train_state.history[-1].stats[self.group][self.key]
         except:
             return None
-    
-    def __str__(self) -> str:
-        return f"{self.__class__.__name__}(key='{self.key}',group='{self.group}')"
 
-#TODO: Remove callback
 class StatSlopeTrigger(BoundedTrigger):
     def __init__(self, *,
         key: str = 'loss',
