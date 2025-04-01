@@ -62,6 +62,9 @@ class AbstractGenerator:
             with tqdm(total=batch_size, desc=f'Generating for {exchange.calendar.unix_to_datetime(time)}', leave=True) as bar:
                 while len(current) < batch_size and i < len(securities):
                     security = securities[i]
+                    i += 1
+                    if security_time_frame[security][0] >= time or security_time_frame[security][1] < time:
+                        continue
                     try:
                         current.append(self.generate_example(security, time, with_output=True))
                         logger.info(f"Generated example for {security.symbol} for end time {exchange.calendar.unix_to_datetime(time)}")
@@ -70,7 +73,6 @@ class AbstractGenerator:
                         raise
                     except:
                         logger.error(f"Failed to generate example for {security.symbol} for {exchange.calendar.unix_to_datetime(time)}", exc_info=True)
-                    i += 1
             
             if current:
                 data = {key:torch.stack([it[key] for it in current], dim=0) for key in current[0].keys()}

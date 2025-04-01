@@ -32,10 +32,6 @@ def train(inputs: list[Path], batch_group_configs: list[BatchGroupConfig], model
     for accuracy in range(5, 100, 5):
         train_config.when(StatTrigger('val', 'accuracy', (accuracy/100, float('+inf')), once=True))\
             .then(CheckpointAction(manager.checkpoints / f"accuracy_{accuracy}_checkpoint.pth"))
-    def loss_plateau(values: Sequence[float]) -> bool:
-        high = max(values)
-        last = values[-1]
-        return last>=high or (high-last)/high < 0.001
     train_config.when(StatSlopeTrigger(key='loss', group='val', epochs=5, bounds=(-0.002,float('+inf'))) | EpochTrigger(threshold=100))\
         .then(StopAction())
     manager.train(train_config)

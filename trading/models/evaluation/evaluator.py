@@ -1,6 +1,7 @@
 #1
 from __future__ import annotations
 import logging
+import os
 import time
 import bisect
 import torch
@@ -21,6 +22,7 @@ from base import plotutils
 from trading.core.work_calendar import TimingConfig
 from trading.core import Interval
 from trading.core.securities import Security
+from trading.models.base import ModelManager
 from trading.providers.aggregate import AggregateProvider
 from trading.models.base.model_config import PriceEstimator, ModelConfig
 from trading.models.base.abstract_model import AbstractModel
@@ -38,7 +40,7 @@ class Result(Serializable):
         self.data = {}
 
 @serializable()
-class SelectionStrategy(Serializable):
+class Selector(Serializable):
     results: list[Result]
     def __init__(self, top_count:int = 10):
         self.results = []
@@ -53,8 +55,7 @@ class SelectionStrategy(Serializable):
     def clear(self):
         self.results.clear()
 
-@serializable()
-class MarketCapSelector(SelectionStrategy):
+class MarketCapSelector(Selector):
     def __init__(self, top_count: int = 10, select_at: float = 1):
         super().__init__(top_count)
         self.select_at = select_at
@@ -70,7 +71,7 @@ class MarketCapSelector(SelectionStrategy):
         selection = sorted(self.results[:self.top_count], key=lambda it: -it.data['market_cap'])
         return selection[round(self.select_at*(len(selection)-1)):]
 
-class RandomSelector(SelectionStrategy):
+class RandomSelector(Selector):
     def __init__(self, top_count: int = 10):
         super().__init__(top_count)
     @override
@@ -79,7 +80,7 @@ class RandomSelector(SelectionStrategy):
         random.shuffle(selection)
         return selection
 
-class FirstTradeTimeSelector(SelectionStrategy):
+class FirstTradeTimeSelector(Selector):
     KEY = 'first_trade_time'
     def __init__(self, top_count: int = 10):
         super().__init__(top_count)
@@ -105,7 +106,6 @@ class BacktestFrame(Serializable, ClassDict[float]):
         total_real_win = prev.total_real_win*real_win if prev else real_win
         return BacktestFrame(win, total_win, real_win, total_real_win)
 
-
 @serializable()
 class BacktestResult(Serializable):
     def __init__(
@@ -113,43 +113,46 @@ class BacktestResult(Serializable):
         history: list[BacktestFrame],
         unix_from: float,
         unix_to: float,
-        model: str,
-        config: ModelConfig,
-        selector: SelectionStrategy,
+        selector: Selector,
         estimator: PriceEstimator,
-        commission: float
+        commission: float,
+        model: str
     ):
         self.history = history
         self.unix_from = unix_from
         self.unix_to = unix_to
-        self.model = model
-        self.config = config
         self.selector = selector
         self.estimator = estimator
         self.commission = commission
+        self.model = model
+        self.unix_time = time.time()
     
     def __str__(self) -> str:
-        return f"""\
-model={self.model},
-config=\n{text.tab(str(self.config))},
-from {dates.unix_to_datetime(self.unix_from,tz=dates.CET)} to {dates.unix_to_datetime(self.unix_to,tz=dates.CET)}.
-Selector {self.selector}.
-Estimator {self.estimator}.\
+        return f"""BacktestResult ({dates.unix_to_datetime(self.unix_from,tz=dates.CET)} -> {dates.unix_to_datetime(self.unix_to,tz=dates.CET)}).
+    Selector = {self.selector}
+    Estimator = {self.estimator}
+    Model = '{self.model}'
+    Time = {dates.unix_to_datetime(self.unix_time, tz=dates.CET)}
 """
 
 class Evaluator:
-    def __init__(self, generator: AbstractGenerator, model: AbstractModel):
+    def __init__(self, manager: ModelManager, generator: AbstractGenerator):
         self.generator = generator
-        self.model = model
-        self.device = model.get_device()
-        self.dtype = model.get_dtype()
+        self.manager = manager
 
-    def evaluate(
+    def evaluate(self, security: Security, unix_time: float|None = None) -> float:
+        self.manager.model.eval()
+        with torch.no_grad():
+            example = {key:value.to(dtype=self.manager.dtype, device=self.manager.device) for key,value in self.generator.generate_example(security, unix_time or time.time(), with_output=False).items()}
+            tensors = self.manager.model.extract_tensors(example, with_output=False)
+            return self.manager.model(tensors).squeeze().item()
+
+    def select(
         self,
         securities: list[Security],
         unix_time: float|None = None,
-        selector: SelectionStrategy = SelectionStrategy(),
-        on_update: Callable[[SelectionStrategy], None]|None = None,
+        selector: Selector = Selector(),
+        on_update: Callable[[Selector], None]|None = None,
         log: bool = True
     ) -> None:
         """
@@ -160,20 +163,16 @@ class Evaluator:
         if isinstance(selector, RandomSelector) and selector.top_count >= len(securities):
             for security in securities: selector.insert(Result(security, 0))
             return
-        self.model.eval()
-        with torch.no_grad():
-            for security in tqdm(securities, leave=True, desc=f"Evaluating for {dates.unix_to_datetime(unix_time, tz=dates.CET) if unix_time else 'now'}"):
-                try:
-                    example = {key:value.to(dtype=self.dtype, device=self.device) for key,value in self.generator.generate_example(security, unix_time or time.time(), with_output=False).items()}
-                    tensors = self.model.extract_tensors(example, with_output=False)
-                    output = self.model(**tensors).squeeze().item()
-                    selector.insert(Result(security, output))
-                    if on_update: on_update(selector)
-                    if log: logger.info(f"Evaluated {security.symbol} with output {output}.")
-                except KeyboardInterrupt:
-                    raise
-                except:
-                    if log: logger.error(f"Failed to evaluate {security.symbol}.", exc_info=True)
+        for security in tqdm(securities, leave=True, desc=f"Evaluating for {dates.unix_to_datetime(unix_time, tz=dates.CET) if unix_time else 'now'}"):
+            try:
+                output = self.evaluate(security, unix_time)
+                selector.insert(Result(security, output))
+                if on_update: on_update(selector)
+                if log: logger.info(f"Evaluated {security.symbol} with output {output}.")
+            except KeyboardInterrupt:
+                raise
+            except:
+                if log: logger.error(f"Failed to evaluate {security.symbol}.", exc_info=True)
         return
 
     def backtest(
@@ -183,7 +182,7 @@ class Evaluator:
         securities: list[Security],
         timing: TimingConfig,
         estimator: PriceEstimator,
-        selector: SelectionStrategy = SelectionStrategy(),
+        selector: Selector = Selector(),
         commission: float = 0.0035
     ) -> BacktestResult:
         """
@@ -216,7 +215,7 @@ class Evaluator:
         while unix_time < unix_to:
             try:
                 selector.clear()
-                self.evaluate(securities, unix_time=unix_time, log=False, selector=selector)
+                self.select(securities, unix_time=unix_time, log=False, selector=selector)
                 
                 results = selector.get_selected()
                 result: Result|None = None
@@ -249,10 +248,9 @@ class Evaluator:
             
         plt.ioff()
         selector.clear()
-        backtest_result = BacktestResult(
-            history, unix_from, unix_to, get_full_classname(self.model), self.model.config, selector, estimator, commission
-        )
-        path = FOLDER / f"backtest_{self.model.get_name()}_t{int(time.time())}.json"
+        model = f"{self.manager.model.get_name()}\n{text.tab(serializer.serialize(self.manager.model.config, typed=False, indent=2))}"
+        backtest_result = BacktestResult(history, unix_from, unix_to, selector, estimator, commission, model)
+        path = self.manager.backtests / f"backtest_t{int(time.time())}.json"
         path.write_text(serializer.serialize(backtest_result))
         plt.show(block = True)
         return backtest_result
@@ -261,6 +259,14 @@ class Evaluator:
     def show_backtest_file(file: Path, block: bool = True):
         data = serializer.deserialize(file.read_text(), BacktestResult)
         Evaluator.show_backtest(data, block=block)
+
+    def show_backtests(self, unix_from: float, unix_to: float):
+        backtests = [serializer.deserialize((self.manager.backtests/file).read_text(), BacktestResult) for file in os.listdir(self.manager.backtests)]
+        backtests = [it for it in backtests if it.unix_time > unix_from and it.unix_time <= unix_to]
+        backtests = sorted(backtests, key=lambda it: it.unix_time)
+        for backtest in backtests:
+            Evaluator.show_backtest(backtest)
+
     @staticmethod
     def show_backtest(data: BacktestResult, block: bool = True):
         history = data.history
@@ -288,6 +294,3 @@ class Evaluator:
 
         plt.show(block=block)
         return
-
-
-

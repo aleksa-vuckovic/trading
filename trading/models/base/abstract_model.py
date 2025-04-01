@@ -15,6 +15,7 @@ class AbstractModel(torch.nn.Module):
     def extract_tensors(self, example: dict[str, Tensor], with_output: bool = True) -> dict[str, Tensor]|tuple[dict[str,Tensor],Tensor]:
         raise NotImplementedError()
     def forward(self, tensors: dict[str, Tensor]) -> Tensor: ...
+    def __call__(self, arg1: dict[str, Tensor]) -> Tensor: ...
     def print_summary(self, merge: int = 10): ...
 
     def get_device(self) -> torch.device:
@@ -23,3 +24,4 @@ class AbstractModel(torch.nn.Module):
         return next(self.parameters()).dtype
     def get_name(self) -> str:
         return __name__.split(".")[-2]
+    
