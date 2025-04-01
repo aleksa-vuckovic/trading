@@ -2,7 +2,7 @@ import logging
 import torch
 from typing import Sequence
 from pathlib import Path
-from trading.models.base.manager import BatchGroupConfig, ModelManager, StatTrigger, CheckpointAction, LearningRateAction, StatHistoryTrigger, StopAction, EpochTrigger, TrainConfig
+from trading.models.base.manager import BatchGroupConfig, ModelManager, StatTrigger, CheckpointAction, LearningRateAction, StatSlopeTrigger, StopAction, EpochTrigger, TrainConfig
 from trading.models.base.stats import StatContainer, Accuracy, Precision, TanhLoss
 from trading.models.base.model_config import ModelConfig
 from trading.models.model4.model import Model
@@ -36,6 +36,6 @@ def train(inputs: list[Path], batch_group_configs: list[BatchGroupConfig], model
         high = max(values)
         last = values[-1]
         return last>=high or (high-last)/high < 0.001
-    train_config.when(StatHistoryTrigger('loss', group='val', count=10, criteria=loss_plateau) | EpochTrigger(threshold=100))\
+    train_config.when(StatSlopeTrigger(key='loss', group='val', epochs=5, bounds=(-0.002,float('+inf'))) | EpochTrigger(threshold=100))\
         .then(StopAction())
     manager.train(train_config)

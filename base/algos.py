@@ -77,11 +77,12 @@ class LineSegment:
         return x >= self.start and x <= self.end
     def __call__(self, x: float) -> float:
         return self.k*x+self.n
-def interpolate(x: Sequence[float], y: Sequence[float], x_ret: Sequence[float], method: Literal['linear_edge'] = 'linear_edge') -> list[float]:
-    if len(x) != len(y): raise Exception(f"Lists x and y in interpolate must have the same length.")
-    y_ret: list[float] = []
+type InterpolationMetod = Literal['linear', 'linear_edge']
+def interpolate(x: Sequence[float], y: Sequence[float], x_ret: Sequence[float], method: InterpolationMetod = 'linear_edge') -> list[float]:
+    assert len(x) == len(y)
     i = 0 #x_ret cursor
     if method == 'linear_edge':
+        y_ret: list[float] = []
         for segment in itertools.chain(
             [LineSegment((float('-inf'), y[0]), (x[0], y[0]))],
             [LineSegment((x[i-1], y[i-1]), (x[i], y[i])) for i in range(1,len(x))],
@@ -91,5 +92,14 @@ def interpolate(x: Sequence[float], y: Sequence[float], x_ret: Sequence[float], 
                 y_ret.append(segment(x_ret[i]))
                 i += 1
             if i == len(x_ret): break
+        return y_ret
+    elif method == 'linear':
+        N = len(x)
+        if not N: k,n = 0,0
+        elif N==1: k,n = 0,y[0]
+        else:
+            k = N*sum(a*b for a,b in zip(x,y))-sum(x)*sum(y)
+            k /= N*sum(a**2 for a in x)-sum(x)**2
+            n = (sum(y)-k*sum(x))/N
+        return [k*a+n for a in x_ret]
     else: raise Exception(f"Unknown interpolation methods {method}.")
-    return y_ret

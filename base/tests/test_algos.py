@@ -49,3 +49,22 @@ class TestAlgos(unittest.TestCase):
         expect = [1, *expect, 4]
         result = interpolate(x, y, x_ret, method='linear_edge')
         self.assertEqual(expect, result)
+
+    def test_interpolate_linear(self):
+        cases: list[tuple[list[float],list[float],float,float]] = [
+            ([], [], 0, 0),
+            ([4], [10], 0, 10),
+            (
+                [1,1.4,2,2.5,5],
+                [10,12,14,15,25],
+                3.683252427, 6.433859223
+            )
+        ]
+
+        y_ret = [1,20,50,123,500]
+        for x,y,k,n in cases:
+            expect = [k*it+n for it in y_ret]
+            result = interpolate(x,y,y_ret,method='linear')
+            for a,b in zip(expect,result):
+                self.assertAlmostEqual(a,b,3)
+

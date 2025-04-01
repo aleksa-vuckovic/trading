@@ -14,6 +14,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, Mapped, declarative_base, mapped_column
 
 from base import plotutils
+from base.algos import interpolate
 from base.serialization import SerializedObject
 from base.types import get_module, get_full_classname
 from trading.models.base import AbstractModel
@@ -87,11 +88,12 @@ class AndTrigger(BaseTrigger):
         for criteria, state_dict in zip(self.criteria, data['criteria']): criteria.load_state_dict(state_dict)
     
 class BoundedTrigger(BaseTrigger):
+    type Event = Literal['enter','exit','both','in','out']
     in_bounds: bool|None
     def __init__(
         self,
         bounds: tuple[float,float],
-        event: Literal['enter','exit','both','in','out'] = 'enter',
+        event: Event = 'enter',
         once: bool = False
     ):
         super().__init__(once)
@@ -123,7 +125,7 @@ class StatTrigger(BoundedTrigger):
         group: str,
         key: str,
         bounds: tuple[float, float],
-        event: Literal['enter','exit','both','in','out'] = 'enter',
+        event: BoundedTrigger.Event = 'enter',
         once: bool = False
     ):
         super().__init__(bounds, event, once)
@@ -141,29 +143,25 @@ class StatTrigger(BoundedTrigger):
         return f"{self.__class__.__name__}(key='{self.key}',group='{self.group}')"
 
 #TODO: Remove callback
-class StatHistoryTrigger(BaseTrigger):
-    def __init__(self,
-        key: str,
+class StatSlopeTrigger(BoundedTrigger):
+    def __init__(self, *,
+        key: str = 'loss',
         group: str = 'val',
-        count: int = 10,
-        criteria: Callable[[Sequence[float]], bool] = lambda values: True,
-        desc: str|None = None,
+        epochs: int = 5,
+        bounds: tuple[float,float],
+        event: BoundedTrigger.Event = 'in',
         once: bool = False
     ):
-        super().__init__(once)
+        super().__init__(bounds, event, once)
         self.key = key
         self.group = group
-        self.count = count
-        self.criteria = criteria
-        self.desc = desc
+        self.epochs = epochs
     @override
-    def _check(self, manager: ModelManager) -> bool:
-        if len(manager.train_state.history) < self.count: return False
-        values = [it.stats[self.group][self.key] for it in manager.train_state.history[-self.count:]]
-        result = self.criteria(values)
-        if result:
-            logger.info(f"Triggered stat history trigger ({self.desc or 'no description'}) with values {values}.")
-        return result
+    def get_value(self, manager: ModelManager) -> float | None:
+        if len(manager.train_state.history) < self.epochs: return None
+        values = [it.stats[self.group][self.key] for it in manager.train_state.history[-self.epochs:]]
+        y_ret = interpolate(list(range(self.epochs)), values, [1,2], method='linear')
+        return y_ret[1]-y_ret[0]
 
 class EpochTrigger(BaseTrigger):
     def __init__(self, threshold: int, once: bool = True):
