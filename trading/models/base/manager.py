@@ -5,12 +5,12 @@ import shutil
 import time
 import torch
 import logging
-from typing import Literal, final, override
+from typing import Literal, Sequence, final, override
 from pathlib import Path
 from tqdm import tqdm
 from matplotlib import pyplot as plt
 from torch import Tensor
-from sqlalchemy import create_engine, select
+from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session, Mapped, declarative_base, mapped_column
 
 from base import plotutils
@@ -317,15 +317,15 @@ _PRIMARY_CHECKPOINT = "primary_checkpoint.pt"
 _BACKTESTS = "backtests"
 #endregion
 
-class ModelManager:
-    def __init__(self, model: AbstractModel):
+class ModelManager[T: AbstractModel]:
+    def __init__(self, model: T):
         # basics
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.dtype = torch.float32
         self.model = model
         # get storage paths
         folder = ModelManager.get_folder(type(model))
-        self.engine = create_engine(f"sqlite:///{folder}/{_DB}")
+        self.engine = ModelManager.get_engine(type(model))
         Base.metadata.create_all(self.engine)
         with Session(self.engine) as session:
             entity = session.scalar(select(ModelConfigEntity).where(ModelConfigEntity.content == self.model.config))
@@ -472,15 +472,35 @@ class ModelManager:
             session.commit()
 
     @staticmethod
-    def get_folder(model_type: type) -> Path:
+    def get_folder(model_type: type[T]) -> Path:
         file = get_module(model_type).__file__
         if file is None: raise Exception(f"Can't determine the file path of model: {model_type}.")
         return Path(file).parent
+    
+    engines: dict[type, Engine] = {}
+    @staticmethod
+    def get_engine(model_type: type[T]) -> Engine:
+        if model_type not in ModelManager.engines:
+            ModelManager.engines[model_type] = create_engine(f"sqlite:///{ModelManager.get_folder(model_type)}/{_DB}")
+        return ModelManager.engines[model_type]
 
     @staticmethod
-    def delete_all(model_type: type):
+    def delete_all(model_type: type[T]):
         folder = ModelManager.get_folder(model_type)
         db = folder / _DB
         data = folder / _DATA
         if db.exists(): db.unlink()
         if data.exists(): shutil.rmtree(data)
+
+    instances: dict[tuple[type, ModelConfig], ModelManager] = {}
+    @staticmethod
+    def get(model_type: type[T], config: ModelConfig) -> ModelManager[T]:
+        key = (model_type, config)
+        if key not in ModelManager.instances:
+            ModelManager.instances[key] = ModelManager(model_type(config))
+        return ModelManager.instances[key]
+    @staticmethod
+    def get_all(model_type: type[T]) -> Sequence[ModelManager[T]]:
+        engine = ModelManager.get_engine(model_type)
+        with Session(engine) as session:
+            return [ModelManager.get(model_type, it.content) for it in session.scalars(select(ModelConfigEntity))]

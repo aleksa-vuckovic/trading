@@ -19,8 +19,8 @@ stats = StatContainer(
 )
 
 def train(inputs: list[Path], batch_group_configs: list[BatchGroupConfig], model_config: ModelConfig):
+    manager = ModelManager.get(Model, model_config)
     train_config = TrainConfig(inputs, batch_group_configs, stats) 
-    manager = ModelManager(Model(model_config))
     #triggers
     for loss, lr_factor in [(100, 1), (0.7, 0.8), (0.6, 0.6), (0.5, 0.4), (0.4, 0.2), (0.35, 0.1), (0.3, 0.05), (0.25, 0.01), (0.2, 0.01), (0.15, 0.01), (0.1, 0.01)]:
         train_config.when(StatTrigger('val', 'loss', (float('-inf'), loss), once=True))\
