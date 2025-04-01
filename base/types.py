@@ -18,7 +18,14 @@ def equatable[T: type](skip_keys: list[str] = []) -> Callable[[T], T]:
             for key in other.__dict__:
                 if key not in skip_keys and key not in self.__dict__: return False
             return True
+        def __hash__(self) -> int:
+            ret = 17
+            for key in self.__dict__:
+                if key in skip_keys: continue
+                ret ^= hash(self.__dict__[key])
+            return ret
         cls.__eq__ = __eq__ # type: ignore
+        cls.__hash__ = __hash__ # type: ignore
         return cls
     return decorate
 

@@ -21,6 +21,30 @@ class TestTypes(unittest.TestCase):
         obj6 = A(0,0,obj3)
         self.assertEqual(obj4, obj5)
         self.assertNotEqual(obj4, obj6)
+    
+    def test_equatable_hashing(self):
+        @equatable()
+        class A:
+            def __init__(self, a, b, c):
+                self.a = a
+                self.b = b
+                self.c = c
+        
+        obj1 = A(1,2,3)
+        obj2 = A(1,2,obj1)
+        obj3 = A(1, obj1, obj2)
+        obj1_c = A(1,2,3)
+        obj2_c = A(1,2,obj1_c)
+        obj3_c = A(1, obj1_c, obj2_c)
+        
+        data = {obj1: 1, obj2: 2, obj3: 3}
+        self.assertEqual(3, len(data))
+        data[obj1_c] = 100
+        data[obj2_c] = 200
+        data[obj3_c] = 300
+        self.assertEqual(3, len(data))
+        self.assertEqual(300, data[obj3])
+        self.assertEqual(300, data[obj3_c])
 
     def test_cloneable(self):
         @equatable()
