@@ -37,7 +37,8 @@ class OHLCV(Serializable):
         return self
     
     def is_valid(self) -> bool:
-        if any(self[key]<=0 for key in 'ohlcv'): return False
+        if any(self[key]<0 for key in 'ohlcv'): return False
+        if any(self[key]==0 for key in 't'): return False
         if any(math.isnan(self[key]) or math.isinf(self[key]) for key in 'tohlcv'): return False
         #if any(self[key] < self.l for key in 'ohc'): return False
         #if any(self[key] > self.h for key in 'olc'): return False

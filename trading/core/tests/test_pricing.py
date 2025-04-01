@@ -30,11 +30,11 @@ class TestPricingProvider(unittest.TestCase):
         self.assertEqual(expect, result)
 
     def test_ohlcv_is_valid(self):
-        self.assertTrue(OHLCV(0,5,8,2,5,1).is_valid())
+        self.assertFalse(OHLCV(0,5,8,2,5,1).is_valid())
         self.assertTrue(OHLCV(1,5,8,2,5,1).is_valid())
         self.assertTrue(OHLCV(1,9,8,2,5,1).is_valid())
         self.assertTrue(OHLCV(1,5,8,2,1,1).is_valid())
-        self.assertFalse(OHLCV(1,5,8,2,5,0).is_valid())
+        self.assertTrue(OHLCV(1,5,8,2,0,0).is_valid())
         self.assertFalse(OHLCV(1,5,8,2,-1,1).is_valid())
         self.assertFalse(OHLCV(1,float('inf'),1,1,1,1).is_valid())
         self.assertFalse(OHLCV(1,float('nan'),1,1,1,1).is_valid())
