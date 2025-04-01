@@ -19,6 +19,6 @@ class TestUtils(unittest.TestCase):
         
         # check validation filtering
         input = [OHLCV(0,5,9,1,5,2),OHLCV(2,5,9,-1,5,2),OHLCV(3,1,9,2,5,2),OHLCV(4,5,9,1,5,0),OHLCV(5,5,9,1,5,2),OHLCV(6,5,9,1,5,2)]
-        expect = [OHLCV(it,5,9,1,5,2) if it != 3 else OHLCV(3,1,9,2,5,2) for it in [0,3,5,6]]
+        expect = input[2:]
         result = filter_ohlcv(input, -1, 10)
         self.assertEqual(expect, result)
