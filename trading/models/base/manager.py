@@ -5,6 +5,7 @@ import shutil
 import time
 import torch
 import logging
+import gc
 from typing import Literal, Sequence, final, override
 from pathlib import Path
 from tqdm import tqdm
@@ -484,23 +485,29 @@ class ModelManager[T: AbstractModel]:
             ModelManager.engines[model_type] = create_engine(f"sqlite:///{ModelManager.get_folder(model_type)}/{_DB}")
         return ModelManager.engines[model_type]
 
-    @staticmethod
-    def delete_all(model_type: type[T]):
-        folder = ModelManager.get_folder(model_type)
-        db = folder / _DB
-        data = folder / _DATA
-        if db.exists(): db.unlink()
-        if data.exists(): shutil.rmtree(data)
-
-    instances: dict[tuple[type, ModelConfig], ModelManager] = {}
+    instances: dict[type, dict[ModelConfig, ModelManager]] = {}
     @staticmethod
     def get(model_type: type[T], config: ModelConfig) -> ModelManager[T]:
-        key = (model_type, config)
-        if key not in ModelManager.instances:
-            ModelManager.instances[key] = ModelManager(model_type(config))
-        return ModelManager.instances[key]
+        if model_type not in ModelManager.instances:
+            ModelManager.instances[model_type] = {}
+        if config not in ModelManager.instances[model_type]:
+            ModelManager.instances[model_type][config] = ModelManager(model_type(config))
+        return ModelManager.instances[model_type][config]
     @staticmethod
     def get_all(model_type: type[T]) -> Sequence[ModelManager[T]]:
         engine = ModelManager.get_engine(model_type)
         with Session(engine) as session:
             return [ModelManager.get(model_type, it.content) for it in session.scalars(select(ModelConfigEntity))]
+        
+    @staticmethod
+    def delete_all(model_type: type[T]):
+        folder = ModelManager.get_folder(model_type)
+        if model_type in ModelManager.engines:
+            del ModelManager.engines[model_type]
+        if model_type in ModelManager.instances:
+            del ModelManager.instances[model_type]
+        gc.collect()
+        db = folder / _DB
+        data = folder / _DATA
+        if db.exists(): db.unlink()
+        if data.exists(): shutil.rmtree(data)

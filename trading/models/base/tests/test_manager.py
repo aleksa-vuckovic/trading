@@ -43,12 +43,11 @@ class TestTrainingPlan(unittest.TestCase):
 
     def setUp(self):
         global manager
-        manager = ModelManager(Model(config))
+        manager = ModelManager.get(Model, config)
     def tearDown(self) -> None:
         global manager
         if manager:
             manager = None
-            gc.collect()
             ModelManager.delete_all(Model)
         
     def test_stat_trigger(self):
