@@ -49,14 +49,14 @@ class Generator(AbstractGenerator):
                     it.calendar.add_intervals(
                         AggregateProvider.instance.get_interval_start(interval), 
                         interval, 
-                        self.data_config.counts[interval]
+                        self.data_config.pricing[interval]
                     ) for interval in self.data_config.intervals
                 ),
                 min(
                     it.calendar.add_intervals(
                         time.time(),
                         interval,
-                        -self.after_data_config.counts[interval]
+                        -self.after_data_config.pricing[interval]
                     )
                     for interval in self.data_config.intervals
                 )
@@ -66,7 +66,7 @@ class Generator(AbstractGenerator):
                 it.exchange.calendar.add_intervals(
                     AggregateProvider.instance.get_first_trade_time(it),
                     interval,
-                    self.data_config.counts[interval]
+                    self.data_config.pricing[interval]
                 )
                 for interval in self.data_config.intervals
             ), time.time()

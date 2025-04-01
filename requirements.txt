@@ -9,4 +9,4 @@ transformers
 torchinfo
 matplotlib
 parameterized
-portalocker
+sqlalchemy

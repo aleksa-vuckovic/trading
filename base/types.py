@@ -1,5 +1,7 @@
 #1
 import importlib
+import sys
+from types import ModuleType
 from typing import Callable, Iterable, Self
 
 def equatable[T: type](skip_keys: list[str] = []) -> Callable[[T], T]:
@@ -28,6 +30,8 @@ def get_class_by_full_classname(full_classname: str) -> type:
     module_name, class_name = full_classname.rsplit('.', 1) 
     module = importlib.import_module(module_name)
     return getattr(module, class_name)
+def get_module(cls: type) -> ModuleType:
+    return sys.modules[cls.__module__]
 
 
 class ClassDict[T]:

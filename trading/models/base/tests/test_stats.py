@@ -36,7 +36,7 @@ class TestStats(unittest.TestCase):
         self.assertEqual(0.5, c1.running)
         self.assertEqual(2.5, c2.running)
         
-        c = StatContainer(c1, c2, name='test')
+        c = StatContainer(c1, c2)
         c.clear()
         c.update(expect1, output1)
         c.update(expect2, output2)

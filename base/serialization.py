@@ -4,7 +4,8 @@ import json
 import datetime
 import zoneinfo
 import builtins
-from typing import Any, Callable, Self, overload, override
+from typing import Any, Callable, Self, cast, overload, override
+from sqlalchemy import String, TypeDecorator
 from enum import Enum
 from pathlib import Path
 from base.types import get_full_classname, get_class_by_full_classname, get_no_args_cnst
@@ -119,3 +120,18 @@ class TypedSerializer(Serializer):
         return ret
 
 serializer = TypedSerializer()
+
+class SerializedObject(TypeDecorator):
+    impl = String
+    cache_ok = True
+
+    def __init__(self, serializer: Serializer = serializer):
+        super().__init__()
+        self.serializer = serializer
+    @override
+    def process_bind_param(self, value, dialect) -> str:
+        return self.serializer.serialize(value)
+    @override
+    def process_result_value(self, value, dialect):
+        return self.serializer.deserialize(cast(str, value))
+    

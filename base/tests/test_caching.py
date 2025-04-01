@@ -10,18 +10,19 @@ from base.caching import cached_scalar, cached_series, FilePersistor, SqlitePers
 
 TEST_DATA = Path("./test_data")
 class TestCaching(unittest.TestCase):
+    def drop_files(self):
+        if TEST_DATA.exists():
+            if TEST_DATA.is_file(): TEST_DATA.unlink()
+            else: shutil.rmtree(TEST_DATA)
+    def make_files(self):
+        TEST_DATA.mkdir(parents=True, exist_ok=True)
     def setUp(self):
         super().setUp()
-        if TEST_DATA.exists():
-            if TEST_DATA.is_file(): TEST_DATA.unlink()
-            else: shutil.rmtree(TEST_DATA)
-        TEST_DATA.mkdir(parents=True, exist_ok=True)
-
+        self.drop_files()
+        self.make_files()
     def tearDown(self):
         super().tearDown()
-        if TEST_DATA.exists():
-            if TEST_DATA.is_file(): TEST_DATA.unlink()
-            else: shutil.rmtree(TEST_DATA)
+        self.drop_files()
 
     def _test_persistor_multi(self, persistor: Persistor):
         self.assertEqual(0, len(list(persistor.keys())))

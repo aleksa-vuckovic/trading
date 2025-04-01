@@ -21,9 +21,7 @@ class generator:
     timing = TimingConfig.Builder()\
         .starting(hour = 10, minute = 0)\
         .until(hour = 14, minute=30)\
-        .build()\
-        .with_calendar(Nasdaq.instance.calendar)\
-        .with_interval(Interval.M5)
+        .build()
     folder = Path(__file__).parent/"trading"/"models"/"generators"/"examples_w1_m5"
 
 class generator2:
@@ -42,7 +40,5 @@ class generator2:
     timing = TimingConfig.Builder()\
         .starting(hour = 10, minute = 0)\
         .until(hour = 15, minute=30)\
-        .build()\
-        .with_calendar(Nasdaq.instance.calendar)\
-        .with_interval(Interval.M15)
+        .build()
     folder = Path(__file__).parent/"trading"/"models"/"generators"/"examples_w1_m15"

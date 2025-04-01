@@ -94,7 +94,6 @@ def __get_sampled(tensor: Tensor, count: int) -> Tensor:
     result[indices] = True
     return result
 
-
 def get_sampled(
     tensor: Tensor,
     bins: Sequence[tuple[float|tuple[float,float]|Callable[[Tensor], Tensor], float]]
@@ -122,4 +121,3 @@ def get_sampled(
     selected = [__get_sampled(selection, count) for selection, count in zip(selected, counts)]
 
     return functools.reduce(lambda x,y: torch.logical_or(x,y), selected, torch.full(tensor.shape, False, dtype=torch.bool))
-

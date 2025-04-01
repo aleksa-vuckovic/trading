@@ -2,7 +2,6 @@
 import torch
 from torch import Tensor
 from typing import Callable, override
-from base.serialization import serializable, Serializable
 from base.types import Cloneable
 
 class StatCollector(Cloneable):
@@ -33,10 +32,9 @@ class StatCollector(Cloneable):
 class StatContainer(Cloneable):
     stats: dict[str, StatCollector]
     primary: str
-    def __init__(self, *args: StatCollector, primary: str|None = None, name: str):
+    def __init__(self, *args: StatCollector, primary: str|None = None):
         self.stats = {it.name:it for it in args}
         self.primary = primary or args[0].name
-        self.name = name
 
     def update(self, expect: Tensor, output: Tensor) -> Tensor:
         result = {key:self.stats[key].update(expect, output) for key in self.stats}

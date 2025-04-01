@@ -1,12 +1,12 @@
 #1
 from __future__ import annotations
-from typing import overload, Iterable, Iterator
 import logging
 import torch
+from typing import overload, Iterable, Iterator
 from torch import Tensor
-from pathlib import Path
 from enum import Enum, auto
 from matplotlib import pyplot as plt
+
 from base.serialization import serializable, Serializable, serializer
 from base.types import equatable
 from trading.core import Interval
@@ -150,12 +150,12 @@ class PriceTarget(Enum):
 
 @equatable()
 class ModelDataConfig(Serializable):
-    def __init__(self, counts: dict[Interval, int]):
-        self.counts = counts
+    def __init__(self, pricing: dict[Interval, int]):
+        self.pricing = pricing
 
     @property
     def intervals(self) -> Iterable[Interval]:
-        return sorted(self.counts.keys(), reverse=True)
+        return sorted(self.pricing.keys(), reverse=True)
     @property
     def min_interval(self) -> Interval:
         return sorted(self.intervals)[-1]
@@ -164,10 +164,10 @@ class ModelDataConfig(Serializable):
         return sorted(self.intervals)[0]
     @property
     def min_interval_count(self) -> int:
-        return self.counts[self.min_interval]
+        return self.pricing[self.min_interval]
     @property
     def max_interval_count(self) -> int:
-        return self.counts[self.max_interval]
+        return self.pricing[self.max_interval]
 
     class Iterator(Iterator[tuple[Interval, int]]):
         def __init__(self, data_config: ModelDataConfig):
@@ -178,32 +178,32 @@ class ModelDataConfig(Serializable):
             if self.i >= len(self.intervals):
                 raise StopIteration()
             self.i += 1
-            return self.intervals[self.i-1], self.data_config.counts[self.intervals[self.i-1]]
+            return self.intervals[self.i-1], self.data_config.pricing[self.intervals[self.i-1]]
 
     def __iter__(self) -> Iterator[tuple[Interval, int]]:
         return ModelDataConfig.Iterator(self)
     
     def __len__(self):
-        return len(self.counts)
+        return len(self.pricing)
     
     def __getitem__(self, key: Interval|str) -> int:
         if isinstance(key, Interval):
-            return self.counts[key]
+            return self.pricing[key]
         if isinstance(key, str) and any(it for it in Interval if it.name == key):
-            return self.counts[Interval[key]]
+            return self.pricing[Interval[key]]
         raise IndexError(f"Key {key} does not exist in this DataConfig.")
     
     def __contains__(self, key: Interval|str):
         if isinstance(key, Interval):
-            return key in self.counts
+            return key in self.pricing
         if isinstance(key, str) and any(it for it in Interval if it.name == key):
-            return Interval[key] in self.counts
+            return Interval[key] in self.pricing
         return False
     
-    def to_dict(self) -> dict: return {'counts': self.counts}
+    def to_dict(self) -> dict: return {'pricing': {key.name: value for key,value in self.pricing.items()}}
     @staticmethod
     def from_dict(data: dict) -> ModelDataConfig:
-        return ModelDataConfig({Interval[key]: data[key] for key in data['counts']})
+        return ModelDataConfig({Interval[key]: data['pricing'][key] for key in data['pricing']})
 
 @serializable()
 @equatable()

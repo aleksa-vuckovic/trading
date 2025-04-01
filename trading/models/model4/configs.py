@@ -6,10 +6,7 @@ from trading.core import Interval
 from trading.core.work_calendar import TimingConfig
 from trading.models.base.model_config import Aggregation, ModelConfig, PriceTarget, Quote, PriceEstimator
 
-class PlanConfig(NamedTuple):
-    model_config: ModelConfig
-    folders: list[Path]
-    checkpoint: Path
+
 
 """configs = [
     PlanConfig(
