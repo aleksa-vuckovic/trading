@@ -4,12 +4,12 @@ import os
 import logging
 import time
 import sqlite3
-from typing import Callable, Iterable, Any, Sequence, Unpack, override, TypeVar, ParamSpec, Concatenate, Type, TypeVarTuple, TypedDict
+from typing import Callable, Iterable, Any, Sequence, override, TypeVar, ParamSpec, TypeVarTuple, TypedDict
 from pathlib import Path
-from base import TypedSerializer
+from base.serialization import TypedSerializer
 from base.algos import binary_search, BinarySearchEdge
 from base.files import escape_filename, unescape_filename
-from base.serialization import Serializer, BasicSerializer, serializable
+from base.serialization import Serializer
 
 logger = logging.getLogger(__name__)
 

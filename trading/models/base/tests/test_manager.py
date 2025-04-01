@@ -24,8 +24,7 @@ config = ModelConfig(
     PriceEstimator(Quote.C, Interval.H1, slice(1,2), Aggregation.AVG),
     PriceTarget.LINEAR_0_10,
     TimingConfig.Builder().at(9).build(),
-    ModelDataConfig({Interval.H1: 10}),
-    {}
+    ModelDataConfig({Interval.H1: 10})
 )
 
 manager: ModelManager|None = None

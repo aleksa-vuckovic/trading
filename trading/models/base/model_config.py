@@ -151,7 +151,11 @@ class PriceTarget(Enum):
 @equatable()
 class ModelDataConfig(Serializable):
     def __init__(self, pricing: dict[Interval, int]):
-        self.pricing = pricing
+        self._pricing = tuple((key,value)for key,value in pricing.items())
+
+    @property
+    def pricing(self) -> dict[Interval, int]:
+        return {key:value for key,value in self._pricing}
 
     @property
     def intervals(self) -> Iterable[Interval]:
@@ -213,14 +217,12 @@ class ModelConfig(Serializable):
         estimator: PriceEstimator,
         target:  PriceTarget,
         timing: TimingConfig,
-        data_config: ModelDataConfig,
-        other: dict = {}
+        data_config: ModelDataConfig
     ):
         self.estimator = estimator
         self.target = target
         self.timing = timing
         self.data_config = data_config
-        self.other = other
     
     def __str__(self) -> str:
         return f"""
@@ -228,6 +230,5 @@ estimator = {serializer.serialize(self.estimator, typed=False, indent=2)}
 target = {self.target.name}
 timing = {serializer.serialize(self.timing, typed=False, indent=2)}
 data_config = {serializer.serialize(self.data_config, typed=False, indent=2)}
-other = {self.other}
 """
     

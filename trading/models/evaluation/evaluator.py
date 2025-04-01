@@ -16,7 +16,7 @@ from matplotlib.gridspec import GridSpec
 
 from base import dates
 from base import text
-from base.types import ClassDict, get_full_classname
+from base.types import ClassDict
 from base.serialization import serializable, Serializable, serializer
 from base import plotutils
 from trading.core.work_calendar import TimingConfig

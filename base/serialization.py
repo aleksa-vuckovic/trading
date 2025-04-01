@@ -4,11 +4,11 @@ import json
 import datetime
 import zoneinfo
 import builtins
-from typing import Any, Callable, Self, cast, overload, override
+from typing import Any, Callable, cast, overload, override
 from sqlalchemy import String, TypeDecorator
 from enum import Enum
 from pathlib import Path
-from base.types import get_full_classname, get_class_by_full_classname, get_no_args_cnst
+from base.reflection import get_full_classname, get_class_by_full_classname, get_no_args_cnst
 
 _SKIP_KEYS = '_serializable_skip_keys'
 

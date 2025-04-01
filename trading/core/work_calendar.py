@@ -283,7 +283,7 @@ class TimingConfig(Serializable):
     """
     Represents a set of timing intervals or points during a single day.
     """
-    def __init__(self, components: list[float|tuple[float,float]]):
+    def __init__(self, components: tuple[float|tuple[float,float],...]):
         self.components = components
     class Builder:
         
@@ -309,7 +309,7 @@ class TimingConfig(Serializable):
         def any(self) -> TimingConfig.Builder:
             return self.starting(0,0).until(0,0)
         def build(self) -> TimingConfig:
-            return TimingConfig(self.components)
+            return TimingConfig(tuple(self.components))
 
     @overload
     def contains(self, time: float, calendar: WorkCalendar) -> bool: ...

@@ -17,8 +17,7 @@ from sqlalchemy.orm import Session, Mapped, declarative_base, mapped_column
 from base import plotutils
 from base.algos import interpolate
 from base.serialization import SerializedObject
-from base.types import get_module, get_full_classname
-from trading.models.base import AbstractModel
+from base.reflection import get_module, get_full_classname
 from trading.models.base.abstract_model import AbstractModel
 from trading.models.base.batches import BatchFile, Batches
 from trading.models.base.stats import StatContainer
