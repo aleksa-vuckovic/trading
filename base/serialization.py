@@ -4,13 +4,14 @@ import json
 import datetime
 import zoneinfo
 import builtins
-from typing import Any, Callable, cast, overload, override
+from typing import Any, Callable, Iterable, cast, overload, override
 from sqlalchemy import String, TypeDecorator
 from enum import Enum
 from pathlib import Path
 from base.reflection import get_full_classname, get_class_by_full_classname, get_no_args_cnst
 
 _SKIP_KEYS = '_serializable_skip_keys'
+_INCLUDE_KEYS = '_serializable_include_keys'
 
 class Serializable:
     def to_dict(self) -> dict: ...
@@ -41,19 +42,26 @@ class BasicSerializer(Serializer):
         if assert_type: assert isinstance(ret, assert_type)
         return ret
 
-def serializable[T: Serializable](skip_keys: list[str] = []) -> Callable[[type[T]], type[T]]:
+def serializable[T: Serializable](skip_keys: Iterable[str]|None = None, include_keys: Iterable[str]|None = None) -> Callable[[type[T]], type[T]]:
     def decorate(cls: type[T]) -> type[T]:
         create = get_no_args_cnst(cls)
-        skips = skip_keys[:]
+        skips: set[str]|None = set(skip_keys) if skip_keys else None
+        includes: set[str]|None = set(include_keys) if include_keys else None
         for base in cls.__bases__:
-            if hasattr(base, _SKIP_KEYS): skips.extend(getattr(base, _SKIP_KEYS))
-        setattr(cls, _SKIP_KEYS, skips)
-        if not skips:
-            def to_dict(self) -> dict:
-                return self.__dict__
-        else:
+            if hasattr(base, _SKIP_KEYS): skips = (skips or set()).union(getattr(base, _SKIP_KEYS))
+            if hasattr(base, _INCLUDE_KEYS): includes = (includes or set()).union(getattr(base, _INCLUDE_KEYS))
+        if skips and includes: raise Exception(f"A class cannot define both skip_keys and include_keys.")
+        if skips: setattr(cls, _SKIP_KEYS, skips)
+        if includes: setattr(cls, _INCLUDE_KEYS, includes)
+        if skips:
             def to_dict(self) -> dict:
                 return {key:self.__dict__[key] for key in self.__dict__ if key not in skips}
+        elif includes:
+            def to_dict(self) -> dict:
+                return {key:self.__dict__[key] for key in self.__dict__ if key in includes}
+        else:
+            def to_dict(self) -> dict:
+                return self.__dict__
         def from_dict(data:dict) -> Any:
             result = create()
             result.__dict__.update(data)

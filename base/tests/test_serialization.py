@@ -11,10 +11,11 @@ class MyEnum(Enum):
     A = 'a'
     B = 'b'
 
+# skip_keys hierarchy
 @serializable(skip_keys=['b'])
 @equatable(skip_keys=['b'])
 class A(Serializable):
-    def __init__(self, a:int|None, b:str|None, c: list|None, d: A|None, e: object = None):
+    def __init__(self, a:int|None, b:str|None, c: list|None, d: A|None, e: object|None = None):
         self.a = a
         self.b = b
         self.c = c
@@ -25,38 +26,81 @@ class A(Serializable):
         pass
 
 @serializable(skip_keys=['x'])
+@equatable(skip_keys=['x'])
 class B(A):
-    def __init__(self, a:int|None, b:str|None, c: list|None, d: A|None, e: object = None, x: int = 3, y: int = 5):
+    def __init__(self, a:int|None, b:str|None, c: list|None, d: A|None, e: object|None = None, x: int = 3, y: int = 5):
         super().__init__(a,b,c,d,e)
         self.x=x
         self.y=y
 
+# include_keys hierarchy
+@serializable(include_keys='a')
+@equatable(include_keys=['a'])
+class C(Serializable):
+    def __init__(self, a: int, b: int):
+        self.a = a
+        self.b = b
+@serializable(include_keys='x')
+@equatable(include_keys=['x'])
+class D(C):
+    def __init__(self, a: int, b: int, x: int, y: int):
+        super().__init__(a, b)
+        self.x = x
+        self.y = y
+
 @serializable()
 @equatable()
-class C(Serializable):
+class E(Serializable):
     def __init__(self, a: tuple):
         self.a = a
 
 class TestJsonutils(unittest.TestCase):
 
-    def test_typed_serializer(self):
+    def test_equatable_with_skips(self):
+        self.assertEqual(A(1, 'a', [1,'c'], A(2, 'b', [], None)), A(1, 'b', [1,'c'], A(2, 'c', [], None)))
+        self.assertNotEqual(A(1, 'b', [], A(3, 'c', [], None)), A(1, 'b', [], A(2, 'c', [], None)))
+        self.assertNotEqual(A(1, 'a', [1,'c'], A(2, 'b', [], None)), A(1, 'b', [2,'c'], A(2, 'c', [], None)))
+        self.assertNotEqual(A(1, 'a', [1,'c'], A(2, 'b', [], None)), A(1, 'b', [1,'c'], None))
+
+        self.assertEqual(B(1, 'a', [], None, x=1, y=2), B(1, 'b', [], None, x=2, y=2))
+        self.assertNotEqual(B(1, 'a', [], None, x=1, y=3), B(1, 'b', [], None, x=2, y=2))
+    
+    def test_equatable_with_includes(self):
+        self.assertEqual(C(1, 2), C(1, 3))
+        self.assertNotEqual(C(2, 2), C(1, 3))
+
+        self.assertEqual(D(1,2,3,4), D(1,20,3,40))
+        self.assertNotEqual(D(2,2,3,4), D(1,20,3,40))
+        self.assertNotEqual(D(1,2,4,4), D(1,20,3,40))
+
+    def test_typed_serializer_with_skips(self):
         serializer = TypedSerializer()
+        def do(obj): return serializer.deserialize(serializer.serialize(obj))
         a = A(1, 'hello', [1,2,3], None)
         b = A(2, 'world', [], a)
-        b_s = serializer.serialize(b)
-        b_d = serializer.deserialize(b_s)
-        self.assertEqual(b, b_d)
+        self.assertEqual(b, do(b))
 
         c = A(3, None, [a,b], a, {'x': a, 'y': b, 'z': MyEnum.A})
-        c_s = serializer.serialize(c)
-        c_d = serializer.deserialize(c_s)
-        self.assertEqual(c, c_d)
+        self.assertEqual(c, do(c))
 
         a = B(None, None, None, None, None)
         a_s = serializer.serialize(a)
         b = json.loads(a_s)
         self.assertFalse('x' in b[_VALUE])
+        self.assertFalse('b' in b[_VALUE])
         self.assertTrue('y' in b[_VALUE])
+    
+    def test_typed_serializer_with_includes(self):
+        serializer = TypedSerializer()
+        def do(obj): return serializer.deserialize(serializer.serialize(obj))
+        c = C(1,2)
+        self.assertEqual(c, do(c))
+        d = D(1,2,3,4)
+        self.assertEqual(d, do(d))
+
+        d = json.loads(serializer.serialize(d))
+        self.assertTrue('a' in d[_VALUE] and 'x' in d[_VALUE])
+        self.assertFalse('b' in d[_VALUE] or 'y' in d[_VALUE])
 
     def test_typed_serializer_datetime(self):
         serializer = TypedSerializer()
@@ -75,7 +119,7 @@ class TestJsonutils(unittest.TestCase):
             't1': (1,2,3),
             't2': ((10,20,30), 11, 12, 13, [1, 2, 3, (4,5,6)]),
             't3': {
-                'c': C(('a', 'b', 'c', 1))
+                'c': E(('a', 'b', 'c', 1))
             }
         }
         data_s = serializer.serialize(data, True)

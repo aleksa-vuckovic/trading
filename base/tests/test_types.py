@@ -1,5 +1,6 @@
 import unittest
-from base.types import Cloneable, equatable
+from base.serialization import serializer
+from base.types import Cloneable, ReadonlyDict, equatable
 
 class TestTypes(unittest.TestCase):
     def test_equatable(self):
@@ -68,3 +69,11 @@ class TestTypes(unittest.TestCase):
         self.assertIsNot(a.a["a"][0], b.a["a"][0])
         self.assertIs(a.c[1], b.c[1])
         
+    def test_readonly_dict(self):
+        a = ReadonlyDict({"a": 1, "b": 2})
+        self.assertEqual(1, a["a"])
+        self.assertEqual({"a", "b"}, set(a.keys()))
+        self.assertEqual(2, len(a))
+        b = serializer.serialize(a)
+        c = serializer.deserialize(b, ReadonlyDict)
+        self.assertEqual(a,c)
