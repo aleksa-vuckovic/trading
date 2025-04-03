@@ -4,10 +4,10 @@ from typing import override
 from torch import Tensor
 from torch.nn import Linear
 from trading.models.base import AbstractModel
-from trading.models.base.model_config import ModelConfig
+from trading.models.base.model_config import BaseModelConfig
 
 class Model(AbstractModel):
-    def __init__(self, config: ModelConfig):
+    def __init__(self, config: BaseModelConfig):
         super().__init__(config)
         self.layer = Linear(1,1)
     @override

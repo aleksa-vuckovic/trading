@@ -2,10 +2,10 @@
 from typing import overload, Literal
 import torch
 from torch import Tensor
-from trading.models.base.model_config import ModelConfig
+from trading.models.base.model_config import BaseModelConfig
 
 class AbstractModel(torch.nn.Module):
-    def __init__(self, config: ModelConfig):
+    def __init__(self, config: BaseModelConfig):
         super().__init__()
         self.config = config
     @overload
@@ -14,7 +14,13 @@ class AbstractModel(torch.nn.Module):
     def extract_tensors(self, example: dict[str, Tensor], with_output: Literal[True]=...) -> tuple[dict[str,Tensor],Tensor]: ...
     def extract_tensors(self, example: dict[str, Tensor], with_output: bool = True) -> dict[str, Tensor]|tuple[dict[str,Tensor],Tensor]:
         raise NotImplementedError()
-    def forward(self, tensors: dict[str, Tensor]) -> Tensor: ...
+    def forward(self, tensors: dict[str, Tensor]) -> Tensor:
+        """
+        The abstract model takes a dictionary of tensors as input.
+        This input can be extracted from a generated example using extract_tensors,
+        IF the example includes all the necessary components.
+        """
+        raise NotImplementedError()
     def __call__(self, arg1: dict[str, Tensor]) -> Tensor: ...
     def print_summary(self, merge: int = 10): ...
 

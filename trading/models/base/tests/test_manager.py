@@ -5,7 +5,7 @@ from typing import override
 from torch import Tensor
 
 from trading.core import Interval
-from trading.models.base.model_config import Aggregation, Quote, ModelDataConfig, ModelConfig, PriceEstimator, PriceTarget
+from trading.models.base.model_config import Aggregation, Quote, PricingDataConfig, BaseModelConfig, PriceEstimator, PriceTarget
 from trading.models.base.manager import HistoryFrame, ModelManager, StatTrigger, EpochTrigger
 from trading.models.base.stats import StatCollector, StatContainer
 from trading.core.work_calendar import TimingConfig
@@ -20,11 +20,11 @@ class CountCollector(StatCollector):
         self.i += 1
         return torch.tensor(self.i, dtype=torch.float32)
 
-config = ModelConfig(
+config = BaseModelConfig(
+    PricingDataConfig({Interval.H1: 10}),
     PriceEstimator(Quote.C, Interval.H1, slice(1,2), Aggregation.AVG),
     PriceTarget.LINEAR_0_10,
-    TimingConfig.Builder().at(9).build(),
-    ModelDataConfig({Interval.H1: 10})
+    TimingConfig.Builder().at(9).build()
 )
 
 manager: ModelManager|None = None

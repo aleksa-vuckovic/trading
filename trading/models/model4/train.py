@@ -4,7 +4,7 @@ from typing import Sequence
 from pathlib import Path
 from trading.models.base.manager import BatchGroupConfig, ModelManager, StatTrigger, CheckpointAction, LearningRateAction, StatSlopeTrigger, StopAction, EpochTrigger, TrainConfig
 from trading.models.base.stats import StatContainer, Accuracy, Precision, TanhLoss
-from trading.models.base.model_config import ModelConfig
+from trading.models.base.model_config import BaseModelConfig
 from trading.models.model4.model import Model
 
 
@@ -18,7 +18,7 @@ stats = StatContainer(
     Accuracy(name='miss', to_bool_output=lambda it: it>0.7, to_bool_expect=lambda it: it<0.005)
 )
 
-def train(inputs: list[Path], batch_group_configs: list[BatchGroupConfig], model_config: ModelConfig):
+def train(inputs: list[Path], batch_group_configs: list[BatchGroupConfig], model_config: BaseModelConfig):
     manager = ModelManager.get(Model, model_config)
     train_config = TrainConfig(inputs, batch_group_configs, stats) 
     #triggers

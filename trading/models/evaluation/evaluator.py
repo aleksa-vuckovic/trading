@@ -24,7 +24,7 @@ from trading.core import Interval
 from trading.core.securities import Security
 from trading.models.base import ModelManager
 from trading.providers.aggregate import AggregateProvider
-from trading.models.base.model_config import PriceEstimator, ModelConfig
+from trading.models.base.model_config import PriceEstimator, BaseModelConfig
 from trading.models.base.abstract_model import AbstractModel
 from trading.models.generators.abstract_generator import AbstractGenerator
 logger = logging.getLogger()

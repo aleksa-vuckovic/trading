@@ -3,13 +3,22 @@ import torch
 import torchinfo
 import config
 from torch import Tensor
-from trading.core import Interval
-from trading.models.base.model_config import ModelConfig, Quote
+from storage import PricingDataConfig, TimingConfig
+from trading.models.base.model_config import BaseModelConfig, PriceEstimator, PriceTarget, Quote
 from trading.models.base.abstract_model import AbstractModel
 from trading.models.base.tensors import get_moving_average, get_time_relativized, check_tensors, check_tensor
 
-INPUT_FEATURES = 'input_features'
-MVG_WINDOW = 'mvg_window'
+class ModelConfig(BaseModelConfig):
+    def __init__(
+        self,
+        estimator: PriceEstimator,
+        target:  PriceTarget,
+        timing: TimingConfig,
+        pricing_data_config: PricingDataConfig,
+        mvg_window: int = 10
+    ):
+        super().__init__(pricing_data_config, estimator, target, timing)
+        self.mvg_window = mvg_window
 
 class RecursiveLayer(torch.nn.Module):
     def __init__(self, in_features: int, out_features: int):
@@ -42,28 +51,27 @@ class Model(AbstractModel):
     Configurable with regards to the prediction interval, timing and output.
     """
     def __init__(self, config: ModelConfig):
-        config.other.setdefault(INPUT_FEATURES, 10)
-        config.other.setdefault(MVG_WINDOW, 10)
         super().__init__(config)
-        input_features = self.config.other[INPUT_FEATURES]
+        self.config = config
+        self.input_features = 10
 
         self.conv_layers = torch.nn.ModuleDict(
             {
                 interval.name : torch.nn.Sequential(
-                    ConvolutionalLayer(input_features=input_features, output_features=10*input_features),
-                    torch.nn.BatchNorm1d(num_features=10*input_features),
-                    RecursiveLayer(in_features=10*input_features, out_features=10*input_features)
-                ) for interval, count in self.config.data_config 
+                    ConvolutionalLayer(input_features=self.input_features, output_features=10*self.input_features),
+                    torch.nn.BatchNorm1d(num_features=10*self.input_features),
+                    RecursiveLayer(in_features=10*self.input_features, out_features=10*self.input_features)
+                ) for interval, count in self.config.pricing_data_config.pricing.items()
             }
         )
         self.layers = torch.nn.ModuleDict(
             {
-                interval.name : RecursiveLayer(in_features=input_features, out_features=10*input_features)
-                for interval, count in self.config.data_config
+                interval.name : RecursiveLayer(in_features=self.input_features, out_features=10*self.input_features)
+                for interval, count in self.config.pricing_data_config.pricing.items()
             }
         )
 
-        total_features = 20*input_features*len(self.config.data_config)
+        total_features = 20*self.input_features*len(self.config.pricing_data_config)
         self.dense = torch.nn.Sequential(
             torch.nn.BatchNorm1d(num_features=total_features),
             torch.nn.Linear(in_features=total_features, out_features=total_features//5),
@@ -96,11 +104,11 @@ class Model(AbstractModel):
             example = { key: example[key].unsqueeze(dim=0) for key in example }
 
         def process(tensor: Tensor, count: int):
-            tensor = tensor[:,-count-self.config.other[MVG_WINDOW]:,:]
+            tensor = tensor[:,-count-self.config.mvg_window:,:]
             #1 Get high-low relative to low (relative span)
             tensor[:,:,Quote.O.value] = (tensor[:,:,Quote.H.value] - tensor[:,:,Quote.L.value]) / tensor[:,:,Quote.L.value]
             #2 Get moving averages for everything
-            mvg = get_moving_average(tensor, dim=1, window=self.config.other[MVG_WINDOW])
+            mvg = get_moving_average(tensor, dim=1, window=self.config.mvg_window)
             #3 Concat everything
             tensor = torch.concat([tensor, mvg], dim=2)
             #4 Relativize all except relative span
@@ -109,13 +117,13 @@ class Model(AbstractModel):
             return tensor[:,-count:,:].transpose(1,2)
         
         tensors = { 
-            key : process(example[key], self.config.data_config[key])
-            for key in example if key in self.config.data_config
+            key : process(example[key], self.config.pricing_data_config[key])
+            for key in example if key in {it.name for it in self.config.pricing_data_config.intervals}
         }
         check_tensors(tensors)
         if with_output:
             after = self.config.estimator.estimate_example(example)
-            close = example[self.config.data_config.min_interval.name][:,-1,Quote.C.value]
+            close = example[self.config.pricing_data_config.min_interval.name][:,-1,Quote.C.value]
             after = (after[:,-1] - close) / close
             after = self.config.target.get_price(after)
             check_tensor(after)
@@ -124,7 +132,7 @@ class Model(AbstractModel):
 
     def print_summary(self, merge:int = 10):
         input = [
-            (config.models.batch_size*merge, self.config.other[INPUT_FEATURES], count)
-            for interval, count in self.config.data_config
+            (config.models.batch_size*merge, self.input_features, count)
+            for interval, count in self.config.pricing_data_config.pricing.items()
         ]
         torchinfo.summary(self, input_size=input)

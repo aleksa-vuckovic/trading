@@ -1,5 +1,6 @@
 #1
 from __future__ import annotations
+from functools import cached_property
 import logging
 import torch
 from typing import overload, Iterable, Iterator
@@ -8,7 +9,7 @@ from enum import Enum, auto
 from matplotlib import pyplot as plt
 
 from base.serialization import serializable, Serializable, serializer
-from base.types import equatable
+from base.types import ReadonlyDict, equatable
 from trading.core import Interval
 from trading.core.work_calendar import TimingConfig
 from trading.core.securities import Security
@@ -148,45 +149,25 @@ class PriceTarget(Enum):
         [plt.figure(it).tight_layout() for it in plt.get_fignums()]
         plt.show()
 
+@serializable()
 @equatable()
-class ModelDataConfig(Serializable):
+class PricingDataConfig(Serializable):
     def __init__(self, pricing: dict[Interval, int]):
-        self._pricing = tuple((key,value)for key,value in pricing.items())
+        self._pricing = ReadonlyDict({key.name:value for key,value in pricing.items()})
 
-    @property
-    def pricing(self) -> dict[Interval, int]:
-        return {key:value for key,value in self._pricing}
+    @cached_property
+    def pricing(self) -> ReadonlyDict[Interval, int]: return ReadonlyDict({Interval[key]:value for key,value in self._pricing.items()})
+    @cached_property
+    def intervals(self) -> Iterable[Interval]: return sorted(self.pricing.keys(), reverse=True)
+    @cached_property
+    def min_interval(self) -> Interval: return sorted(self.intervals)[-1]
+    @cached_property
+    def max_interval(self) -> Interval: return sorted(self.intervals)[0]
+    @cached_property
+    def min_interval_count(self) -> int: return self.pricing[self.min_interval]
+    @cached_property
+    def max_interval_count(self) -> int: return self.pricing[self.max_interval]
 
-    @property
-    def intervals(self) -> Iterable[Interval]:
-        return sorted(self.pricing.keys(), reverse=True)
-    @property
-    def min_interval(self) -> Interval:
-        return sorted(self.intervals)[-1]
-    @property
-    def max_interval(self) -> Interval:
-        return sorted(self.intervals)[0]
-    @property
-    def min_interval_count(self) -> int:
-        return self.pricing[self.min_interval]
-    @property
-    def max_interval_count(self) -> int:
-        return self.pricing[self.max_interval]
-
-    class Iterator(Iterator[tuple[Interval, int]]):
-        def __init__(self, data_config: ModelDataConfig):
-            self.data_config = data_config
-            self.intervals = list(data_config.intervals)
-            self.i = 0
-        def __next__(self) -> tuple[Interval, int]:
-            if self.i >= len(self.intervals):
-                raise StopIteration()
-            self.i += 1
-            return self.intervals[self.i-1], self.data_config.pricing[self.intervals[self.i-1]]
-
-    def __iter__(self) -> Iterator[tuple[Interval, int]]:
-        return ModelDataConfig.Iterator(self)
-    
     def __len__(self):
         return len(self.pricing)
     
@@ -197,38 +178,32 @@ class ModelDataConfig(Serializable):
             return self.pricing[Interval[key]]
         raise IndexError(f"Key {key} does not exist in this DataConfig.")
     
-    def __contains__(self, key: Interval|str):
-        if isinstance(key, Interval):
-            return key in self.pricing
-        if isinstance(key, str) and any(it for it in Interval if it.name == key):
-            return Interval[key] in self.pricing
-        return False
-    
     def to_dict(self) -> dict: return {'pricing': {key.name: value for key,value in self.pricing.items()}}
     @staticmethod
-    def from_dict(data: dict) -> ModelDataConfig:
-        return ModelDataConfig({Interval[key]: data['pricing'][key] for key in data['pricing']})
+    def from_dict(data: dict) -> PricingDataConfig:
+        return PricingDataConfig({Interval[key]: data['pricing'][key] for key in data['pricing']})
 
 @serializable()
 @equatable()
-class ModelConfig(Serializable):
+class BaseModelConfig(Serializable):
     def __init__(
-        self, 
+        self,
+        pricing_data_config: PricingDataConfig,
         estimator: PriceEstimator,
         target:  PriceTarget,
-        timing: TimingConfig,
-        data_config: ModelDataConfig
+        timing: TimingConfig
     ):
+        self.pricing_data_config = pricing_data_config
         self.estimator = estimator
         self.target = target
         self.timing = timing
-        self.data_config = data_config
+        
     
     def __str__(self) -> str:
         return f"""
 estimator = {serializer.serialize(self.estimator, typed=False, indent=2)}
 target = {self.target.name}
 timing = {serializer.serialize(self.timing, typed=False, indent=2)}
-data_config = {serializer.serialize(self.data_config, typed=False, indent=2)}
+data_config = {serializer.serialize(self.pricing_data_config, typed=False, indent=2)}
 """
     

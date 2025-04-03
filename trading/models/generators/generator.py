@@ -14,7 +14,7 @@ from trading.core import Interval
 from trading.core.securities import Exchange, Security
 from trading.core.work_calendar import TimingConfig
 from trading.providers.aggregate import AggregateProvider
-from trading.models.base.model_config import Aggregation, Quote, AFTER, PriceEstimator, ModelDataConfig, PriceTarget
+from trading.models.base.model_config import Aggregation, Quote, AFTER, PriceEstimator, PricingDataConfig, PriceTarget
 from trading.models.base.tensors import check_tensors
 from trading.models.base.batches import BatchFile
 from trading.models.generators.abstract_generator import AbstractGenerator
@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 class Generator(AbstractGenerator):
     def __init__(
         self,
-        data_config: ModelDataConfig,
-        after_data_config: ModelDataConfig,
+        data_config: PricingDataConfig,
+        after_data_config: PricingDataConfig,
         folder: Path
     ):
         self.data_config = data_config
@@ -80,7 +80,7 @@ class Generator(AbstractGenerator):
     ) -> dict[str, Tensor]:
         #1. Get the prices
         data = {}
-        for interval, count in self.data_config:
+        for interval, count in self.data_config.pricing.items():
             start_time = security.exchange.calendar.add_intervals(end_time, interval, -count)
             pricing = AggregateProvider.instance.get_pricing(start_time, end_time, security, interval, interpolate=True, max_fill_ratio=1/5)
             if len(pricing) != count: 
@@ -90,7 +90,7 @@ class Generator(AbstractGenerator):
         if not with_output: return data
 
         after_data = {}
-        for interval, count in self.after_data_config:
+        for interval, count in self.after_data_config.pricing.items():
             start_time = security.exchange.calendar.add_intervals(end_time, interval, -count)
             pricing = AggregateProvider.instance.get_pricing(start_time, end_time, security, interval, interpolate=True, max_fill_ratio=1/5)
             if len(pricing) != count:

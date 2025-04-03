@@ -21,7 +21,7 @@ from base.reflection import get_module, get_full_classname
 from trading.models.base.abstract_model import AbstractModel
 from trading.models.base.batches import BatchFile, Batches
 from trading.models.base.stats import StatContainer
-from trading.models.base.model_config import ModelConfig
+from trading.models.base.model_config import BaseModelConfig
 from trading.models.base.tensors import get_sampled
 
 logger = logging.getLogger(__name__)
@@ -305,7 +305,7 @@ Base = declarative_base()
 class ModelConfigEntity(Base):
     __tablename__ = "ModelConfigEntity"
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    content: Mapped[ModelConfig] = mapped_column(SerializedObject(), nullable=False)
+    content: Mapped[BaseModelConfig] = mapped_column(SerializedObject(), nullable=False)
 
 """    def __init__(self, content: ModelConfig):
         self.content = content"""
@@ -484,9 +484,9 @@ class ModelManager[T: AbstractModel]:
             ModelManager.engines[model_type] = create_engine(f"sqlite:///{ModelManager.get_folder(model_type)}/{_DB}")
         return ModelManager.engines[model_type]
 
-    instances: dict[type, dict[ModelConfig, ModelManager]] = {}
+    instances: dict[type, dict[BaseModelConfig, ModelManager]] = {}
     @staticmethod
-    def get(model_type: type[T], config: ModelConfig) -> ModelManager[T]:
+    def get(model_type: type[T], config: BaseModelConfig) -> ModelManager[T]:
         if model_type not in ModelManager.instances:
             ModelManager.instances[model_type] = {}
         if config not in ModelManager.instances[model_type]:
