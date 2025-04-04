@@ -11,6 +11,6 @@ class Model(AbstractModel):
         super().__init__(config)
         self.layer = Linear(1,1)
     @override
-    def forward(self, tensors: dict[str, Tensor]) -> Tensor:
+    def forward(self, tensors: dict[str, Tensor]|Tensor, *args: Tensor) -> Tensor:
         return self.layer(next(iter(tensors.values())))
 

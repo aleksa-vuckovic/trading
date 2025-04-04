@@ -126,7 +126,7 @@ class PriceTarget(Enum):
             return (1-x)/(1+x)
         raise Exception("Unknown price target type")
     
-    def get_layer(self):
+    def get_layer(self) -> torch.nn.Module:
         if self in [PriceTarget.LINEAR_0_10, PriceTarget.LINEAR_0_5, PriceTarget.LINEAR_10_10, PriceTarget.LINEAR_5_5]:
             return torch.nn.Identity()
         if self in [PriceTarget.SIGMOID_0_10, PriceTarget.SIGMOID_0_5]:
@@ -149,36 +149,36 @@ class PriceTarget(Enum):
         [plt.figure(it).tight_layout() for it in plt.get_fignums()]
         plt.show()
 
-@serializable()
-@equatable()
+@serializable(include_keys=['_counts'])
+@equatable(include_keys=['_counts'])
 class PricingDataConfig(Serializable):
     def __init__(self, pricing: dict[Interval, int]):
-        self._pricing = ReadonlyDict({key.name:value for key,value in pricing.items()})
+        self._counts = ReadonlyDict({key.name:value for key,value in pricing.items()})
 
     @cached_property
-    def pricing(self) -> ReadonlyDict[Interval, int]: return ReadonlyDict({Interval[key]:value for key,value in self._pricing.items()})
+    def counts(self) -> ReadonlyDict[Interval, int]: return ReadonlyDict({Interval[key]:value for key,value in self._counts.items()})
     @cached_property
-    def intervals(self) -> Iterable[Interval]: return sorted(self.pricing.keys(), reverse=True)
+    def intervals(self) -> Iterable[Interval]: return sorted(self.counts.keys(), reverse=True)
     @cached_property
     def min_interval(self) -> Interval: return sorted(self.intervals)[-1]
     @cached_property
     def max_interval(self) -> Interval: return sorted(self.intervals)[0]
     @cached_property
-    def min_interval_count(self) -> int: return self.pricing[self.min_interval]
+    def min_interval_count(self) -> int: return self.counts[self.min_interval]
     @cached_property
-    def max_interval_count(self) -> int: return self.pricing[self.max_interval]
+    def max_interval_count(self) -> int: return self.counts[self.max_interval]
 
     def __len__(self):
-        return len(self.pricing)
+        return len(self.counts)
     
     def __getitem__(self, key: Interval|str) -> int:
         if isinstance(key, Interval):
-            return self.pricing[key]
+            return self.counts[key]
         if isinstance(key, str) and any(it for it in Interval if it.name == key):
-            return self.pricing[Interval[key]]
+            return self.counts[Interval[key]]
         raise IndexError(f"Key {key} does not exist in this DataConfig.")
     
-    def to_dict(self) -> dict: return {'pricing': {key.name: value for key,value in self.pricing.items()}}
+    def to_dict(self) -> dict: return {'pricing': {key.name: value for key,value in self.counts.items()}}
     @staticmethod
     def from_dict(data: dict) -> PricingDataConfig:
         return PricingDataConfig({Interval[key]: data['pricing'][key] for key in data['pricing']})

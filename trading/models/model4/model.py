@@ -1,3 +1,4 @@
+from itertools import chain
 from typing import Literal, overload, override
 import torch
 import torchinfo
@@ -61,13 +62,13 @@ class Model(AbstractModel):
                     ConvolutionalLayer(input_features=self.input_features, output_features=10*self.input_features),
                     torch.nn.BatchNorm1d(num_features=10*self.input_features),
                     RecursiveLayer(in_features=10*self.input_features, out_features=10*self.input_features)
-                ) for interval, count in self.config.pricing_data_config.pricing.items()
+                ) for interval, count in self.config.pricing_data_config.counts.items()
             }
         )
         self.layers = torch.nn.ModuleDict(
             {
                 interval.name : RecursiveLayer(in_features=self.input_features, out_features=10*self.input_features)
-                for interval, count in self.config.pricing_data_config.pricing.items()
+                for interval, count in self.config.pricing_data_config.counts.items()
             }
         )
 
@@ -84,7 +85,9 @@ class Model(AbstractModel):
         )
 
     @override
-    def forward(self, tensors: dict[str, Tensor]) -> Tensor:
+    def forward(self, tensors: dict[str, Tensor]|Tensor, *args: Tensor) -> Tensor:
+        if isinstance(tensors, Tensor):
+            tensors = {key: tensor for key, tensor in zip(sorted(it.name for it in self.config.pricing_data_config.intervals), chain([tensors], args))}
         output = torch.cat(
             [
                 *(self.conv_layers[interval](tensors[interval]) for interval in tensors),
@@ -93,7 +96,6 @@ class Model(AbstractModel):
             dim=1
         )  
         return self.dense(output)
-
     @overload
     def extract_tensors(self, example: dict[str, Tensor], with_output: Literal[False]) -> dict[str,Tensor]: ...
     @overload
@@ -131,8 +133,8 @@ class Model(AbstractModel):
         return tensors
 
     def print_summary(self, merge:int = 10):
-        input = [
-            (config.models.batch_size*merge, self.input_features, count)
-            for interval, count in self.config.pricing_data_config.pricing.items()
-        ]
-        torchinfo.summary(self, input_size=input)
+        input = {
+            interval.name: (config.models.batch_size*merge, self.input_features, self.config.pricing_data_config.counts[interval])
+            for interval in self.config.pricing_data_config.intervals
+        }
+        torchinfo.summary(self, input_size=[input[key] for key in sorted(input.keys())])

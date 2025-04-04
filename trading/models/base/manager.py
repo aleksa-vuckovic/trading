@@ -318,6 +318,7 @@ _BACKTESTS = "backtests"
 #endregion
 
 class ModelManager[T: AbstractModel]:
+    model: T
     def __init__(self, model: T):
         # basics
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -479,27 +480,27 @@ class ModelManager[T: AbstractModel]:
     
     engines: dict[type, Engine] = {}
     @staticmethod
-    def get_engine(model_type: type[T]) -> Engine:
+    def get_engine[M: AbstractModel](model_type: type[M]) -> Engine:
         if model_type not in ModelManager.engines:
             ModelManager.engines[model_type] = create_engine(f"sqlite:///{ModelManager.get_folder(model_type)}/{_DB}")
         return ModelManager.engines[model_type]
 
     instances: dict[type, dict[BaseModelConfig, ModelManager]] = {}
     @staticmethod
-    def get(model_type: type[T], config: BaseModelConfig) -> ModelManager[T]:
+    def get[M: AbstractModel](model_type: type[M], config: BaseModelConfig) -> ModelManager[M]:
         if model_type not in ModelManager.instances:
             ModelManager.instances[model_type] = {}
         if config not in ModelManager.instances[model_type]:
             ModelManager.instances[model_type][config] = ModelManager(model_type(config))
         return ModelManager.instances[model_type][config]
     @staticmethod
-    def get_all(model_type: type[T]) -> Sequence[ModelManager[T]]:
+    def get_all[M: AbstractModel](model_type: type[M]) -> Sequence[ModelManager[M]]:
         engine = ModelManager.get_engine(model_type)
         with Session(engine) as session:
             return [ModelManager.get(model_type, it.content) for it in session.scalars(select(ModelConfigEntity))]
         
     @staticmethod
-    def delete_all(model_type: type[T]):
+    def delete_all[M: AbstractModel](model_type: type[M]):
         folder = ModelManager.get_folder(model_type)
         if model_type in ModelManager.engines:
             del ModelManager.engines[model_type]

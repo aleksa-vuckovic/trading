@@ -49,14 +49,14 @@ class Generator(AbstractGenerator):
                     it.calendar.add_intervals(
                         AggregateProvider.instance.get_interval_start(interval), 
                         interval, 
-                        self.data_config.pricing[interval]
+                        self.data_config.counts[interval]
                     ) for interval in self.data_config.intervals
                 ),
                 min(
                     it.calendar.add_intervals(
                         time.time(),
                         interval,
-                        -self.after_data_config.pricing[interval]
+                        -self.after_data_config.counts[interval]
                     )
                     for interval in self.data_config.intervals
                 )
@@ -66,7 +66,7 @@ class Generator(AbstractGenerator):
                 it.exchange.calendar.add_intervals(
                     AggregateProvider.instance.get_first_trade_time(it),
                     interval,
-                    self.data_config.pricing[interval]
+                    self.data_config.counts[interval]
                 )
                 for interval in self.data_config.intervals
             ), time.time()
@@ -80,7 +80,7 @@ class Generator(AbstractGenerator):
     ) -> dict[str, Tensor]:
         #1. Get the prices
         data = {}
-        for interval, count in self.data_config.pricing.items():
+        for interval, count in self.data_config.counts.items():
             start_time = security.exchange.calendar.add_intervals(end_time, interval, -count)
             pricing = AggregateProvider.instance.get_pricing(start_time, end_time, security, interval, interpolate=True, max_fill_ratio=1/5)
             if len(pricing) != count: 
@@ -90,7 +90,7 @@ class Generator(AbstractGenerator):
         if not with_output: return data
 
         after_data = {}
-        for interval, count in self.after_data_config.pricing.items():
+        for interval, count in self.after_data_config.counts.items():
             start_time = security.exchange.calendar.add_intervals(end_time, interval, -count)
             pricing = AggregateProvider.instance.get_pricing(start_time, end_time, security, interval, interpolate=True, max_fill_ratio=1/5)
             if len(pricing) != count:
