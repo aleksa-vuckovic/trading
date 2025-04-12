@@ -17,7 +17,7 @@ from trading.providers.aggregate import AggregateProvider
 
 logger = logging.getLogger(__name__)
 
-class Bars(Enum):
+class BarValues(Enum):
     O = 0
     H = 1
     L = 2
@@ -63,13 +63,13 @@ class PriceEstimator(Serializable):
     """
     def __init__(
         self,
-        quote: Bars,
+        value: BarValues,
         interval: Interval,
         index: slice,
         agg: Aggregation,
         max_fill_ratio: float = 1
     ):
-        self.quote = quote
+        self.value = value
         self.interval = interval
         self.index = index
         self.agg = agg
@@ -77,7 +77,7 @@ class PriceEstimator(Serializable):
 
     def estimate_tensor(self, tensor: Tensor) -> Tensor:
         dims = len(tensor.shape)
-        index = tuple(slice(None,None) if it < dims-2 else self.index if it < dims - 1 else self.quote.value for it in range(dims))
+        index = tuple(slice(None,None) if it < dims-2 else self.index if it < dims - 1 else self.value.value for it in range(dims))
         return self.agg.apply(tensor[index])
     
     def estimate_example(self, example: dict[str, Tensor]) -> Tensor:
@@ -88,7 +88,7 @@ class PriceEstimator(Serializable):
     def estimate(self, security: Security, unix_time: float) -> float:
         end_time = security.exchange.calendar.add_intervals(unix_time, self.interval, self.index.stop)
         prices = AggregateProvider.instance.get_pricing(unix_time, end_time, security, self.interval, interpolate=True, max_fill_ratio=self.max_fill_ratio)
-        tensor = torch.tensor([it[self.quote.name] for it in prices], dtype=torch.float64)
+        tensor = torch.tensor([it[self.value.name] for it in prices], dtype=torch.float64)
         return float(self.agg.apply(tensor, dim=-1).item())
 
 class PriceTarget(Enum):
