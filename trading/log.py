@@ -43,7 +43,7 @@ def configure_logging(console: bool = False, name: str = "main"):
     models = logging.getLogger("trading.models")
     models.propagate = False
     models.addHandler(file_handlers["models"])
-    http = logging.getLogger("trading.utils.httputils")
+    http = logging.getLogger("base.scraping")
     http.propagate = False
     http.addHandler(file_handlers["http"])
     for logger in [root, providers, yahoo, models, http]:

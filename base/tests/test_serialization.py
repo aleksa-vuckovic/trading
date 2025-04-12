@@ -145,9 +145,6 @@ class TestJsonutils(unittest.TestCase):
             "abc": "Value 4"
         }
         data_s = serializer.serialize(data)
-        print("--------------------")
-        print(data_s)
-        print("---------------------")
         data_d = serializer.deserialize(data_s)
         self.assertEqual(data, data_d)
         self.assertEqual({MyEnum.A, C(1,0), C(2,0), "abc"}, set(data_d.keys()))
