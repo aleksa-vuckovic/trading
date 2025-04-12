@@ -77,24 +77,20 @@ class TypedSerializer(Serializer):
     def _serialize(self, obj: object, typed: bool) -> None|bool|int|float|str|list|dict:
         if obj is None: return None
         if isinstance(obj, (bool,int,float,str)): return obj
-        if isinstance(obj, list): return [self._serialize(it, typed) for it in obj]
-        if isinstance(obj, dict): return {key: self._serialize(value, typed) for key, value in obj.items()}
-
-        # Types that are not directly mapped to json types
-        cls = type(obj)
-        if cls in (set, tuple): obj = list(obj) # type: ignore
-        elif cls.__module__ == 'builtins': obj = repr(obj)
-        elif isinstance(obj, Enum): obj = obj.name
-        elif isinstance(obj, datetime.datetime): obj = repr(obj)
-        elif isinstance(obj, Path): obj = str(obj)
-        elif hasattr(obj, 'to_dict'): obj = obj.to_dict() # type: ignore
-        else: raise Exception(f"Can't serialize {obj} of type {cls}.")
-
-        if isinstance(obj, list): obj = [self._serialize(it, typed) for it in obj]
-        elif isinstance(obj, dict): obj = {key: self._serialize(value, typed) for key,value in obj.items()}
+        elif isinstance(obj, list): return [self._serialize(it, typed) for it in obj]
         
-        if typed: return {_TYPE: get_full_classname(cls), _VALUE: obj}
-        else: return obj # type: ignore
+        # classes that are not directly mapped to json
+        if isinstance(obj, dict): val = [(self._serialize(key, typed), self._serialize(value, typed)) for key, value in obj.items()]
+        elif isinstance(obj, (set, tuple)): val = [self._serialize(it, typed) for it in obj]
+        elif type(obj).__module__ == 'builtins': val = repr(obj)
+        elif isinstance(obj, Enum): val = obj.name
+        elif isinstance(obj, datetime.datetime): val = repr(obj)
+        elif isinstance(obj, Path): val = str(obj)
+        elif hasattr(obj, 'to_dict'): val = {key: self._serialize(value, typed) for key, value in cast(dict, cast(Serializable, obj).to_dict()).items()}
+        else: raise Exception(f"Can't serialize {obj} of type {type(obj)}.")
+        
+        if typed: return {_TYPE: get_full_classname(obj), _VALUE: val}
+        else: return val
     @override
     def serialize(self, obj: object, typed:bool = True, indent:int|str|None=None) -> str:
         return json.dumps(self._serialize(obj, typed), indent=indent)
@@ -103,20 +99,19 @@ class TypedSerializer(Serializer):
         if obj is None: return None
         if isinstance(obj, (bool,int,float,str)): return obj
         if isinstance(obj, list): return [self._deserialize(it) for it in obj]
-        if not isinstance(obj, dict): raise Exception(f"Can't deserialize {obj}.")
+        if not isinstance(obj, dict) or obj.keys() != {_TYPE, _VALUE}: raise Exception(f"Can't deserialize {obj}.")
 
-        result = {key: self._deserialize(value) for key, value in obj.items()}
-        if result.keys() != {_TYPE, _VALUE}: return result
-        cls = get_class_by_full_classname(result[_TYPE])
-        value = result[_VALUE]
+        cls = get_class_by_full_classname(obj[_TYPE])
+        val = obj[_VALUE]
 
-        if cls in (set, tuple): return cls(value)
-        elif cls.__module__ == 'builtins': return eval(value)
-        elif issubclass(cls, Enum): return cls[value] 
-        elif cls == datetime.datetime: return eval(value)
-        elif issubclass(cls, Path): return Path(value)
-        elif hasattr(cls, 'from_dict'): return cls.from_dict(value) # type: ignore
-        else: raise Exception(f"Can't deserialize {obj} into type {cls}.")
+        if cls == dict: return {self._deserialize(key):self._deserialize(value) for key,value in cast(list[tuple], val)}
+        elif cls in (set, tuple): return cls(self._deserialize(it) for it in cast(list, val))
+        elif cls.__module__ == 'builtins': return eval(cast(str, val))
+        elif issubclass(cls, Enum): return cls[cast(str, val)] 
+        elif cls == datetime.datetime: return eval(cast(str, val))
+        elif issubclass(cls, Path): return Path(cast(str, val))
+        elif hasattr(cls, 'from_dict'): return cls.from_dict({key: self._deserialize(value) for key,value in cast(dict, val).items()})
+        else: raise Exception(f"Can't deserialize {val} into type {cls}.")
     @overload
     def deserialize[T](self, data: str, assert_type: type[T]) -> T: ...
     @overload

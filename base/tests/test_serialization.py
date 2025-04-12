@@ -135,3 +135,19 @@ class TestJsonutils(unittest.TestCase):
         data_s = serializer.serialize(data)
         data_d = serializer.deserialize(data_s, dict)
         self.assertEqual(data, data_d)
+
+    def test_typed_serializer_dict_with_object_keys(self):
+        serializer = TypedSerializer()
+        data = {
+            MyEnum.A: "Value 1",
+            C(1, 0): "Value 2",
+            C(2, 0): "Value 3",
+            "abc": "Value 4"
+        }
+        data_s = serializer.serialize(data)
+        print("--------------------")
+        print(data_s)
+        print("---------------------")
+        data_d = serializer.deserialize(data_s)
+        self.assertEqual(data, data_d)
+        self.assertEqual({MyEnum.A, C(1,0), C(2,0), "abc"}, set(data_d.keys()))

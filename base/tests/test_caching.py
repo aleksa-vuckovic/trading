@@ -7,6 +7,7 @@ from typing import Any
 from enum import Enum
 from pathlib import Path
 from base.caching import cached_scalar, cached_series, FilePersistor, SqlitePersistor, Persistor, MetaDict
+from base.serialization import serializer
 
 TEST_DATA = Path("./test_data")
 class TestCaching(unittest.TestCase):
@@ -179,7 +180,7 @@ class TestCaching(unittest.TestCase):
         unix_to = now
         test1 = provider.get_series(unix_from, unix_to)
         metapath = TEST_DATA / MetaDict.__name__
-        meta: MetaDict = json.loads(metapath.read_text())
+        meta: MetaDict = serializer.deserialize(metapath.read_text())
         self.assertLess(meta['live_fetch'] or now, now-1) 
         self.assertEqual(0, len(test1))
         time.sleep(1.1)
