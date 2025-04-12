@@ -81,7 +81,7 @@ class Model(AbstractModel):
             torch.nn.Sigmoid(),
             torch.nn.BatchNorm1d(num_features=total_features//20),
             torch.nn.Linear(in_features=total_features//20, out_features=1),
-            self.config.target.get_layer()
+            self.config.price_target.get_layer()
         )
 
     #region Overrides
@@ -123,10 +123,10 @@ class Model(AbstractModel):
         }
         check_tensors(tensors)
         if with_output:
-            after = self.config.estimator.estimate_example(example)
+            after = self.config.price_estimator.estimate_example(example)
             close = example[self.config.pricing_data_config.min_interval.name][:,-1,BarValues.C.value]
             after = (after[:,-1] - close) / close
-            after = self.config.target.get_price(after)
+            after = self.config.price_target.get_price(after)
             check_tensor(after)
             return tensors, after
         return tensors

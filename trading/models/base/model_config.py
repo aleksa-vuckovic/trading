@@ -187,21 +187,20 @@ class BaseModelConfig(Serializable):
     def __init__(
         self,
         pricing_data_config: PricingDataConfig,
-        estimator: PriceEstimator,
-        target:  PriceTarget,
+        price_estimator: PriceEstimator,
+        price_target:  PriceTarget,
         timing: TimingConfig
     ):
         self.pricing_data_config = pricing_data_config
-        self.estimator = estimator
-        self.target = target
+        self.price_estimator = price_estimator
+        self.price_target = price_target
         self.timing = timing
-        
     
     def __str__(self) -> str:
         return f"""
-estimator = {serializer.serialize(self.estimator, typed=False, indent=2)}
-target = {self.target.name}
+pricing_data_config = {serializer.serialize(self.pricing_data_config, typed=False, indent=2)}
+price_estimator = {serializer.serialize(self.price_estimator, typed=False, indent=2)}
+price_target = {self.price_target.name}
 timing = {serializer.serialize(self.timing, typed=False, indent=2)}
-data_config = {serializer.serialize(self.pricing_data_config, typed=False, indent=2)}
 """
     

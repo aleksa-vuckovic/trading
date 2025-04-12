@@ -483,6 +483,7 @@ class ModelManager[T: AbstractModel]:
     def get_engine[M: AbstractModel](model_type: type[M]) -> Engine:
         if model_type not in ModelManager.engines:
             ModelManager.engines[model_type] = create_engine(f"sqlite:///{ModelManager.get_folder(model_type)}/{_DB}")
+            Base.metadata.create_all(ModelManager.engines[model_type])
         return ModelManager.engines[model_type]
 
     instances: dict[type, dict[BaseModelConfig, ModelManager]] = {}
