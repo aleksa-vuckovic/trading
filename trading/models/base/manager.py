@@ -423,7 +423,7 @@ class ModelManager[T: AbstractModel]:
                         with torch.no_grad():
                             with tqdm(batch_group.batches, desc = f"Evaluating '{batch_group.config.name}' batches...", leave=False) as bar:
                                 for batch in bar:
-                                    input, expect = self.model.extract_tensors(batch)
+                                    input, expect = self.model.extract_tensors(batch, with_output=True)
                                     if batch_group.config.sampling:
                                         sample = get_sampled(expect, batch_group.config.sampling)
                                         input = {key: value[sample] for key,value in input.items()}

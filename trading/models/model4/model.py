@@ -84,29 +84,28 @@ class Model(AbstractModel):
             self.config.target.get_layer()
         )
 
+    #region Overrides
     @override
-    def forward(self, tensors: dict[str, Tensor]|Tensor, *args: Tensor) -> Tensor:
-        if isinstance(tensors, Tensor):
-            tensors = {key: tensor for key, tensor in zip(sorted(it.name for it in self.config.pricing_data_config.intervals), chain([tensors], args))}
+    def predict(self, example: dict[str, Tensor]) -> Tensor:
         output = torch.cat(
             [
-                *(self.conv_layers[interval](tensors[interval]) for interval in tensors),
-                *(self.layers[interval](tensors[interval]) for interval in tensors)
+                *(self.conv_layers[interval.name](example[interval.name]) for interval in self.config.pricing_data_config.intervals),
+                *(self.layers[interval.name](example[interval.name]) for interval in self.config.pricing_data_config.intervals)
             ],
             dim=1
         )  
         return self.dense(output)
     @overload
-    def extract_tensors(self, example: dict[str, Tensor], with_output: Literal[False]) -> dict[str,Tensor]: ...
+    def extract_tensors(self, example: dict[str, Tensor], with_output: Literal[False]=...) -> dict[str,Tensor]: ...
     @overload
-    def extract_tensors(self, example: dict[str, Tensor], with_output: Literal[True]=...) -> tuple[dict[str,Tensor],Tensor]: ...
+    def extract_tensors(self, example: dict[str, Tensor], with_output: Literal[True]) -> tuple[dict[str,Tensor],Tensor]: ...
     @override
-    def extract_tensors(self, example: dict[str, Tensor], with_output: bool = True) -> dict[str, Tensor]|tuple[dict[str, Tensor], Tensor]:
+    def extract_tensors(self, example: dict[str, Tensor], with_output: bool = False) -> dict[str, Tensor]|tuple[dict[str, Tensor], Tensor]:
         if len(next(iter(example.values())).shape) < 3: # Make sure there's a batch dimension
             example = { key: example[key].unsqueeze(dim=0) for key in example }
 
         def process(tensor: Tensor, count: int):
-            tensor = tensor[:,-count-self.config.mvg_window:,:]
+            tensor = tensor[:,-count-self.config.mvg_window:,:5]
             #1 Get high-low relative to low (relative span)
             tensor[:,:,Quote.O.value] = (tensor[:,:,Quote.H.value] - tensor[:,:,Quote.L.value]) / tensor[:,:,Quote.L.value]
             #2 Get moving averages for everything
@@ -132,9 +131,4 @@ class Model(AbstractModel):
             return tensors, after
         return tensors
 
-    def print_summary(self, merge:int = 10):
-        input = {
-            interval.name: (config.models.batch_size*merge, self.input_features, self.config.pricing_data_config.counts[interval])
-            for interval in self.config.pricing_data_config.intervals
-        }
-        torchinfo.summary(self, input_size=[input[key] for key in sorted(input.keys())])
+    #endregion
