@@ -17,7 +17,7 @@ from trading.providers.aggregate import AggregateProvider
 
 logger = logging.getLogger(__name__)
 
-class Quote(Enum):
+class Bars(Enum):
     O = 0
     H = 1
     L = 2
@@ -63,7 +63,7 @@ class PriceEstimator(Serializable):
     """
     def __init__(
         self,
-        quote: Quote,
+        quote: Bars,
         interval: Interval,
         index: slice,
         agg: Aggregation,

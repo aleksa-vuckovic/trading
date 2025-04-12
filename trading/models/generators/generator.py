@@ -14,7 +14,7 @@ from trading.core import Interval
 from trading.core.securities import Exchange, Security
 from trading.core.work_calendar import TimingConfig
 from trading.providers.aggregate import AggregateProvider
-from trading.models.base.model_config import Aggregation, Quote, AFTER, PriceEstimator, PricingDataConfig, PriceTarget
+from trading.models.base.model_config import Aggregation, Bars, AFTER, PriceEstimator, PricingDataConfig, PriceTarget
 from trading.models.base.tensors import check_tensors
 from trading.models.base.batches import BatchFile
 from trading.models.generators.abstract_generator import AbstractGenerator
@@ -85,7 +85,7 @@ class Generator(AbstractGenerator):
             pricing = AggregateProvider.instance.get_pricing(start_time, end_time, security, interval, interpolate=True, max_fill_ratio=1/5)
             if len(pricing) != count: 
                 raise Exception(f"Unexpected number of timestamps for start_time {start_time} end time {end_time} interval {interval} count {count}. Got {len(pricing)}.")
-            data[interval.name] = [[it[quote.name] for quote in Quote] for it in pricing]
+            data[interval.name] = [[it[quote.name] for quote in Bars] for it in pricing]
         check_tensors(list(data.values()), allow_zeros=False)
         if not with_output: return data
 
@@ -96,7 +96,7 @@ class Generator(AbstractGenerator):
             if len(pricing) != count:
                 raise Exception(f"Unexpected number of timestamps for start_time {start_time} end time {end_time} interval {interval} count {count}. Got {len(pricing)}.")
             
-            after_data[f"{AFTER}_{interval.name}"] = torch.tensor([[it[quote.name] for quote in Quote] for it in pricing], dtype=torch.float64)
+            after_data[f"{AFTER}_{interval.name}"] = torch.tensor([[it[quote.name] for quote in Bars] for it in pricing], dtype=torch.float64)
         check_tensors(list(after_data.values()), allow_zeros=False)
         return {**data, **after_data}
 
@@ -105,7 +105,7 @@ class Generator(AbstractGenerator):
         self,
         *,
         timing: TimingConfig = TimingConfig.Builder().any().build(),
-        estimator: PriceEstimator = PriceEstimator(Quote.C, Interval.H1, slice(0,7), Aggregation.LAST),
+        estimator: PriceEstimator = PriceEstimator(Bars.C, Interval.H1, slice(0,7), Aggregation.LAST),
         targets: list[PriceTarget] = list(PriceTarget),
         title: str = "",
         **kwargs
@@ -116,7 +116,7 @@ class Generator(AbstractGenerator):
         random.shuffle(files)
         for file in files[:20]:
             example: dict[str, Tensor] = torch.load(file, weights_only=True)
-            close = example[self.data_config.min_interval.name][:,-1:,Quote.C.value]
+            close = example[self.data_config.min_interval.name][:,-1:,Bars.C.value]
             data = (estimator.estimate_example(example) - close)/close
             temp.append(data)
         data = torch.concat(temp, dim=0)

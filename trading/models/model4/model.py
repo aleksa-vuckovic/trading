@@ -5,7 +5,7 @@ import torchinfo
 import config
 from torch import Tensor
 from storage import PricingDataConfig, TimingConfig
-from trading.models.base.model_config import BaseModelConfig, PriceEstimator, PriceTarget, Quote
+from trading.models.base.model_config import BaseModelConfig, PriceEstimator, PriceTarget, Bars
 from trading.models.base.abstract_model import AbstractModel
 from trading.models.base.tensors import get_moving_average, get_time_relativized, check_tensors, check_tensor
 
@@ -107,7 +107,7 @@ class Model(AbstractModel):
         def process(tensor: Tensor, count: int):
             tensor = tensor[:,-count-self.config.mvg_window:,:5]
             #1 Get high-low relative to low (relative span)
-            tensor[:,:,Quote.O.value] = (tensor[:,:,Quote.H.value] - tensor[:,:,Quote.L.value]) / tensor[:,:,Quote.L.value]
+            tensor[:,:,Bars.O.value] = (tensor[:,:,Bars.H.value] - tensor[:,:,Bars.L.value]) / tensor[:,:,Bars.L.value]
             #2 Get moving averages for everything
             mvg = get_moving_average(tensor, dim=1, window=self.config.mvg_window)
             #3 Concat everything
@@ -124,7 +124,7 @@ class Model(AbstractModel):
         check_tensors(tensors)
         if with_output:
             after = self.config.estimator.estimate_example(example)
-            close = example[self.config.pricing_data_config.min_interval.name][:,-1,Quote.C.value]
+            close = example[self.config.pricing_data_config.min_interval.name][:,-1,Bars.C.value]
             after = (after[:,-1] - close) / close
             after = self.config.target.get_price(after)
             check_tensor(after)
