@@ -152,11 +152,9 @@ class PriceTarget(Enum):
 @serializable(include_keys=['_counts'])
 @equatable(include_keys=['_counts'])
 class PricingDataConfig(Serializable):
-    def __init__(self, pricing: dict[Interval, int]):
-        self._counts = ReadonlyDict({key.name:value for key,value in pricing.items()})
+    def __init__(self, counts: dict[Interval, int]):
+        self.counts = ReadonlyDict(counts)
 
-    @cached_property
-    def counts(self) -> ReadonlyDict[Interval, int]: return ReadonlyDict({Interval[key]:value for key,value in self._counts.items()})
     @cached_property
     def intervals(self) -> Iterable[Interval]: return sorted(self.counts.keys(), reverse=True)
     @cached_property

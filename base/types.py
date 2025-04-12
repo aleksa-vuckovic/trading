@@ -1,6 +1,5 @@
 #3
-from typing import Callable, Iterable, KeysView, Mapping, Self, override
-from functools import cached_property
+from typing import Callable, Iterable, Self
 from base.reflection import get_no_args_cnst
 from base.serialization import serializable, Serializable
 
@@ -8,7 +7,7 @@ from base.serialization import serializable, Serializable
 _SKIP_KEYS = '_equatable_skip_keys'
 _INCLUDE_KEYS = '_equatable_include_keys'
 
-def equatable[T: type](skip_keys: list[str]|None = None, include_keys: list[str]|None = None) -> Callable[[T], T]:
+def equatable[T: type](skip_keys: list[str]|None = None, include_keys: list[str]|None = None, with_hash:bool=True) -> Callable[[T], T]:
     """
     Defines the __eq__ method for the decorated class as a recursive __eq__ for all contained keys.
     """
@@ -36,14 +35,15 @@ def equatable[T: type](skip_keys: list[str]|None = None, include_keys: list[str]
             for key in other.__dict__:
                 if not skip(key) and key not in self.__dict__: return False
             return True
-        def __hash__(self) -> int:
-            ret = 17
-            for key in self.__dict__:
-                if skip(key): continue
-                ret ^= hash(self.__dict__[key])
-            return ret
         cls.__eq__ = __eq__ # type: ignore
-        cls.__hash__ = __hash__ # type: ignore
+        if with_hash:
+            def __hash__(self) -> int:
+                ret = 17
+                for key in self.__dict__:
+                    if skip(key): continue
+                    ret ^= hash(self.__dict__[key])
+                return ret
+            cls.__hash__ = __hash__ # type: ignore
         return cls
     return decorate
 
@@ -77,16 +77,15 @@ class Cloneable:
     def clone(self) -> Self:
         return _clone(self)
 
-@serializable(skip_keys=['_data'])
-@equatable(skip_keys=['_data'])
+@serializable()
+@equatable(with_hash=False)
 class ReadonlyDict[TK, TV](Serializable):
     def __init__(self, data: dict[TK, TV]):
-        self._immutable_data = tuple((key,value) for key,value in data.items())
+        self._data = data
     
-    @cached_property
-    def _data(self) -> dict[TK, TV]: return {key:value for key,value in self._immutable_data}
     def __getitem__(self, key: TK) -> TV: return self._data[key]
-    def keys(self) -> Iterable[TK]: return (key for key,_ in self._immutable_data)
-    def items(self) -> Iterable[tuple[TK,TV]]: return ((key,value) for key,value in self._immutable_data)
-    def __len__(self) -> int: return len(self._immutable_data)
+    def keys(self) -> Iterable[TK]: return self._data.keys()
+    def items(self) -> Iterable[tuple[TK, TV]]: return self._data.items()
+    def __len__(self) -> int: return len(self._data)
     def __contains__(self, key: TV) -> bool: return key in self._data
+    def __hash__(self) -> int: return hash(tuple((key,value) for key, value in self._data.items()))
