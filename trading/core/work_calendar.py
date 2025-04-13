@@ -1,5 +1,6 @@
 #2
 from __future__ import annotations
+import math
 import calendar
 from typing import overload, TypeVar, override
 from zoneinfo import ZoneInfo
@@ -241,11 +242,16 @@ class BasicWorkCalendar(WorkCalendar):
     def _is_timestamp(self, time: datetime, interval: Interval) -> bool:
         if interval == Interval.L1: return time == self.month_end(time)
         if interval == Interval.W1: return time == self.week_end(time)
-        if interval > Interval.D1: raise Exception(f"Unknown interval {interval}.")
+
+        if interval not in {Interval.D1, Interval.H1, Interval.M15, Interval.M5}: raise Exception(f"Unknown interval {interval}.")
         if not self.is_workday(time): return False
         if interval == Interval.D1: return time == self.to_zero(time)
-        if time == self.set_close(time): return True
-        return (time.timestamp() - self.set_open(time).timestamp())%interval.time() == 0
+        start = self.to_zero(time).timestamp()
+        it = math.floor((time.timestamp()-start)/interval.time())
+        if start + it*interval.time() != time.timestamp(): return False
+        first = math.floor((self.set_open(time).timestamp()-start)/interval.time())
+        last = math.ceil((self.set_close(time).timestamp()-start)/interval.time())
+        return it > first and it <= last
     @override
     def _get_next_timestamp(self, time: datetime, interval: Interval) -> datetime:
         if interval == Interval.L1:
@@ -260,21 +266,19 @@ class BasicWorkCalendar(WorkCalendar):
             timestamp = self.to_zero(time + timedelta(days=1))
             while not self.is_workday(timestamp): timestamp += timedelta(days=1)
             return timestamp
-        if interval > Interval.D1: raise Exception(f"Unknown interval {interval}.")
+        if interval not in {Interval.H1, Interval.M15, Interval.M5}: raise Exception(f"Unknown interval {interval}.")
         #Intraday intervals
-        if self.is_worktime(time):
-            open = self.set_open(time)
-            close = self.set_close(time)
-            cnt = (time.timestamp() - open.timestamp())//interval.time()
-            timestamp = self.unix_to_datetime(open.timestamp() + (cnt+1)*interval.time())
-            if timestamp <= close: return timestamp
-            if close > time: return close
-        if self.is_workday(time) and time > self.set_open(time): time += timedelta(days=1)
+        if self.is_workday(time):
+            start = self.to_zero(time).timestamp()
+            it = math.floor((time.timestamp()-start)/interval.time())+1
+            first = math.floor((self.set_open(time).timestamp()-start)/interval.time())
+            last = math.ceil((self.set_close(time).timestamp()-start)/interval.time())
+            if it > first and it <= last: return self.unix_to_datetime(start + it*interval.time())
+            if it > last: time += timedelta(days=1)
         while not self.is_workday(time): time += timedelta(days=1)
-        time = self.set_open(time)
-        timestamp = self.unix_to_datetime(self.set_open(time).timestamp() + interval.time())
-        if timestamp <= self.set_close(time): return timestamp
-        return self.set_close(time)
+        start = self.to_zero(time).timestamp()
+        first = math.floor((self.set_open(time).timestamp()-start)/interval.time())
+        return self.unix_to_datetime(start + (first+1)*interval.time())
     #endregion
 
 @serializable()
