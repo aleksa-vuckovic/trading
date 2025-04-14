@@ -1,9 +1,12 @@
 #1
 from __future__ import annotations
 from enum import Enum, auto
+from typing import override
+from base.reflection import get_classes
+from base.types import Serializable
 from trading.core.work_calendar import WorkCalendar
 
-class Exchange:
+class Exchange(Serializable):
     def __init__(
         self,
         mic: str,
@@ -20,6 +23,28 @@ class Exchange:
     def get_security(self, symbol: str) -> Security:
         sec = [it for it in self.get_securities() if it.symbol == symbol]
         return sec[0]
+    
+    _exchanges: dict[str, Exchange]|None = None
+    @staticmethod
+    def init():
+        if Exchange._exchanges is None:
+            exchanges: set[Exchange] = set(it.instance for it in get_classes("trading.providers", recursive=False, base=Exchange))
+            Exchange._exchanges = {it.mic:it for it in exchanges}
+    @staticmethod
+    def all() -> list[Exchange]:
+        Exchange.init()
+        assert Exchange._exchanges is not None
+        return list(Exchange._exchanges.values())
+    @staticmethod
+    def for_mic(mic: str) -> Exchange:
+        Exchange.init()
+        assert Exchange._exchanges is not None
+        return Exchange._exchanges[mic]
+    
+    @override
+    def to_dict(self) -> dict: return {"mic": self.mic}
+    @staticmethod
+    def from_dict(data: dict) -> Exchange: return Exchange.for_mic(data["mic"])
 
 class SecurityType(Enum):
     STOCK = auto()

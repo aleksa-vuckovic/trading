@@ -1,6 +1,7 @@
 from typing import override
 import unittest
-from trading.core.securities import SecurityType
+from base.serialization import serializer
+from trading.core.securities import Exchange, SecurityType
 from trading.providers import NasdaqSecurity, NasdaqMarket, Nasdaq
 from trading.core.interval import Interval
 from trading.core.work_calendar import WorkCalendar
@@ -18,6 +19,11 @@ class TestNasdaq(unittest.TestCase):
         self.assertEqual(SecurityType.ETF, nusi.type)
         self.assertEqual(SecurityType.WARRANT, abblw.type)
         self.assertIs(Nasdaq.instance, nvda.exchange)
+
+    def test_serialization(self):
+        serialized = serializer.serialize(Nasdaq.instance)
+        deserialized = serializer.deserialize(serialized, Exchange)
+        self.assertIs(Nasdaq.instance, deserialized)
 
 class TestNasdaqCalendar(TestCalendar):
     @override

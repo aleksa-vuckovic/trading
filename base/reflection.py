@@ -1,8 +1,10 @@
 #1
 import importlib
 import sys
+import os
+from pathlib import Path
 from types import ModuleType
-from typing import Callable
+from typing import Callable, Iterable
 
 def get_full_classname(obj_or_cls: object) -> str:
     if not isinstance(obj_or_cls, type): cls = type(obj_or_cls)
@@ -20,3 +22,39 @@ def get_no_args_cnst[T](cls: type[T]) -> Callable[[], T]:
         return cls
     except:
         return lambda: object.__new__(cls)
+
+_default_skip_folders = {"tests"}
+def _get_modules(folder: Path, prefix: str, recursive: bool = True, skip_folders:set[str]=_default_skip_folders) -> Iterable[str]:
+    for name in os.listdir(folder):
+        path = folder/name
+        if recursive and path.is_dir() and name not in skip_folders and (path/'__init__.py').exists():
+            for it in _get_modules(path, f"{prefix}{name}.", recursive=True, skip_folders=skip_folders):
+                yield it
+        elif path.is_file() and name.endswith(".py") and name != "__init__.py":
+            yield f"{prefix}{name[:-3]}"
+def get_modules(top_module: str|None = None, recursive: bool = True, skip_folders:set[str]=_default_skip_folders) -> list[str]:
+    root = Path(__file__)
+    for it in __name__.split("."):
+        root = root.parent
+    if top_module:
+        for segment in top_module.split("."):
+            root /= segment
+            if not root.exists(): raise Exception(f"Module {top_module} not found.")
+            if not root.is_dir(): raise Exception(f"Path {root} is not a directory.")
+            if not (root/"__init__.py").exists(): raise Exception(f"Folder {root} is not a python module (missing __init__.py).")
+        prefix = f"{top_module}."
+    else:
+        prefix = ""
+    return list(_get_modules(root, prefix, recursive=recursive, skip_folders=skip_folders))
+
+def import_modules(top_module: str|None = None, recursive: bool=True, skip_folders:set[str]=_default_skip_folders) -> list[ModuleType]:
+    return [importlib.import_module(it) for it in get_modules(top_module, recursive=recursive, skip_folders=skip_folders)]
+
+def get_classes(top_module: str|None = None, recursive:bool=True, skip_folders:set[str]=_default_skip_folders, base:type=object) -> set[type]:
+    result: list[type] = []
+    for module in import_modules(top_module, recursive=recursive, skip_folders=skip_folders):
+        for obj in module.__dict__.values():
+            if isinstance(obj, type) and obj.__module__ == module.__name__ and issubclass(obj, base):
+                result.append(obj)
+    return set(result)
+    

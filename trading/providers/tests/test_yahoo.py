@@ -115,7 +115,7 @@ class TestYahoo(TestPricingProviderRecent):
         self.assertLess(result,expect*1.2)
 
 
-    #@unittest.skip("Not ready")
+    #@unittest.skip("Avoid http calls")
     def test_merge(self):
         nonmerged = Yahoo('none', merge={})
         start = security.exchange.calendar.get_next_timestamp(time.time() - 5*24*3600, Interval.D1)

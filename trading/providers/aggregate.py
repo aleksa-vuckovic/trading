@@ -70,9 +70,6 @@ class AggregateProvider(PricingProvider, NewsProvider, DataProvider):
     
     instance: AggregateProvider
 
-
-exchanges: list[Exchange] = [Nasdaq.instance]
-exchange_by_mic: dict[str, Exchange] = {it.mic: it for it in exchanges}
 pricing_providers: list[PricingProvider] = [Yahoo(), WallStreetJournal(), FinancialTimes()]
 news_providers: list[NewsProvider] = [GlobeNewswire(), SeekingAlpha()]
 data_providers: list[DataProvider] = [Yahoo()]

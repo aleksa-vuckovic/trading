@@ -10,7 +10,6 @@ from torch import Tensor
 import torch
 
 from trading.core.securities import Exchange
-from trading.providers.aggregate import exchange_by_mic
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +19,7 @@ class BatchFile:
         match = BatchFile.PATTERN.fullmatch(path.name)
         if not match: raise Exception(f"File {path.name} does not match the batch file pattern.")
         self.path = path
-        self.exchange = exchange_by_mic[match.group(1)]
+        self.exchange = Exchange.for_mic(match.group(1))
         self.unix_time = int(match.group(2))
         self.entry = int(match.group(3))
     @staticmethod
