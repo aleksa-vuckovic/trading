@@ -21,11 +21,7 @@ _MODULE: str = __name__.split(".")[-1]
 class WallStreetJournal(BasePricingProvider):
     def __init__(self, storage: Literal['file','db','none']='db'):
         super().__init__(
-            native = [Interval.D1, Interval.M15, Interval.M5],
-            merge = {
-                Interval.H1: Interval.M5,
-                Interval.M15: Interval.M5
-            }
+            native = [Interval.D1, Interval.M30, Interval.M15, Interval.M5, Interval.M1]
         )
         self.pricing_persistor = FilePersistor(config.caching.file_path/_MODULE/"pricing") if storage == 'file'\
             else SqlitePersistor(config.caching.db_path, f"{_MODULE}_pricing") if storage == 'db'\
@@ -71,8 +67,10 @@ class WallStreetJournal(BasePricingProvider):
     
     def _get_interval(self, interval: Interval) -> str:
         if interval == Interval.D1: return 'P1D'
+        elif interval == Interval.M30: return 'PT30M'
         elif interval == Interval.M15: return 'PT15M'
         elif interval == Interval.M5: return 'PT5M'
+        elif interval == Interval.M1: return 'PT1M'
         else: raise ValueError(f"Unsupported interval {interval}")
 
     def _fix_timestamps(self, timestamps: list[float|int|None], interval: Interval, security: Security) -> list[float|None]:
@@ -81,7 +79,7 @@ class WallStreetJournal(BasePricingProvider):
         for it in timestamps:
             if not it:
                 result.append(None)
-            elif interval >= Interval.D1:
+            elif interval == Interval.D1:
                 date = dates.unix_to_datetime(it, tz=dates.UTC)
                 if date != dates.to_zero(date):
                     logger.warning(f"Unexpected UTC timestamp {date}. Skipping.")
@@ -90,21 +88,22 @@ class WallStreetJournal(BasePricingProvider):
                     date = date.replace(tzinfo=security.exchange.calendar.tz) + timedelta(hours=1)
                     date = security.exchange.calendar.get_next_timestamp(date, interval)
                     result.append(date.timestamp())
-            elif interval == Interval.H1:
-                raise Exception(f"Can't fix H1 timestamps!")
-            else:
+            elif interval in {Interval.M30, Interval.M15, Interval.M5, Interval.M1}:
                 it += interval.time()
                 if not security.exchange.calendar.is_timestamp(it, interval):
                     logger.warning(f"Unexpected {interval} timestamp {security.exchange.calendar.unix_to_datetime(it)}. Skipping.")
                     result.append(None)
                 else:
                     result.append(it)
+            else:
+                raise Exception(f"Unsupported interval {interval}.")
+
         return result
 
     @override
     def get_interval_start(self, interval) -> float:
         if interval == Interval.D1: return time.time() - 365*24*3600
-        if interval < Interval.D1: return time.time() - 5*25*3600
+        if interval in {Interval.M30, Interval.M15, Interval.M5, Interval.M1}: return time.time() - 5*25*3600
         raise Exception(f"Unsupported interval {interval}.")
     @override
     def get_pricing_persistor(self, security, interval) -> Persistor:
@@ -114,7 +113,7 @@ class WallStreetJournal(BasePricingProvider):
         return 120
     @override
     def get_pricing_raw(self, unix_from, unix_to, security, interval) -> list[OHLCV]:
-        data = self._fetch_pricing(f"STOCK/US/XNAS/{security.symbol}", self._get_interval(interval), 'D5')
+        data = self._fetch_pricing(f"STOCK/US/{security.exchange.mic}/{security.symbol}", self._get_interval(interval), 'D5')
         def extract_data_points(series: dict) -> dict:
             return {key: [it[index] for it in series['DataPoints']] for index,key in enumerate(series['DesiredDataPoints'])}
         quotes = {'Timestamp': self._fix_timestamps(data['TimeInfo']['Ticks'], interval, security)}

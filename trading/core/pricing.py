@@ -67,8 +67,8 @@ class PricingProvider:
         security: Security,
         interval: Interval,
         *,
-        interpolate: bool,
-        max_fill_ratio: float
+        interpolate: bool = False,
+        max_fill_ratio: float = 1
     ) -> Sequence[OHLCV]:
         """
         Returns the requested pricing data fresh from the source.
@@ -78,7 +78,7 @@ class PricingProvider:
                 Only used when interpolate=True.
         """
         raise NotImplementedError()
-    def get_intervals(self) -> Sequence[Interval]:
+    def get_intervals(self) -> set[Interval]:
         """
         Get all intervals supported by this pricing provider.
         """
@@ -124,7 +124,12 @@ class BasePricingProvider(PricingProvider):
         self,
         *,
         native: Iterable[Interval],
-        merge: Mapping[Interval, Interval]
+        merge: Mapping[Interval, Interval] = {
+            Interval.H1: Interval.M30,
+            Interval.M30: Interval.M15,
+            Interval.M15: Interval.M5,
+            Interval.M5: Interval.M1
+        }
     ):
         """
         Args:
@@ -144,6 +149,9 @@ class BasePricingProvider(PricingProvider):
                 raise Exception(f"Fill ratio {fill_ratio} is larger than the maximum {max_fill_ratio}.")
             data = OHLCV.interpolate(data, timestamps)
         return data
+    @override
+    def get_intervals(self) -> set[Interval]:
+        return self.native.union(self.merge.keys())
 
     @staticmethod
     def _get_pricing_timestamp_fn(it: OHLCV) -> float: return it.t
@@ -155,9 +163,11 @@ class BasePricingProvider(PricingProvider):
         if interval == Interval.L1: return 1000000000
         elif interval == Interval.W1: return 300000000
         elif interval == Interval.D1: return 50000000
-        elif interval == Interval.H1: return 10000000
-        elif interval == Interval.M15: return 2000000
+        elif interval == Interval.H1: return 12000000
+        elif interval == Interval.M30: return 6000000
+        elif interval == Interval.M15: return 3000000
         elif interval == Interval.M5: return 1000000
+        elif interval == Interval.M1: return 200000
         else: raise Exception(f"Unknown interval {interval}.")
     def _get_pricing_live_delay_fn(self, security: Security, interval: Interval) -> float:
         return self.get_pricing_delay(security, interval)
@@ -180,7 +190,9 @@ class BasePricingProvider(PricingProvider):
     ) -> Sequence[OHLCV]:
         if interval not in self.native and interval not in self.merge:
             raise Exception(f"Unsupported interval {interval}. Supported intervals are {self.native.union(self.merge.keys())}.")
-        if interval not in self.native or (interval in self.merge and unix_from <= self.get_interval_start(self.merge[interval])):
+        if interval in self.merge:
+            if interval in self.native and unix_from < self.get_interval_start(self.merge[interval]):
+                return self.get_pricing_raw(unix_from, unix_to, security, interval)
             data = self._get_pricing(security.exchange.calendar.add_intervals(unix_from, interval, -1), unix_to, security, self.merge[interval])
             return merge_pricing(data, unix_from, unix_to, interval, security)
         else:

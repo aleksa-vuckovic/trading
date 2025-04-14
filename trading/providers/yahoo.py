@@ -29,10 +29,7 @@ class Yahoo(BasePricingProvider, DataProvider):
     def __init__(self, storage: Literal['file','db','none']='db'):
         BasePricingProvider.__init__(
             self,
-            native = [Interval.L1, Interval.W1, Interval.D1, Interval.H1, Interval.M15, Interval.M5],
-            merge = {
-                Interval.M15: Interval.M5
-            }
+            native = [Interval.L1, Interval.W1, Interval.D1, Interval.M30, Interval.M15, Interval.M5, Interval.M1]
         )
         DataProvider.__init__(self)
         self.info_persistor = FilePersistor(config.caching.file_path/_MODULE/"info") if storage == 'file'\
@@ -64,11 +61,14 @@ class Yahoo(BasePricingProvider, DataProvider):
         if interval == Interval.W1: return '1wk'
         if interval == Interval.H1: return '1h'
         if interval == Interval.D1: return '1d'
+        if interval == Interval.M30: return '30m'
         if interval == Interval.M15: return '15m'
         if interval == Interval.M5: return '5m'
+        if interval == Interval.M1: return '1m'
         raise Exception(f"Unknown interval {interval}.")
 
-    def _fix_timestamps(self, timestamps: list[float], interval: Interval, security: Security):
+    def _fix_timestamps(self, timestamps: list[float], interval: Interval, security: Security) -> list[float | None]:
+        if interval == Interval.H1: raise Exception(f"The h1 interval is unaligned in yahoo.")
         result: list[float|None] = []
         def skip(it: float):
             logger.warning(f"Unexpected {interval} timestamp {security.exchange.calendar.unix_to_datetime(it)}. Skipping.")
@@ -84,7 +84,7 @@ class Yahoo(BasePricingProvider, DataProvider):
                 else: result.append(security.exchange.calendar.get_next_timestamp(it - 1, interval))
             else:
                 timestamp = security.exchange.calendar.get_next_timestamp(it, interval)
-                if interval.time() != timestamp-it and timestamp != security.exchange.calendar.set_close(timestamp): skip(it)
+                if interval.time() != timestamp-it: skip(it)
                 else: result.append(timestamp)
         return result
 
@@ -93,15 +93,15 @@ class Yahoo(BasePricingProvider, DataProvider):
         now = time.time()
         if interval >= Interval.D1: return now - 10*365*24*3600
         if interval == Interval.H1: return now - 729*24*3600
-        if interval == Interval.M15: return now - 59*24*3600
-        if interval == Interval.M5: return now - 59*24*3600
+        if interval in {Interval.M30, Interval.M15, Interval.M5}: return now - 60*24*3600
+        if interval == Interval.M1: return now - 30*24*3600
         raise Exception(f"Unsupported interval {self}.")
     @override
     def get_pricing_persistor(self, security, interval):
         return self.pricing_persistor
     @override
     def get_pricing_delay(self, security, interval):
-        return 120
+        return 60
     @override
     def get_pricing_raw(self, unix_from: float, unix_to: float, security: Security, interval: Interval) -> list[OHLCV]:
         first_trade_time = self.get_first_trade_time(security)

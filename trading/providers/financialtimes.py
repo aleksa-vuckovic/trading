@@ -28,18 +28,16 @@ def _get_interval(interval: Interval) -> tuple[str, int]:
     if interval > Interval.D1: raise Exception(f"Unsupported interval {interval}.")
     if interval == Interval.D1: return 'Day', 1
     if interval == Interval.H1: return 'Hour', 1
+    if interval == Interval.M30: return 'Minute', 30
     if interval == Interval.M15: return 'Minute', 15
     if interval == Interval.M5: return 'Minute', 5
+    if interval == Interval.M1: return 'Minute', 1
     raise Exception(f"Unknown interval {interval}")
 
 class FinancialTimes(BasePricingProvider):
     def __init__(self, storage: Literal['file','db','none']='db'):
         super().__init__(
-            native = [Interval.D1, Interval.H1, Interval.M15, Interval.M5],
-            merge = {
-                Interval.H1: Interval.M5,
-                Interval.M15: Interval.M5
-            }
+            native = [Interval.D1, Interval.M30, Interval.M15, Interval.M5, Interval.M1]
         )
         self.info_persistor = FilePersistor(config.caching.file_path/_MODULE/'info') if storage == 'file'\
             else SqlitePersistor(config.caching.db_path, f"{_MODULE}_info") if storage == 'db'\

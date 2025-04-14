@@ -1,13 +1,24 @@
+from typing import override
 import unittest
 import config
 from trading.core.interval import Interval
+from trading.core.pricing import PricingProvider
+from trading.core.securities import Security
+from trading.core.tests.test_pricing import TestPricingProviderRecent
 from trading.providers import Yahoo, Nasdaq
 
 security = Nasdaq.instance.get_security('NVDA')
 calendar = Nasdaq.instance.calendar
 provider = Yahoo(config.caching.storage)
 
-class TestYahoo(unittest.TestCase):
+class TestYahoo(TestPricingProviderRecent):
+    @override
+    def get_provider(self) -> PricingProvider:
+        return provider
+    @override
+    def get_securities(self) -> list[Security]:
+        return [security]
+    
     def test_pricing_l1(self):
         data = provider.get_pricing(
             calendar.str_to_unix("2021-11-27 00:00:00"),
@@ -47,21 +58,20 @@ class TestYahoo(unittest.TestCase):
 
     def test_pricing_h1(self):
         data = provider.get_pricing(
-            calendar.str_to_unix("2023-12-01 00:00:00"),
-            calendar.str_to_unix("2024-01-15 00:00:00"),
+            calendar.str_to_unix("2025-03-01 00:00:00"),
+            calendar.str_to_unix("2025-04-15 00:00:00"),
             security,
             Interval.H1
         )
-        self.assertTrue(len(data)> 150 and len(data) < 300)
-        self.assertEqual(calendar.str_to_unix('2023-12-01 10:30:00'), data[0].t)
-        self.assertEqual(calendar.str_to_unix('2024-01-12 16:00:00'), data[-1].t)
-        self.assertGreater(data[0].c, 46)
-        self.assertLess(data[0].c, 47)
+        self.assertGreater(len(data), 150)
+        self.assertLess(len(data), 300)
+        self.assertEqual(calendar.str_to_unix('2025-03-03 10:00:00'), data[0].t)
+        self.assertEqual(calendar.str_to_unix('2025-04-11 16:00:00'), data[-1].t)
+        self.assertGreater(data[0].c, 118)
+        self.assertLess(data[0].c, 119)
         self.assertGreater(sum(it.v for it in data[:7]), 340000000)
         self.assertLess(sum(it.v for it in data[:7]), 380000000)
 
-
-    #TODO: Make the test case based on recent dates
     def test_pricing_m15(self):
         data = provider.get_pricing(
             calendar.str_to_unix("2025-04-09 16:00:00"),

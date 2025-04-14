@@ -11,15 +11,15 @@ calendar = BasicWorkCalendar(tz=dates.ET, open_hour=9, open_minute=30, close_hou
 class TestTimingConfig(unittest.TestCase):
     def test_timing_config_next(self):
         config = TimingConfig.Builder()\
-            .at(hour = 11, minute = 30)\
-            .around(hour = 14, minute = 30, delta_minute=20)\
+            .at(hour = 11, minute = 00)\
+            .around(hour = 14, minute = 00, delta_minute=20)\
             .starting(hour = 15, minute = 0).until(hour = 16, minute = 0)\
             .build()
         config_ = serializer.deserialize(serializer.serialize(config))
         self.assertEqual(config, config_)
         
         expect = [calendar.str_to_datetime(it) for it in 
-            ['2025-02-21 11:30:00', '2025-02-21 14:30:00', '2025-02-21 15:30:00', '2025-02-21 16:00:00', '2025-02-24 11:30:00']]
+            ['2025-02-21 11:00:00', '2025-02-21 14:00:00', '2025-02-21 16:00:00', '2025-02-24 11:00:00']]
         result = []
         cur = calendar.str_to_datetime('2025-02-21 10:00:00')
         for i in range(len(expect)):

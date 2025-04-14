@@ -1,10 +1,10 @@
 import unittest
 from base import dates
-from trading.core.pricing import OHLCV, merge_pricing
+from trading.core.pricing import OHLCV, PricingProvider, merge_pricing
 from trading.core import Interval
 from trading.core.securities import Exchange, Security, SecurityType
 from trading.core.work_calendar import BasicWorkCalendar
-
+import time
 
 calendar = BasicWorkCalendar(tz=dates.ET, open_hour=9, open_minute=30, close_hour=16, semi_close_hour=16)
 exchange = Exchange('XNAS', 'Nasdaq', calendar)
@@ -16,7 +16,7 @@ class MockSecurity(Security):
         return exchange
 security = MockSecurity()
 
-class TestPricingProvider(unittest.TestCase):
+class TestOHLCV(unittest.TestCase):
     def test_ohlcv_interpolate(self):
         data = [OHLCV(t, x, x, x, x, x) for t,x in zip([1,5,7],[1,2,4])]
         timestamps = [1,2,5,6,7]
@@ -39,17 +39,19 @@ class TestPricingProvider(unittest.TestCase):
         self.assertFalse(OHLCV(1,float('inf'),1,1,1,1).is_valid())
         self.assertFalse(OHLCV(1,float('nan'),1,1,1,1).is_valid())
 
+class TestMerge(unittest.TestCase):
     def test_merge(self):
-        start = calendar.str_to_unix('2025-01-10 10:00:00')
-        #test regular merge at 11:30, 12:30
-        #test first half only merge ar 13:00
+        start = calendar.str_to_unix('2025-01-10 10:30:00')
+        #test regular merge at 11:00, 12:00, 13:00
+        #test first half only merge at 13:30
         input = [OHLCV(start+i*1800, i, i, i, i, i)for i in range(7)]
-        expect = [OHLCV(start+(i+1)*1800, i, i+1 if i < 6 else i, i, i+1 if i < 6 else i, 2*i+1 if i < 6 else i) for i in range(0, 7, 2)]
+        expect = [OHLCV(start+(i+1)*1800, i, i+1, i, i+1, 2*i+1) for i in range(0, 5, 2)]
+        expect = [*expect, OHLCV(start+7*1800, 6, 6, 6, 6, 6)]
         result = merge_pricing(input, start, start+7*1800, Interval.H1, security)
         self.assertEqual(expect, result)
 
     def test_merge_cutoffs(self):
-        start = calendar.str_to_unix('2025-01-10 10:00:00')
+        start = calendar.str_to_unix('2025-01-10 10:30:00')
         #test no left cutoff even though the subinterval is at lower bound
         #test right cutoff
         input = [OHLCV(start+i*1800, i, i, i, i, i) for i in [0,3]]
@@ -74,7 +76,28 @@ class TestPricingProvider(unittest.TestCase):
         t2 = calendar.str_to_unix('2025-01-13 09:30:00')
         input = [OHLCV(t1+i*15*60, i, i, i, i, i) for i in range(1,3)]
         input = [*input, *[OHLCV(t2+i*15*60, i, i, i, i, i) for i in range(1,5)]]
-        expect = [OHLCV(t1+1800, 1, 2, 1, 2, 3), OHLCV(t2+3600, 1, 4, 1, 4, 10)]
-        result = merge_pricing(input, t1, t2+3600, Interval.H1, security)
+        expect = [OHLCV(t1+1800, 1, 2, 1, 2, 3), OHLCV(t2+1800, 1, 2, 1, 2, 3), OHLCV(t2+5400, 3, 4, 3, 4, 7)]
+        result = merge_pricing(input, t1, t2+5400, Interval.H1, security)
         self.assertEqual(expect, result)
+
+class TestPricingProviderRecent(unittest.TestCase):
+    def get_provider(self) -> PricingProvider: ...
+    def get_securities(self) -> list[Security]: ...
+
+    def test_get_pricing(self):
+        if type(self) == TestPricingProviderRecent: return
+        now = time.time()
+        provider = self.get_provider()
+        securities = self.get_securities()
+        unix_from = now - 5*24*3600
+        unix_to = now
+        for interval in provider.get_intervals():
+            if interval > Interval.D1: continue
+            for security in securities:
+                data = provider.get_pricing(unix_from, unix_to, security, interval)
+                expect = len(security.exchange.calendar.get_timestamps(unix_from, unix_to, interval))
+                self.assertGreater(len(data), 0.75*expect)
+                self.assertTrue(all(it.is_valid() for it in data))
+                self.assertTrue(all(security.exchange.calendar.is_timestamp(it.t, interval) for it in data))
+        
 

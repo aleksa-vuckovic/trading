@@ -13,16 +13,20 @@ class Interval(Enum):
     W1 = '1 week'
     D1 = '1 day'
     H1 = '1 hour'
+    M30 = '30 minutes'
     M15 = '15 minutes'
     M5 = '5 minutes'
+    M1 = '1 minute'
 
     def time(self) -> float:
         if self == Interval.L1: return 31*24*3600
         if self == Interval.W1: return 7*24*3600
         if self == Interval.D1: return 24*3600
         if self == Interval.H1: return 3600
+        if self == Interval.M30: return 1800
         if self == Interval.M15: return 900
         if self == Interval.M5: return 300
+        if self == Interval.M1: return 60
         raise ValueError(f"Unknown interval {self}.")
     def __lt__(self, other: Interval):
         return self.time() < other.time()

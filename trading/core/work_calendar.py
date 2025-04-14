@@ -243,7 +243,7 @@ class BasicWorkCalendar(WorkCalendar):
         if interval == Interval.L1: return time == self.month_end(time)
         if interval == Interval.W1: return time == self.week_end(time)
 
-        if interval not in {Interval.D1, Interval.H1, Interval.M15, Interval.M5}: raise Exception(f"Unknown interval {interval}.")
+        if interval not in {Interval.D1, Interval.H1, Interval.M30, Interval.M15, Interval.M5, Interval.M1}: raise Exception(f"Unknown interval {interval}.")
         if not self.is_workday(time): return False
         if interval == Interval.D1: return time == self.to_zero(time)
         start = self.to_zero(time).timestamp()
@@ -266,7 +266,7 @@ class BasicWorkCalendar(WorkCalendar):
             timestamp = self.to_zero(time + timedelta(days=1))
             while not self.is_workday(timestamp): timestamp += timedelta(days=1)
             return timestamp
-        if interval not in {Interval.H1, Interval.M15, Interval.M5}: raise Exception(f"Unknown interval {interval}.")
+        if interval not in {Interval.H1, Interval.M30, Interval.M15, Interval.M5, Interval.M1}: raise Exception(f"Unknown interval {interval}.")
         #Intraday intervals
         if self.is_workday(time):
             start = self.to_zero(time).timestamp()
