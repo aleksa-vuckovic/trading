@@ -111,25 +111,26 @@ def merge_pricing(
         if timestamp <= unix_from: continue
         result.append(OHLCV(
             t = timestamp,
-            o = seg[0]['o'],
-            h = max(it['h'] for it in seg),
-            l = min(it['l'] for it in seg),
-            c = seg[-1]['c'],
-            v = sum(it['v'] for it in seg)
+            o = seg[0].o,
+            h = max(it.h for it in seg),
+            l = min(it.l for it in seg),
+            c = seg[-1].c,
+            v = sum(it.v for it in seg)
         ))
     return result
     
 class BasePricingProvider(PricingProvider):
+    DEFAULT_MERGE = {
+        Interval.H1: Interval.M30,
+        Interval.M30: Interval.M15,
+        Interval.M15: Interval.M5,
+        Interval.M5: Interval.M1
+    }
     def __init__(
         self,
         *,
         native: Iterable[Interval],
-        merge: Mapping[Interval, Interval] = {
-            Interval.H1: Interval.M30,
-            Interval.M30: Interval.M15,
-            Interval.M15: Interval.M5,
-            Interval.M5: Interval.M1
-        }
+        merge: Mapping[Interval, Interval] = DEFAULT_MERGE
     ):
         """
         Args:

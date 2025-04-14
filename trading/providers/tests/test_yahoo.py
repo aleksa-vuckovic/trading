@@ -1,4 +1,5 @@
 from typing import override
+import time
 import unittest
 import config
 from trading.core.interval import Interval
@@ -59,7 +60,7 @@ class TestYahoo(TestPricingProviderRecent):
     def test_pricing_h1(self):
         data = provider.get_pricing(
             calendar.str_to_unix("2025-03-01 00:00:00"),
-            calendar.str_to_unix("2025-04-15 00:00:00"),
+            calendar.str_to_unix("2025-04-14 00:00:00"),
             security,
             Interval.H1
         )
@@ -113,3 +114,19 @@ class TestYahoo(TestPricingProviderRecent):
         self.assertGreater(result, expect*0.8)
         self.assertLess(result,expect*1.2)
 
+
+    #@unittest.skip("Not ready")
+    def test_merge(self):
+        nonmerged = Yahoo('none', merge={})
+        start = security.exchange.calendar.get_next_timestamp(time.time() - 5*24*3600, Interval.D1)
+        end = security.exchange.calendar.get_next_timestamp(time.time()-3*24*3600, Interval.D1)
+
+        result1 = provider.get_pricing(start, end, security, Interval.M30)
+        result2 = nonmerged.get_pricing(start, end, security, Interval.M30)
+
+        for a,b in zip(result1, result2):
+            self.assertAlmostEqual(a.o, b.o)
+            self.assertAlmostEqual(a.h, b.h)
+            self.assertAlmostEqual(a.l, b.l)
+            self.assertAlmostEqual(a.c, b.c)
+            self.assertAlmostEqual(a.v/b.v, 1, 1)

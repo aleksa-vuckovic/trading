@@ -3,7 +3,7 @@ import yfinance # type: ignore
 import logging
 import time
 import math
-from typing import Literal, override
+from typing import Literal, Mapping, override
 import config
 from base.algos import BinarySearchEdge, binary_search
 from base.caching import NullPersistor, cached_scalar, Persistor, FilePersistor, SqlitePersistor
@@ -26,10 +26,13 @@ class Yahoo(BasePricingProvider, DataProvider):
     The last nonprepost period is at 15:30 and covers only the last 30 minutes.
     The timestamps correspond to the START of the period.
     """
-    def __init__(self, storage: Literal['file','db','none']='db'):
+    def __init__(self, storage: Literal['file','db','none']='db', merge: Mapping[Interval, Interval] = BasePricingProvider.DEFAULT_MERGE):
+        if merge != BasePricingProvider.DEFAULT_MERGE and storage != 'none':
+            raise Exception(f"Only change merge config when using 'none' storage.")
         BasePricingProvider.__init__(
             self,
-            native = [Interval.L1, Interval.W1, Interval.D1, Interval.M30, Interval.M15, Interval.M5, Interval.M1]
+            native = [Interval.L1, Interval.W1, Interval.D1, Interval.M30, Interval.M15, Interval.M5, Interval.M1],
+            merge = merge
         )
         DataProvider.__init__(self)
         self.info_persistor = FilePersistor(config.caching.file_path/_MODULE/"info") if storage == 'file'\
