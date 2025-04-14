@@ -1,10 +1,8 @@
-from itertools import chain
-from typing import Literal, overload, override
 import torch
-import torchinfo
-import config
 from torch import Tensor
+from typing import Literal, overload, override
 from storage import PricingDataConfig, TimingConfig
+from trading.core.securities import Exchange
 from trading.models.base.model_config import BaseModelConfig, PriceEstimator, PriceTarget, BarValues
 from trading.models.base.abstract_model import AbstractModel
 from trading.models.base.tensors import get_moving_average, get_time_relativized, check_tensors, check_tensor
@@ -12,13 +10,14 @@ from trading.models.base.tensors import get_moving_average, get_time_relativized
 class ModelConfig(BaseModelConfig):
     def __init__(
         self,
+        exchanges: list[Exchange],
         estimator: PriceEstimator,
         target:  PriceTarget,
         timing: TimingConfig,
         pricing_data_config: PricingDataConfig,
         mvg_window: int = 10
     ):
-        super().__init__(pricing_data_config, estimator, target, timing)
+        super().__init__(exchanges, pricing_data_config, estimator, target, timing)
         self.mvg_window = mvg_window
 
 class RecursiveLayer(torch.nn.Module):

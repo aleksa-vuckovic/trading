@@ -5,10 +5,11 @@ from typing import override
 from torch import Tensor
 
 from trading.core import Interval
+from trading.core.work_calendar import TimingConfig
+from trading.providers.nasdaq import Nasdaq
 from trading.models.base.model_config import Aggregation, BarValues, PricingDataConfig, BaseModelConfig, PriceEstimator, PriceTarget
 from trading.models.base.manager import HistoryFrame, ModelManager, StatTrigger, EpochTrigger
 from trading.models.base.stats import StatCollector, StatContainer
-from trading.core.work_calendar import TimingConfig
 from trading.models.base.tests.model import Model
 
 class CountCollector(StatCollector):
@@ -21,6 +22,7 @@ class CountCollector(StatCollector):
         return torch.tensor(self.i, dtype=torch.float32)
 
 config = BaseModelConfig(
+    [Nasdaq.instance],
     PricingDataConfig({Interval.H1: 10}),
     PriceEstimator(BarValues.C, Interval.H1, slice(1,2), Aggregation.AVG),
     PriceTarget.LINEAR_0_10,
@@ -84,18 +86,21 @@ class TestManager(unittest.TestCase):
         ModelManager.delete_all(Model)
     def test_model_config_storage(self):
         config1 = BaseModelConfig(
+            [Nasdaq.instance],
             PricingDataConfig({Interval.H1: 10, Interval.D1: 100}),
             PriceEstimator(BarValues.C, Interval.H1, slice(1,2), Aggregation.AVG),
             PriceTarget.LINEAR_0_10,
             TimingConfig.Builder().around(11, delta_minute=30).build()
         )
         config2 = BaseModelConfig(
+            [Nasdaq.instance],
             PricingDataConfig({Interval.H1: 12, Interval.D1: 100}),
             PriceEstimator(BarValues.C, Interval.H1, slice(1,2), Aggregation.AVG),
             PriceTarget.TANH_10_10,
             TimingConfig.Builder().around(11, delta_minute=30).build()
         )
         config1_copy = BaseModelConfig(
+            [Nasdaq.instance],
             PricingDataConfig({Interval.H1: 10, Interval.D1: 100}),
             PriceEstimator(BarValues.C, Interval.H1, slice(1,2), Aggregation.AVG),
             PriceTarget.LINEAR_0_10,

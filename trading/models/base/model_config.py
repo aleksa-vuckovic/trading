@@ -12,7 +12,7 @@ from base.serialization import serializable, Serializable, serializer
 from base.types import ReadonlyDict, equatable
 from trading.core import Interval
 from trading.core.work_calendar import TimingConfig
-from trading.core.securities import Security
+from trading.core.securities import Exchange, Security
 from trading.providers.aggregate import AggregateProvider
 
 logger = logging.getLogger(__name__)
@@ -186,11 +186,13 @@ class PricingDataConfig(Serializable):
 class BaseModelConfig(Serializable):
     def __init__(
         self,
+        exchanges: list[Exchange],
         pricing_data_config: PricingDataConfig,
         price_estimator: PriceEstimator,
         price_target:  PriceTarget,
         timing: TimingConfig
     ):
+        self.exchanges = exchanges
         self.pricing_data_config = pricing_data_config
         self.price_estimator = price_estimator
         self.price_target = price_target

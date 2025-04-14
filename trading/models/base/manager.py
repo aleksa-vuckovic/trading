@@ -369,7 +369,11 @@ class ModelManager[T: AbstractModel]:
         files: list[BatchFile] = []
         files = functools.reduce(lambda files, folder: files +  BatchFile.load(folder), config.inputs, files)
         files = sorted(files, key=lambda it: it.unix_time)
-        files = [it for it in files if self.model.config.timing.contains(it.unix_time, it.exchange.calendar)]
+        files = [
+            it for it in files 
+            if it.exchange in self.model.config.exchanges and
+                self.model.config.timing.contains(it.unix_time, it.exchange.calendar)
+        ]
 
         total = sum(it.ratio for it in config.batch_group_configs)
         counts = [int(it.ratio/total*len(files)) for it in config.batch_group_configs]
