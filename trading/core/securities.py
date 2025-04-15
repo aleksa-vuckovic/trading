@@ -40,11 +40,6 @@ class Exchange(Serializable):
         Exchange.init()
         assert Exchange._exchanges is not None
         return Exchange._exchanges[mic]
-    
-    @override
-    def to_dict(self) -> dict: return {"mic": self.mic}
-    @staticmethod
-    def from_dict(data: dict) -> Exchange: return Exchange.for_mic(data["mic"])
 
 class SecurityType(Enum):
     STOCK = auto()

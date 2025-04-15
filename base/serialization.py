@@ -13,10 +13,11 @@ from base.reflection import get_full_classname, get_class_by_full_classname, get
 _SKIP_KEYS = '_serializable_skip_keys'
 _INCLUDE_KEYS = '_serializable_include_keys'
 
+type json_type = None|bool|int|float|str|list|dict
 class Serializable:
-    def to_dict(self) -> dict: ...
+    def to_json(self) -> json_type: ...
     @staticmethod
-    def from_dict(data: dict) -> Any: ...
+    def from_json(data: json_type) -> Any: ...
 
 class Serializer:
     def serialize(self, obj: object) -> str:
@@ -54,27 +55,28 @@ def serializable[T: Serializable](skip_keys: Iterable[str]|None = None, include_
         if skips: setattr(cls, _SKIP_KEYS, skips)
         if includes: setattr(cls, _INCLUDE_KEYS, includes)
         if skips:
-            def to_dict(self) -> dict:
+            def to_json(self) -> dict:
                 return {key:self.__dict__[key] for key in self.__dict__ if key not in skips}
         elif includes:
-            def to_dict(self) -> dict:
+            def to_json(self) -> dict:
                 return {key:self.__dict__[key] for key in self.__dict__ if key in includes}
         else:
-            def to_dict(self) -> dict:
+            def to_json(self) -> dict:
                 return self.__dict__
-        def from_dict(data:dict) -> Any:
+        def from_json(data:json_type) -> Any:
+            assert isinstance(data, dict)
             result = create()
             result.__dict__.update(data)
             return result
-        cls.to_dict = to_dict
-        cls.from_dict = from_dict
+        cls.to_json = to_json
+        cls.from_json = from_json
         return cls
     return decorate
     
 _TYPE = '$T'
 _VALUE = '$V'
 class TypedSerializer(Serializer):
-    def _serialize(self, obj: object, typed: bool) -> None|bool|int|float|str|list|dict:
+    def _serialize(self, obj: object, typed: bool) -> json_type:
         if obj is None: return None
         if isinstance(obj, (bool,int,float,str)): return obj
         elif isinstance(obj, list): return [self._serialize(it, typed) for it in obj]
@@ -86,7 +88,10 @@ class TypedSerializer(Serializer):
         elif isinstance(obj, Enum): val = obj.name
         elif isinstance(obj, datetime.datetime): val = repr(obj)
         elif isinstance(obj, Path): val = str(obj)
-        elif hasattr(obj, 'to_dict'): val = {key: self._serialize(value, typed) for key, value in cast(dict, cast(Serializable, obj).to_dict()).items()}
+        elif isinstance(obj, Serializable):
+            val = cast(Serializable, obj).to_json()
+            if isinstance(val, list): val = [self._serialize(it, typed) for it in val]
+            elif isinstance(val, dict): val = {key: self._serialize(value, typed) for key,value in val.items()}
         else: raise Exception(f"Can't serialize {obj} of type {type(obj)}.")
         
         if typed: return {_TYPE: get_full_classname(obj), _VALUE: val}
@@ -95,7 +100,7 @@ class TypedSerializer(Serializer):
     def serialize(self, obj: object, typed:bool = True, indent:int|str|None=None) -> str:
         return json.dumps(self._serialize(obj, typed), indent=indent)
     
-    def _deserialize(self, obj: dict|list|str|int|float|bool|None) -> Any:
+    def _deserialize(self, obj: json_type) -> Any:
         if obj is None: return None
         if isinstance(obj, (bool,int,float,str)): return obj
         if isinstance(obj, list): return [self._deserialize(it) for it in obj]
@@ -110,7 +115,10 @@ class TypedSerializer(Serializer):
         elif issubclass(cls, Enum): return cls[cast(str, val)] 
         elif cls == datetime.datetime: return eval(cast(str, val))
         elif issubclass(cls, Path): return Path(cast(str, val))
-        elif hasattr(cls, 'from_dict'): return cls.from_dict({key: self._deserialize(value) for key,value in cast(dict, val).items()})
+        elif issubclass(cls, Serializable):
+            if isinstance(val, list): val = [self._deserialize(it) for it in val]
+            elif isinstance(val, dict): val = {key: self._deserialize(value) for key,value in val.items()}
+            return cls.from_json(val)
         else: raise Exception(f"Can't deserialize {val} into type {cls}.")
     @overload
     def deserialize[T](self, data: str, assert_type: type[T]) -> T: ...

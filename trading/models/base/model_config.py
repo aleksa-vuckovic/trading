@@ -3,12 +3,12 @@ from __future__ import annotations
 from functools import cached_property
 import logging
 import torch
-from typing import overload, Iterable, Iterator
+from typing import overload, Iterable, Iterator, override
 from torch import Tensor
 from enum import Enum, auto
 from matplotlib import pyplot as plt
 
-from base.serialization import serializable, Serializable, serializer
+from base.serialization import serializable, Serializable, serializer, json_type
 from base.types import ReadonlyDict, equatable
 from trading.core import Interval
 from trading.core.work_calendar import TimingConfig
@@ -176,9 +176,11 @@ class PricingDataConfig(Serializable):
             return self.counts[Interval[key]]
         raise IndexError(f"Key {key} does not exist in this DataConfig.")
     
-    def to_dict(self) -> dict: return {'pricing': {key.name: value for key,value in self.counts.items()}}
+    @override
+    def to_json(self) -> dict: return {'pricing': {key.name: value for key,value in self.counts.items()}}
     @staticmethod
-    def from_dict(data: dict) -> PricingDataConfig:
+    def from_json(data: json_type) -> PricingDataConfig:
+        assert isinstance(data, dict)
         return PricingDataConfig({Interval[key]: data['pricing'][key] for key in data['pricing']})
 
 @serializable()

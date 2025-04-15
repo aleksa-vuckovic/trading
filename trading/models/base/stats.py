@@ -52,7 +52,7 @@ class StatContainer(Cloneable):
     def __str__(self):
         return ','.join([str(it) for it in self.stats.values()])
     
-    def to_dict(self):
+    def to_dict(self) -> dict[str, float]:
         return {key: self.stats[key].running for key in self.stats}
     
 class Accuracy(StatCollector):
