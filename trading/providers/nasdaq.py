@@ -1,3 +1,4 @@
+#1
 from __future__ import annotations
 from functools import cached_property
 import logging
@@ -6,8 +7,8 @@ from typing import Sequence, override
 from enum import Enum
 from base import dates
 from base.scraping import scraper
-from trading.core.work_calendar import HolidaySchedule, BasicWorkCalendar
 from base.serialization import Serializable, serializable, serializable_singleton
+from trading.core.work_calendar import HolidaySchedule, BasicWorkCalendar
 from trading.core.securities import Security, SecurityType, Exchange
 
 logger = logging.getLogger(__name__)

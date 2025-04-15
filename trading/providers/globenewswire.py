@@ -1,3 +1,4 @@
+#2
 import logging
 from typing import Literal, Sequence, override
 from urllib import parse
@@ -7,7 +8,7 @@ from base.scraping import scraper, backup_timeout
 from base.caching import NullPersistor, Persistor, FilePersistor, SqlitePersistor
 from trading.core.securities import Security
 from trading.core.news import News, BaseNewsProvider
-from trading.providers.utils import filter_news, filter_ohlcv
+from trading.providers.utils import filter_news
 from trading.providers.nasdaq import Nasdaq
 
 logger = logging.getLogger(__name__)

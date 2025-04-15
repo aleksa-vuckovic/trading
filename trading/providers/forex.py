@@ -1,3 +1,4 @@
+#1
 from __future__ import annotations
 from enum import Enum, auto
 from functools import cached_property
@@ -5,9 +6,8 @@ from typing import Sequence, override
 from base.serialization import serializable_singleton
 from base.types import Serializable
 from base import dates
-from trading.core.securities import Security, Exchange, SecurityType, WorkCalendar
-from trading.providers.nasdaq import BasicWorkCalendar
-
+from trading.core.securities import Security, Exchange, SecurityType
+from trading.core.work_calendar import BasicWorkCalendar
 
 class ForexSecurity(Security):
     class Subtype(Enum):

@@ -1,3 +1,4 @@
+#2
 import json
 import logging
 import time
@@ -6,11 +7,11 @@ from datetime import timedelta
 import config
 from base import dates
 from base.scraping import scraper, backup_timeout
-from trading.core.interval import Interval
-from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
 from base.caching import FilePersistor, NullPersistor, Persistor, SqlitePersistor
+from trading.core.interval import Interval
 from trading.core.securities import Security
 from trading.core.pricing import OHLCV, BasePricingProvider
+from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
 
 logger = logging.getLogger(__name__)
 _TOKEN_KEY='Dylan2010.Entitlementtoken'

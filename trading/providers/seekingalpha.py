@@ -1,3 +1,4 @@
+#2
 import json
 import logging
 from typing import Literal, override
@@ -5,9 +6,9 @@ from datetime import datetime
 import config
 from base.scraping import scraper, backup_timeout
 from base.caching import NullPersistor, Persistor, FilePersistor, SqlitePersistor
-from trading.providers.utils import filter_news
 from trading.core.securities import Security
 from trading.core.news import BaseNewsProvider, News
+from trading.providers.utils import filter_news
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]

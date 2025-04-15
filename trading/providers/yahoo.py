@@ -1,3 +1,4 @@
+#2
 import json
 import yfinance # type: ignore
 import logging
@@ -7,10 +8,10 @@ from typing import Literal, Mapping, override
 import config
 from base.algos import BinarySearchEdge, binary_search
 from base.caching import NullPersistor, cached_scalar, Persistor, FilePersistor, SqlitePersistor
+from base.scraping import scraper, backup_timeout, BadResponseException, TooManyRequestsException
 from trading.core import Interval
 from trading.core.securities import Security, DataProvider
 from trading.core.pricing import OHLCV, BasePricingProvider
-from base.scraping import scraper, backup_timeout, BadResponseException, TooManyRequestsException
 from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
 
 
@@ -71,7 +72,7 @@ class Yahoo(BasePricingProvider, DataProvider):
         raise Exception(f"Unknown interval {interval}.")
 
     def _fix_timestamps(self, timestamps: list[float], interval: Interval, security: Security) -> list[float | None]:
-        if interval == Interval.H1: raise Exception(f"The h1 interval is unaligned in yahoo.")
+        if interval == Interval.H1: raise Exception(f"The {interval} interval is unaligned in yahoo.")
         result: list[float|None] = []
         def skip(it: float):
             logger.warning(f"Unexpected {interval} timestamp {security.exchange.calendar.unix_to_datetime(it)}. Skipping.")

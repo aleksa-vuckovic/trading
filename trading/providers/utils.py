@@ -1,3 +1,4 @@
+#1
 import logging
 from typing import Mapping, Sequence
 from trading.core.news import News
