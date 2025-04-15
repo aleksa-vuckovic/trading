@@ -1,5 +1,7 @@
 #1
 from __future__ import annotations
+from functools import cached_property
+from typing import Sequence
 from enum import Enum, auto
 from base.reflection import get_classes
 from base.serialization import Serializable, serializable_singleton
@@ -17,11 +19,11 @@ class Exchange(Serializable):
         self.name = name
         self.calendar = calendar
     
-    def get_securities(self) -> list[Security]:
-        raise NotImplementedError()
+    @cached_property
+    def securities(self) -> Sequence[Security]: ...
     
     def get_security(self, symbol: str) -> Security:
-        sec = [it for it in self.get_securities() if it.symbol == symbol]
+        sec = [it for it in self.securities if it.symbol == symbol]
         return sec[0]
     
     _exchanges: dict[str, Exchange]|None = None
@@ -45,6 +47,7 @@ class SecurityType(Enum):
     STOCK = auto()
     ETF = auto()
     WARRANT = auto()
+    FX = auto()
     TEST = auto()
 
 class Security:

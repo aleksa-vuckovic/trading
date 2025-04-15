@@ -201,8 +201,8 @@ class BasicWorkCalendar(WorkCalendar):
         open_minute: int = 0,
         close_hour: int,
         close_minute: int = 0,
-        semi_close_hour: int,
-        semi_close_minute: int = 0,
+        semi_close_hour: int|None = None,
+        semi_close_minute: int|None = None,
         holidays: HolidaySchedule = HolidaySchedule()
     ):
         super().__init__(tz)
@@ -210,8 +210,8 @@ class BasicWorkCalendar(WorkCalendar):
         self.open_minute = open_minute
         self.close_hour = close_hour
         self.close_minute = close_minute
-        self.semi_close_hour = semi_close_hour
-        self.semi_close_minute = semi_close_minute
+        self.semi_close_hour = close_hour if semi_close_hour is None else semi_close_hour
+        self.semi_close_minute = close_minute if semi_close_minute is None else semi_close_minute
         self.holidays = holidays
     
     #region Overrides

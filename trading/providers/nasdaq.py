@@ -1,7 +1,8 @@
 from __future__ import annotations
+from functools import cached_property
 import logging
 import re
-from typing import override
+from typing import Sequence, override
 from enum import Enum
 from base import dates
 from base.scraping import scraper
@@ -50,32 +51,30 @@ NasdaqCalendar.instance = NasdaqCalendar()
 
 class Nasdaq(Exchange):
     instance: Nasdaq
-    securities: list[Security]|None
     def __init__(self):
         super().__init__('XNAS', 'Nasdaq US', NasdaqCalendar.instance)
-        self.securities = None
     
     def _get_entries(self) -> list[str]:
         response = scraper.get("https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt")
         return response.text.splitlines(False)
 
+    @cached_property
     @override
-    def get_securities(self) -> list[Security]:
-        if self.securities is None:
-            self.securities = []
-            tests = 0
-            failed = 0
-            for row in self._get_entries():
-                try:
-                    sec = NasdaqSecurity.from_line(row)
-                    if sec.type == SecurityType.TEST: tests += 1
-                    else: self.securities.append(sec)
-                except:
-                    failed += 1
-            logger.info(f"Successfully parsed {len(self.securities)} securities.")
-            logger.info(f"Skipped {tests} test securities.")
-            logger.info(f"Failed to parse {failed} securities.")
-        return self.securities
+    def securities(self) -> Sequence[NasdaqSecurity]:
+        result: list[NasdaqSecurity] = []
+        tests = 0
+        failed = 0
+        for row in self._get_entries():
+            try:
+                sec = NasdaqSecurity.from_line(row)
+                if sec.type == SecurityType.TEST: tests += 1
+                else: result.append(sec)
+            except:
+                failed += 1
+        logger.info(f"Successfully parsed {len(self.securities)} securities.")
+        logger.info(f"Skipped {tests} test securities.")
+        logger.info(f"Failed to parse {failed} securities.")
+        return result
 Nasdaq.instance = Nasdaq()
 
 class NasdaqMarket(Enum):
@@ -104,6 +103,7 @@ class NasdaqSecurity(Security, Serializable):
         self.status = status
 
     @property
+    @override
     def exchange(self) -> Nasdaq:
         return Nasdaq.instance
 
