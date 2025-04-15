@@ -1,7 +1,7 @@
 from pathlib import Path
 from trading.models.base.model_config import PricingDataConfig
 from trading.core.interval import Interval
-from trading.core.work_calendar import TimingConfig
+from trading.core.timing_config import TimingConfig, BasicTimingConfig
 from trading.providers import Nasdaq
 
 class generator:
@@ -18,7 +18,7 @@ class generator:
         Interval.M15: 2*7*4,
         Interval.M5: 2*7*12
     })
-    timing = TimingConfig.Builder()\
+    timing = BasicTimingConfig.Builder()\
         .starting(hour = 10, minute = 0)\
         .until(hour = 14, minute=30)\
         .build()
@@ -37,7 +37,7 @@ class generator2:
         Interval.M15: 2*7*4,
         Interval.M5: 2*7*12
     })
-    timing = TimingConfig.Builder()\
+    timing = BasicTimingConfig.Builder()\
         .starting(hour = 10, minute = 0)\
         .until(hour = 15, minute=30)\
         .build()

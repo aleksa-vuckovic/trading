@@ -372,7 +372,7 @@ class ModelManager[T: AbstractModel]:
         files = [
             it for it in files 
             if it.exchange in self.model.config.exchanges and
-                self.model.config.timing.contains(it.unix_time, it.exchange.calendar)
+                self.model.config.timing.matches(it.unix_time, it.exchange)
         ]
 
         total = sum(it.ratio for it in config.batch_group_configs)

@@ -4,7 +4,7 @@ from typing import override
 from torch import Tensor
 
 from trading.core import Interval
-from trading.core.work_calendar import BasicTimingConfig
+from trading.core.timing_config import BasicTimingConfig
 from trading.providers.nasdaq import Nasdaq
 from trading.models.base.model_config import Aggregation, BarValues, PricingDataConfig, BaseModelConfig, PriceEstimator, PriceTarget
 from trading.models.base.manager import HistoryFrame, ModelManager, StatTrigger, EpochTrigger

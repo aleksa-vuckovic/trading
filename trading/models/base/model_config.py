@@ -11,7 +11,7 @@ from matplotlib import pyplot as plt
 from base.serialization import serializable, Serializable, serializer, json_type
 from base.types import ReadonlyDict, equatable
 from trading.core import Interval
-from trading.core.work_calendar import TimingConfig
+from trading.core.timing_config import TimingConfig
 from trading.core.securities import Exchange, Security
 from trading.providers.aggregate import AggregateProvider
 

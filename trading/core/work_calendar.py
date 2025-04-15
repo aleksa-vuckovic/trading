@@ -5,10 +5,8 @@ import calendar
 from typing import overload, TypeVar, override
 from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta
-from base.types import equatable
 from base.caching import Persistor, cached_series, MemoryPersistor
 from base import dates
-from base.serialization import Serializable, serializable
 from trading.core import Interval
 
 
@@ -280,76 +278,3 @@ class BasicWorkCalendar(WorkCalendar):
         first = math.floor((self.set_open(time).timestamp()-start)/interval.time())
         return self.unix_to_datetime(start + (first+1)*interval.time())
     #endregion
-
-@serializable()
-@equatable()
-class TimingConfig(Serializable):
-    def contains(self, time: float|datetime, calendar: WorkCalendar|None=None) -> bool: ...
-
-class BasicTimingConfig(TimingConfig):
-    """
-    Represents a set of timing intervals or points during a single day.
-    """
-    def __init__(self, components: tuple[float|tuple[float,float],...]):
-        self.components = components
-    class Builder:
-        
-        def __init__(self):
-            self.components = []
-        def at(self, hour: int = 9, minute: int = 30) -> BasicTimingConfig.Builder:
-            self.components.append(float(hour*3600 + minute*60))
-            return self
-        class _Interval:
-            def __init__(self, builder: BasicTimingConfig.Builder, start: float):
-                self._builder = builder
-                self._start = start
-            def until(self, hour: int = 16, minute: int = 0) -> BasicTimingConfig.Builder:
-                self._builder.components.append((self._start, float(hour*3600+minute*60)))
-                return self._builder
-        def starting(self, hour: int = 9, minute: int = 30) -> BasicTimingConfig.Builder._Interval:
-            return BasicTimingConfig.Builder._Interval(self, float(hour*3600+minute*60))
-        def around(self, hour: int = 10, minute: int = 0, delta_minute: int = 10):
-            if not delta_minute: return self.at(hour = hour, minute = minute)
-            time = float(hour*3600 + minute*60)
-            self.components.append((time-delta_minute*60,time+delta_minute*60))
-            return self
-        def any(self) -> BasicTimingConfig.Builder:
-            return self.starting(0,0).until(0,0)
-        def build(self) -> TimingConfig:
-            return BasicTimingConfig(tuple(self.components))
-
-    @override
-    def contains(self, time: datetime|float, calendar: WorkCalendar|None = None) -> bool:
-        if calendar is None:
-            if not isinstance(time, datetime): raise Exception(f"WorkCalendar must be set for unix timestamps.")
-            date = time
-        else:
-            if isinstance(time, datetime): time = time.timestamp()
-            date = calendar.unix_to_datetime(time)
-        daysecs = date.hour*3600+date.minute*60+date.second+date.microsecond
-        for it in self.components:
-            if isinstance(it, tuple):
-                if daysecs > it[0] and (daysecs <= it[1] or not it[1]): return True
-            else:
-                if daysecs == it: return True
-        return False
-    
-    def next(self, time: T,interval: Interval, calendar: WorkCalendar) -> T:
-        if not isinstance(time, datetime):
-            assert calendar is not None
-            return self.next(calendar.unix_to_datetime(time), interval, calendar).timestamp()
-        cur = calendar.get_next_timestamp(time, interval)
-        while not self.contains(cur, calendar): cur = calendar.get_next_timestamp(cur, interval)
-        return cur
-
-class ForexTimingConfig(TimingConfig):
-    def __init__(self, configs: list[tuple[WorkCalendar, TimingConfig]]):
-        self.configs = configs
-    
-    @override
-    def contains(self, time: float | datetime, calendar: WorkCalendar | None = None) -> bool:
-        if isinstance(time, datetime): time = time.timestamp()
-        for calendar, config in self.configs:
-            if config.contains(time, calendar):
-                return True
-        return False

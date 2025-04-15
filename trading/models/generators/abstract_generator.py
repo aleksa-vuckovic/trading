@@ -9,7 +9,7 @@ from base.caching import SqlitePersistor
 from base.serialization import serializer
 from trading.core import Interval
 from trading.core.securities import Exchange, Security, SecurityType
-from trading.core.work_calendar import TimingConfig
+from trading.core.timing_config import TimingConfig
 from trading.models.base.batches import BatchFile
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ class AbstractGenerator:
 
         def next_time(time: float) -> tuple[float, int]:
             while True:
-                time = timing.next(time, interval, exchange.calendar)
+                time = timing.next(time, interval, exchange)
                 symbol: str|None = persistor.try_read(str(time))
                 if symbol is None: return time, 0
                 i = binary_search(securities, symbol, lambda it: it.symbol, edge=BinarySearchEdge.LOW) + 1

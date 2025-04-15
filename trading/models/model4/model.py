@@ -1,7 +1,8 @@
 import torch
 from torch import Tensor
 from typing import Literal, overload, override
-from storage import PricingDataConfig, TimingConfig
+from storage import PricingDataConfig
+from trading.core.timing_config import TimingConfig
 from trading.core.securities import Exchange
 from trading.models.base.model_config import BaseModelConfig, PriceEstimator, PriceTarget, BarValues
 from trading.models.base.abstract_model import AbstractModel

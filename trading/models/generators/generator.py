@@ -12,7 +12,7 @@ from pathlib import Path
 import config
 from trading.core import Interval
 from trading.core.securities import Exchange, Security
-from trading.core.work_calendar import TimingConfig
+from trading.core.timing_config import TimingConfig, BasicTimingConfig
 from trading.providers.aggregate import AggregateProvider
 from trading.models.base.model_config import Aggregation, BarValues, AFTER, PriceEstimator, PricingDataConfig, PriceTarget
 from trading.models.base.tensors import check_tensors
@@ -104,7 +104,7 @@ class Generator(AbstractGenerator):
     def plot_statistics(
         self,
         *,
-        timing: TimingConfig = TimingConfig.Builder().any().build(),
+        timing: TimingConfig = BasicTimingConfig.Builder().any().build(),
         estimator: PriceEstimator = PriceEstimator(BarValues.C, Interval.H1, slice(0,7), Aggregation.LAST),
         targets: list[PriceTarget] = list(PriceTarget),
         title: str = "",
@@ -112,7 +112,7 @@ class Generator(AbstractGenerator):
     ):
         #Bin distribution of after values
         temp: list[Tensor] = []
-        files = [it.path for it in BatchFile.load(self.folder) if timing.contains(it.unix_time, it.exchange.calendar)]
+        files = [it.path for it in BatchFile.load(self.folder) if timing.matches(it.unix_time, it.exchange)]
         random.shuffle(files)
         for file in files[:20]:
             example: dict[str, Tensor] = torch.load(file, weights_only=True)

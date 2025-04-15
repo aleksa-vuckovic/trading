@@ -1,3 +1,4 @@
+from typing import cast
 import unittest
 from base import dates
 from trading.core.pricing import OHLCV, PricingProvider, merge_pricing
@@ -56,7 +57,7 @@ class TestMerge(unittest.TestCase):
         #test right cutoff
         input = [OHLCV(start+i*1800, i, i, i, i, i) for i in [0,3]]
         input = [*input, OHLCV(start+9*1800, 3, 3, 3, 3, 3)]
-        expect: list[OHLCV] = [OHLCV.from_dict({**input[0].to_dict(), 't': start+1800}), input[1]]
+        expect: list[OHLCV] = [OHLCV.from_json({**cast(dict, input[0].to_json()), 't': start+1800}), input[1]]
         result = merge_pricing(input, start, start+5*1800, Interval.H1, security)
         self.assertEqual(expect, result)
         

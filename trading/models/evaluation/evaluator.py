@@ -19,9 +19,9 @@ from base import text
 from base.types import ClassDict
 from base.serialization import serializable, Serializable, serializer
 from base import plotutils
-from trading.core.work_calendar import TimingConfig
+from trading.core.timing_config import TimingConfig
 from trading.core import Interval
-from trading.core.securities import Security
+from trading.core.securities import Exchange, Security, SecurityType
 from trading.models.base import ModelManager
 from trading.providers.aggregate import AggregateProvider
 from trading.models.base.model_config import PriceEstimator, BaseModelConfig
@@ -179,7 +179,7 @@ class Evaluator:
         self,
         unix_from: float,
         unix_to: float,
-        securities: list[Security],
+        exchange: Exchange,
         timing: TimingConfig,
         estimator: PriceEstimator,
         selector: Selector = Selector(),
@@ -188,9 +188,8 @@ class Evaluator:
         """
         Returns total gain in percentages
         """
-        calendar = securities[0].exchange.calendar
-        assert all(it.exchange.calendar == calendar for it in securities)
-        logger.info(f"Backtesting from {dates.unix_to_datetime(unix_from, tz=dates.CET)} to {dates.unix_to_datetime(unix_to, tz=dates.CET)}")
+        securities = [it for it in exchange.get_securities() if it.type == SecurityType.STOCK]
+        logger.info(f"Backtesting on {exchange.mic} from {exchange.calendar.unix_to_datetime(unix_from)} to {exchange.calendar.unix_to_datetime(unix_to)}")
         unix_time = unix_from
         history: list[BacktestFrame] = []
         plt.ion()
@@ -211,7 +210,7 @@ class Evaluator:
         ax2.legend()
         plotutils.refresh_interactive_figures(fig1, fig2)
         
-        unix_time = timing.next(unix_time, Interval.M5, calendar)
+        unix_time = timing.next(unix_time, Interval.M5, exchange)
         while unix_time < unix_to:
             try:
                 selector.clear()
@@ -244,7 +243,7 @@ class Evaluator:
                 raise
             except:
                 logger.error(f"Failed to evaluate at {dates.unix_to_datetime(unix_time,tz=dates.CET)}.", exc_info=True)
-            unix_time = timing.next(unix_time, Interval.M5, calendar)
+            unix_time = timing.next(unix_time, Interval.M5, exchange)
             
         plt.ioff()
         selector.clear()
