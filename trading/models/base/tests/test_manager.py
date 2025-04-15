@@ -1,11 +1,10 @@
-import gc
 import unittest
 import torch
 from typing import override
 from torch import Tensor
 
 from trading.core import Interval
-from trading.core.work_calendar import TimingConfig
+from trading.core.work_calendar import BasicTimingConfig
 from trading.providers.nasdaq import Nasdaq
 from trading.models.base.model_config import Aggregation, BarValues, PricingDataConfig, BaseModelConfig, PriceEstimator, PriceTarget
 from trading.models.base.manager import HistoryFrame, ModelManager, StatTrigger, EpochTrigger
@@ -26,7 +25,7 @@ config = BaseModelConfig(
     PricingDataConfig({Interval.H1: 10}),
     PriceEstimator(BarValues.C, Interval.H1, slice(1,2), Aggregation.AVG),
     PriceTarget.LINEAR_0_10,
-    TimingConfig.Builder().at(9).build()
+    BasicTimingConfig.Builder().at(9).build()
 )
 
 class TestTriggers(unittest.TestCase):
@@ -90,21 +89,21 @@ class TestManager(unittest.TestCase):
             PricingDataConfig({Interval.H1: 10, Interval.D1: 100}),
             PriceEstimator(BarValues.C, Interval.H1, slice(1,2), Aggregation.AVG),
             PriceTarget.LINEAR_0_10,
-            TimingConfig.Builder().around(11, delta_minute=30).build()
+            BasicTimingConfig.Builder().around(11, delta_minute=30).build()
         )
         config2 = BaseModelConfig(
             [Nasdaq.instance],
             PricingDataConfig({Interval.H1: 12, Interval.D1: 100}),
             PriceEstimator(BarValues.C, Interval.H1, slice(1,2), Aggregation.AVG),
             PriceTarget.TANH_10_10,
-            TimingConfig.Builder().around(11, delta_minute=30).build()
+            BasicTimingConfig.Builder().around(11, delta_minute=30).build()
         )
         config1_copy = BaseModelConfig(
             [Nasdaq.instance],
             PricingDataConfig({Interval.H1: 10, Interval.D1: 100}),
             PriceEstimator(BarValues.C, Interval.H1, slice(1,2), Aggregation.AVG),
             PriceTarget.LINEAR_0_10,
-            TimingConfig.Builder().around(11, delta_minute=30).build()
+            BasicTimingConfig.Builder().around(11, delta_minute=30).build()
         )
         self.assertEqual(0, len(ModelManager.get_all(Model)))
         manager1 = ModelManager.get(Model, config1)
