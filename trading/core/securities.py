@@ -1,11 +1,11 @@
 #1
 from __future__ import annotations
 from enum import Enum, auto
-from typing import override
 from base.reflection import get_classes
-from base.types import Serializable
+from base.serialization import Serializable, serializable_singleton
 from trading.core.work_calendar import WorkCalendar
 
+@serializable_singleton
 class Exchange(Serializable):
     def __init__(
         self,
