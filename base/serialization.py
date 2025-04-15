@@ -72,6 +72,15 @@ def serializable[T: Serializable](skip_keys: Iterable[str]|None = None, include_
         cls.from_json = from_json
         return cls
     return decorate
+
+def serializable_singleton[T: Serializable](cls: type[T]) -> type[T]:
+    def to_json(self) -> json_type:
+        return cls.__name__ # This is just for clarity when serializing with typed=False
+    def from_json(data: json_type):
+        return cls.instance # type: ignore
+    cls.to_json = to_json
+    cls.from_json = from_json
+    return cls
     
 _TYPE = '$T'
 _VALUE = '$V'

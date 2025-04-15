@@ -3,7 +3,7 @@ import unittest
 import json
 from enum import Enum
 from pathlib import Path
-from base.serialization import serializable, TypedSerializer, Serializable, _TYPE, _VALUE
+from base.serialization import serializable, TypedSerializer, Serializable, _TYPE, _VALUE, serializable_singleton
 from base.types import equatable
 from base import dates
 
@@ -53,6 +53,11 @@ class D(C):
 class E(Serializable):
     def __init__(self, a: tuple):
         self.a = a
+
+@serializable_singleton
+class TestSingleton(Serializable):
+    instance: TestSingleton
+TestSingleton.instance = TestSingleton()
 
 class TestJsonutils(unittest.TestCase):
 
@@ -148,3 +153,10 @@ class TestJsonutils(unittest.TestCase):
         data_d = serializer.deserialize(data_s)
         self.assertEqual(data, data_d)
         self.assertEqual({MyEnum.A, C(1,0), C(2,0), "abc"}, set(data_d.keys()))
+
+    def test_typed_serializer_singleton(self):
+        serializer = TypedSerializer()
+        data = {"singleton": TestSingleton.instance}
+        data_s = serializer.serialize(data, True)
+        data_d = serializer.deserialize(data_s)
+        self.assertEqual(data, data_d)
