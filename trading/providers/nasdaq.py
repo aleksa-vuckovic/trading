@@ -6,13 +6,14 @@ from enum import Enum
 from base import dates
 from base.scraping import scraper
 from trading.core.work_calendar import HolidaySchedule, BasicWorkCalendar
-from base.serialization import Serializable, serializable
+from base.serialization import Serializable, serializable, serializable_singleton
 from trading.core.securities import Security, SecurityType, Exchange
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
 
-class NasdaqCalendar(BasicWorkCalendar):
+@serializable_singleton
+class NasdaqCalendar(BasicWorkCalendar, Serializable):
     instance: NasdaqCalendar
     def __init__(self):
         holidays = HolidaySchedule()

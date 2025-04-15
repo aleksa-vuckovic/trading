@@ -343,5 +343,13 @@ class BasicTimingConfig(TimingConfig):
         return cur
 
 class ForexTimingConfig(TimingConfig):
-    def __init__(self):
-        pass
+    def __init__(self, configs: list[tuple[WorkCalendar, TimingConfig]]):
+        self.configs = configs
+    
+    @override
+    def contains(self, time: float | datetime, calendar: WorkCalendar | None = None) -> bool:
+        if isinstance(time, datetime): time = time.timestamp()
+        for calendar, config in self.configs:
+            if config.contains(time, calendar):
+                return True
+        return False
