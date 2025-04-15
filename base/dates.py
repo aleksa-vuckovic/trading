@@ -13,10 +13,15 @@ ET =  ZoneInfo('US/Eastern')
 UTC = ZoneInfo('UTC')
 CET = ZoneInfo('CET')
 
-def str_to_datetime(time_string: str, format: str = "%Y-%m-%d %H:%M:%S", tz=UTC) -> datetime:
+DEFAULT_FORMAT = "%Y-%m-%d %H:%M:%S"
+def str_to_datetime(time_string: str, format: str = DEFAULT_FORMAT, tz=UTC) -> datetime:
     return datetime.strptime(time_string, format).replace(tzinfo=tz)
-def str_to_unix(time_string: str, format: str = "%Y-%m-%d %H:%M:%S", tz=UTC) -> float:
+def str_to_unix(time_string: str, format: str = DEFAULT_FORMAT, tz=UTC) -> float:
     return str_to_datetime(time_string, format=format, tz=tz).timestamp()
+def datetime_to_str(time: datetime, format: str = DEFAULT_FORMAT) -> str:
+    return time.strftime(format)
+def unix_to_str(time: float, format: str = DEFAULT_FORMAT, tz=UTC) -> str:
+    return datetime_to_str(unix_to_datetime(time, tz=tz), format=format)
 def unix_to_datetime(unix: float, tz=UTC) -> datetime:
     return datetime.fromtimestamp(unix, tz=tz)
 def datetime_to_unix(time: datetime) -> float:
