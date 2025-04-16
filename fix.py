@@ -102,7 +102,7 @@ def fix_timestamps():
                         result.append(entry)
                         logger.info(f"Fixed {interval} from {date} to {fixed_date}")
                     elif interval == Interval.D1:
-                        if not calendar.is_workday(date):
+                        if calendar.is_off(date):
                             logger.info(f"Deleting {interval} {date}")
                         else:
                             fixed_date = calendar.set_close(date)

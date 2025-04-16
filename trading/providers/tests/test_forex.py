@@ -14,7 +14,8 @@ class TestForexWorkCalendar(TestCalendar):
     def get_next_timestamp_examples(self, interval: Interval) -> list[tuple[str,str]]:
         if interval == Interval.D1: return [
             ('2024-12-31 00:00:00', '2025-01-01 00:00:00'),
-            ('2024-12-31 01:00:00', '2025-01-01 00:00:00')
+            ('2024-12-31 01:00:00', '2025-01-01 00:00:00'),
+            ('2025-03-01 01:00:00', '2025-03-02 00:00:00') #no weekends
         ]
         if interval == Interval.H1: return [
             ('2024-12-31 23:10:00', '2025-01-01 00:00:00'),

@@ -13,7 +13,7 @@ def arrays_to_ohlcv(data: Mapping[str, Sequence[float|int|None]]) -> list[OHLCV]
     if not length: return []
     if not all(len(data[key]) == length for key in keys): raise Exception(f"Unequal series lengths. Data:\n{data}")
     if keys.symmetric_difference('tohlcv'): raise Exception(f"Expecting keys tohlcv but got {keys}.")
-    return [OHLCV(*(float(data[key][i] or 0) for key in 'tohlcv')) for i in range(length) if all(data[key][i] is not None for key in 'tohlcv')]
+    return [OHLCV(*(float(data[key][i] or 0) for key in 'tohlcv')) for i in range(length) if all(data[key][i] is not None for key in 'tohlc')]
 
 def filter_ohlcv(data: Sequence[OHLCV], unix_from: float, unix_to: float) -> list[OHLCV]:
     data = sorted(data, key=lambda it: it.t)

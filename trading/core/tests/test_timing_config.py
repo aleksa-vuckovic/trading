@@ -3,10 +3,10 @@ from base import dates
 from base.serialization import serializer
 from trading.core import Interval
 from trading.core.securities import Exchange
-from trading.core.work_calendar import BasicWorkCalendar
+from trading.core.work_calendar import BasicWorkCalendar, WorkSchedule, Hours
 from trading.core.timing_config import BasicTimingConfig
 
-calendar = BasicWorkCalendar(tz=dates.ET, open_hour=9, open_minute=30, close_hour=16, semi_close_hour=16)
+calendar = BasicWorkCalendar(tz=dates.ET, work_schedule=WorkSchedule.Builder(Hours(9, 16, open_minute=30)).build())
 exchange = Exchange('XTST', 'Test Exchange', calendar)
 class TestBasicTimingConfig(unittest.TestCase):
     def test_timing_config_next(self):

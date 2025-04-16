@@ -2,15 +2,84 @@
 from __future__ import annotations
 import math
 import calendar
-from typing import overload, TypeVar, override
+from typing import Self, overload, TypeVar, override
 from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta
 from base.caching import Persistor, cached_series, MemoryPersistor
 from base import dates
+from base.types import equatable
 from trading.core import Interval
 
 
 T = TypeVar('T', datetime, float)
+
+def nudge(time: datetime) -> datetime:
+    if time == dates.to_zero(time): return time - timedelta(microseconds=1)
+    return time
+
+@equatable()
+class Hours:
+    def __init__(self, open_hour: int|None=None, close_hour: int= 0, *, open_minute: int = 0, close_minute: int = 0):
+        self.open_hour = open_hour or 0
+        self.close_hour = close_hour
+        self.open_minute = open_minute
+        self.close_minute = close_minute
+        for hour in [self.open_hour, self.close_hour]:
+            if hour < 0 or hour > 23: raise Exception(f"Hours must be 0-23 inclusive.")
+        for minute in [self.open_minute, self.close_minute]:
+            if minute < 0 or minute > 59: raise Exception(f"Minutes must be 0-59 inclusive")
+        if open_hour is None: self.open = None
+        else: self.open = open_hour*3600+open_minute*60
+        self.close = close_hour*3600+close_minute*60
+    def __contains__(self, time: datetime) -> bool:
+        if self.open is None: return False
+        daysecs = time.hour*3600+time.minute*60+time.second+time.microsecond/1000
+        if not daysecs: daysecs = 24*3600
+        return daysecs > self.open and daysecs <= (self.close or 24*3600)
+    def set_open(self, time: datetime) -> datetime:
+        if self.open is None: raise Exception(f"Can't set to open on closed hours.")
+        return nudge(time).replace(hour=self.open_hour, minute=self.open_minute)
+    def set_close(self, time: datetime) -> datetime:
+        if self.open is None: raise Exception(f"Can't set to close on closed hours.")
+        time = nudge(time)
+        if not self.close: return dates.to_zero(time + timedelta(days=1))
+        return time.replace(hour=self.close_hour, minute=self.close_minute)
+    def is_off(self) -> bool: return self.open is None
+
+class WorkSchedule:
+    def __init__(self, regular_hours: list[Hours], special_hours: dict[Hours, set[str]]):
+        assert len(regular_hours) == 7
+        self.regular_hours = regular_hours
+        self.special_hours = special_hours
+    def _format(self, time: datetime) -> str:
+        return time.strftime("%Y-%m-%d")
+    
+    class Builder:
+        special_hours: dict[Hours, set[str]]
+        def __init__(self, weekday: Hours, weekend: Hours = Hours()) -> None:
+            self.regular_hours = [*(weekday for _ in range(5)), *(weekend for _ in range(2))]
+            self.special_hours = {}
+        def weekly(self, day: int, hours: Hours) -> Self:
+            self.regular_hours[day] = hours
+            return self
+        def saturday(self, hours: Hours) -> Self: return self.weekly(5, hours)
+        def sunday(self, hours: Hours) -> Self: return self.weekly(6, hours)
+        def special(self, hours: Hours, *days: str) -> Self:
+            if hours not in self.special_hours: self.special_hours[hours] = set()
+            self.special_hours[hours].update(days)
+            return self
+        def off(self, *days: str) -> Self: return self.special(Hours(), *days)
+        def build(self) -> WorkSchedule: return WorkSchedule(self.regular_hours, self.special_hours)
+
+    def hours(self, time: datetime) -> Hours:
+        time = nudge(time)
+        t = self._format(time)
+        for hours, days in self.special_hours.items():
+            if t in days: return hours
+        return self.regular_hours[time.weekday()]
+    def is_off(self, time: datetime) -> bool: return self.hours(time).is_off()
+    def set_open(self, time: datetime) -> datetime: return self.hours(time).set_open(time)
+    def set_close(self, time: datetime) -> datetime: return self.hours(time).set_close(time)
 
 class WorkCalendar:
     """
@@ -45,14 +114,11 @@ class WorkCalendar:
         return dates.to_zero(time, tz=self.tz)
     def now(self) -> datetime:
         return dates.now(self.tz)
-    def nudge(self, time: datetime) -> datetime:
-        if time == dates.to_zero(time): return time - timedelta(microseconds=1)
-        return time
     #endregion
 
     #region Abstract
     # These are the methods that should be implemented in a derived class.
-    def _is_workday(self, time: datetime) -> bool:
+    def _is_off(self, time: datetime) -> bool:
         raise NotImplementedError()
     def _set_open(self, time: datetime) -> datetime:
         raise NotImplementedError()
@@ -65,9 +131,9 @@ class WorkCalendar:
     #endregion
 
     #region Utilities
-    def is_workday(self, time: T) -> bool:
-        if isinstance(time, datetime): return self._is_workday(time)
-        else: return self._is_workday(self.unix_to_datetime(time))
+    def is_off(self, time: T) -> bool:
+        if isinstance(time, datetime): return self._is_off(time)
+        else: return self._is_off(self.unix_to_datetime(time))
     def set_open(self, time: T) -> T:
         """
         Set to the opening hour of the given date.
@@ -96,7 +162,7 @@ class WorkCalendar:
         else: return self._get_next_timestamp(self.unix_to_datetime(time), interval).timestamp()
     def is_worktime(self, time: T) -> bool:
         if not isinstance(time, datetime): return self.is_worktime(self.unix_to_datetime(time))
-        if not self.is_workday(time): return False
+        if self.is_off(time): return False
         return time > self.set_open(time) and time <= self.set_close(time)
     def month_end(self, time: T) -> T:
         if not isinstance(time, datetime): return self.month_end(self.unix_to_datetime(time)).timestamp()
@@ -167,82 +233,30 @@ class WorkCalendar:
     def __eq__(self, other) -> bool:
         return isinstance(other, type(self))
 
-class HolidaySchedule:
-    """
-    Stores data about holidays, as a set of non working and semi working days.
-    Time zone independent.
-    """
-    off_days: set[str]
-    semi_days: set[str]
-    def __init__(self):
-        self.off_days = set()
-        self.semi_days = set()
-    def _format(self, time: datetime) -> str:
-        return time.strftime("%Y-%m-%d")
-    def add_off_day(self, time: datetime|str):
-        self.off_days.add(self._format(time) if isinstance(time, datetime) else time)
-    def add_off_days(self, *times: datetime|str):
-        for time in times: self.add_off_day(time)
-    def add_semi_day(self, time: datetime|str):
-        self.semi_days.add(self._format(time) if isinstance(time, datetime) else time)
-    def add_semi_days(self, *times: datetime|str):
-        for time in times: self.add_semi_day(time)
-    def is_off(self, time: datetime) -> bool:
-        return self._format(time) in self.off_days
-    def is_semi(self, time: datetime) -> bool:
-        return self._format(time) in self.semi_days
-
 class BasicWorkCalendar(WorkCalendar):
     def __init__(
         self,
         *,
         tz: ZoneInfo,
-        open_hour: int,
-        open_minute: int = 0,
-        close_hour: int,
-        close_minute: int = 0,
-        semi_close_hour: int|None = None,
-        semi_close_minute: int|None = None,
-        holidays: HolidaySchedule = HolidaySchedule()
+        work_schedule: WorkSchedule
     ):
         super().__init__(tz)
-        self.open_hour = open_hour
-        self.open_minute = open_minute
-        self.close_hour = close_hour
-        self.close_minute = close_minute
-        self.semi_close_hour = close_hour if semi_close_hour is None else semi_close_hour
-        self.semi_close_minute = close_minute if semi_close_minute is None else semi_close_minute
-        self.holidays = holidays
+        self.work_schedule = work_schedule
     
     #region Overrides
     @override
-    def _is_workday(self, time: datetime) -> bool:
-        time = self.nudge(time)
-        return time.weekday() < 5 and not self.holidays.is_off(time)
+    def _is_off(self, time: datetime) -> bool: return self.work_schedule.is_off(time)
     @override
-    def _set_open(self, time: datetime) -> datetime:
-        assert self.is_workday(time)
-        time = self.nudge(time)
-        return time.replace(hour=self.open_hour, minute=self.open_minute, second=0, microsecond=0)
+    def _set_open(self, time: datetime) -> datetime: return self.work_schedule.set_open(time)
     @override
-    def _set_close(self, time: datetime) -> datetime:
-        assert self.is_workday(time)
-        time = self.nudge(time)
-        if self.holidays.is_semi(time):
-            close_hour = self.semi_close_hour
-            close_minute = self.semi_close_minute
-        else:
-            close_hour = self.close_hour
-            close_minute = self.close_minute
-        if close_hour == 0 and close_minute == 0: return dates.to_zero(time + timedelta(days=1))
-        return time.replace(hour=close_hour, minute=close_minute, second=0, microsecond=0)
+    def _set_close(self, time: datetime) -> datetime: return self.work_schedule.set_close(time)
     @override
     def _is_timestamp(self, time: datetime, interval: Interval) -> bool:
         if interval == Interval.L1: return time == self.month_end(time)
         if interval == Interval.W1: return time == self.week_end(time)
 
         if interval not in {Interval.D1, Interval.H1, Interval.M30, Interval.M15, Interval.M5, Interval.M1}: raise Exception(f"Unknown interval {interval}.")
-        if not self.is_workday(time): return False
+        if self.is_off(time): return False
         if interval == Interval.D1: return time == self.to_zero(time)
         start = self.to_zero(time).timestamp()
         it = math.floor((time.timestamp()-start)/interval.time())
@@ -262,18 +276,18 @@ class BasicWorkCalendar(WorkCalendar):
             else: return self.week_end(time + timedelta(days=1))
         if interval == Interval.D1:
             timestamp = self.to_zero(time + timedelta(days=1))
-            while not self.is_workday(timestamp): timestamp += timedelta(days=1)
+            while self.is_off(timestamp): timestamp += timedelta(days=1)
             return timestamp
         if interval not in {Interval.H1, Interval.M30, Interval.M15, Interval.M5, Interval.M1}: raise Exception(f"Unknown interval {interval}.")
         #Intraday intervals
-        if self.is_workday(time):
+        if not self.is_off(time):
             start = self.to_zero(time).timestamp()
             it = math.floor((time.timestamp()-start)/interval.time())+1
             first = math.floor((self.set_open(time).timestamp()-start)/interval.time())
             last = math.ceil((self.set_close(time).timestamp()-start)/interval.time())
             if it > first and it <= last: return self.unix_to_datetime(start + it*interval.time())
             if it > last: time += timedelta(days=1)
-        while not self.is_workday(time): time += timedelta(days=1)
+        while self.is_off(time): time += timedelta(days=1)
         start = self.to_zero(time).timestamp()
         first = math.floor((self.set_open(time).timestamp()-start)/interval.time())
         return self.unix_to_datetime(start + (first+1)*interval.time())

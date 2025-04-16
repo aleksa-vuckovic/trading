@@ -4,10 +4,10 @@ from base import dates
 from trading.core.pricing import OHLCV, PricingProvider, merge_pricing
 from trading.core import Interval
 from trading.core.securities import Exchange, Security, SecurityType
-from trading.core.work_calendar import BasicWorkCalendar
+from trading.core.work_calendar import BasicWorkCalendar, Hours, WorkSchedule
 import time
 
-calendar = BasicWorkCalendar(tz=dates.ET, open_hour=9, open_minute=30, close_hour=16, semi_close_hour=16)
+calendar = BasicWorkCalendar(tz=dates.ET, work_schedule=WorkSchedule.Builder(Hours(9, 16, open_minute=30)).build())
 exchange = Exchange('XNAS', 'Nasdaq', calendar)
 class MockSecurity(Security):
     def __init__(self):

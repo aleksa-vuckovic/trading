@@ -37,9 +37,9 @@ def configure_logging(console: bool = False, name: str = "main"):
     yahoo = logging.getLogger("trading.providers.yahoo")
     yahoo.propagate = False
     yahoo.addHandler(file_handlers["yahoo"])
-    nasdaq = logging.getLogger("trading.providers.nasdaq")
-    nasdaq.propagate = False
-    nasdaq.addHandler(logging.NullHandler())
+    #nasdaq = logging.getLogger("trading.providers.nasdaq")
+    #nasdaq.propagate = False
+    #nasdaq.addHandler(logging.NullHandler())
     models = logging.getLogger("trading.models")
     models.propagate = False
     models.addHandler(file_handlers["models"])

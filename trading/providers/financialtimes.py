@@ -117,7 +117,7 @@ class FinancialTimes(BasePricingProvider):
                 if utc != dates.to_zero(utc): skip(it)
                 else:
                     time = utc.replace(tzinfo=calendar.tz).timestamp()+1
-                    if not calendar.is_workday(time): skip(it)
+                    if calendar.is_off(time): skip(it)
                     else: result.append(calendar.get_next_timestamp(time, Interval.D1))
             else:
                 if not security.exchange.calendar.is_timestamp(it, interval): skip(it)

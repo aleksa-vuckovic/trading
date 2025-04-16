@@ -7,7 +7,8 @@ from base.serialization import serializable_singleton
 from base.types import Serializable
 from base import dates
 from trading.core.securities import Security, Exchange, SecurityType
-from trading.core.work_calendar import BasicWorkCalendar
+from trading.core.work_calendar import BasicWorkCalendar, Hours
+from trading.providers.nasdaq import WorkSchedule
 
 class ForexSecurity(Security):
     class Subtype(Enum):
@@ -27,7 +28,10 @@ class ForexSecurity(Security):
 class ForexWorkCalendar(BasicWorkCalendar, Serializable):
     instance: ForexWorkCalendar
     def __init__(self):
-        super().__init__(tz=dates.UTC, open_hour=0, close_hour=0)
+        super().__init__(
+            tz=dates.UTC,
+            work_schedule=WorkSchedule.Builder(Hours(0,0)).build()
+        )
 ForexWorkCalendar.instance = ForexWorkCalendar()
 
 class Forex(Exchange):
