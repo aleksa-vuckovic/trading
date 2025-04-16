@@ -6,7 +6,7 @@ class TestUtils(unittest.TestCase):
 
     def test_arrays_to_ohlcv(self):
         input = {'t': [None,2,3,4,5],'o':[5,5,1,5,None],'h':[9,9,9,9,9],'l':[1,-1,2,1,1],'c':[5,5,5,5,5],'v':[2,None,2,0,2]}
-        expect = [OHLCV(3,1,9,2,5,2),OHLCV(4,5,9,1,5,0)]
+        expect = [OHLCV(2,5,9,1,5,0),OHLCV(3,1,9,2,5,2),OHLCV(4,5,9,1,5,0)]
         result = arrays_to_ohlcv(input)
         self.assertEqual(expect, result)
 
