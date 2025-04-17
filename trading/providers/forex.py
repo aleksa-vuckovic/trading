@@ -3,9 +3,11 @@ from __future__ import annotations
 from enum import Enum, auto
 from functools import cached_property
 from typing import Sequence, override
+from datetime import datetime, timedelta
 from base.serialization import serializable_singleton
 from base.types import Serializable
 from base import dates
+from trading.core.interval import Interval
 from trading.core.securities import Security, Exchange, SecurityType
 from trading.core.work_calendar import BasicWorkCalendar, Hours
 from trading.providers.nasdaq import WorkSchedule
@@ -30,8 +32,19 @@ class ForexWorkCalendar(BasicWorkCalendar, Serializable):
     def __init__(self):
         super().__init__(
             tz=dates.UTC,
-            work_schedule=WorkSchedule.Builder(Hours(0,0)).build()
+            work_schedule=WorkSchedule.Builder(Hours(0,0)).sunday(Hours(20,0)).build()
         )
+    @override
+    def _is_timestamp(self, time: datetime, interval: Interval) -> bool:
+        if interval == Interval.D1: return dates.to_zero(time) == time and time.weekday() in range(1,6)
+        return super()._is_timestamp(time, interval)
+    @override
+    def _get_next_timestamp(self, time: dates.datetime, interval: Interval) -> dates.datetime:
+        if interval == Interval.D1:
+            timestamp = self.to_zero(time + timedelta(days=1))
+            while timestamp.weekday() not in range(1,6): timestamp += timedelta(days=1)
+            return timestamp
+        return super()._get_next_timestamp(time, interval)
 ForexWorkCalendar.instance = ForexWorkCalendar()
 
 class Forex(Exchange):
