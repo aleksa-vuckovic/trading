@@ -12,6 +12,9 @@ datetime.replace just sets the timezone, keeping the date components
 ET =  ZoneInfo('US/Eastern')
 UTC = ZoneInfo('UTC')
 CET = ZoneInfo('CET')
+SYDNEY = ZoneInfo("Australia/Sydney")
+TOKYO = ZoneInfo("Asia/Tokyo")
+LONDON = ZoneInfo("Europe/London")
 
 DEFAULT_FORMAT = "%Y-%m-%d %H:%M:%S"
 def str_to_datetime(time_string: str, format: str = DEFAULT_FORMAT, tz=UTC) -> datetime:

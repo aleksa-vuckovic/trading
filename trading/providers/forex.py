@@ -83,5 +83,44 @@ class Forex(Exchange):
             ]
         ]
         return [*majors, *minors]
-        
 Forex.instance = Forex()
+
+@serializable_singleton
+class SydneyForexWorkCalendar(BasicWorkCalendar, Serializable):
+    instance: SydneyForexWorkCalendar
+    def __init__(self):
+        super().__init__(
+            tz = dates.SYDNEY,
+            work_schedule=WorkSchedule.Builder(Hours(7, 16)).build()
+        )
+SydneyForexWorkCalendar.instance = SydneyForexWorkCalendar()
+
+@serializable_singleton
+class TokyoForexWorkCalendar(BasicWorkCalendar, Serializable):
+    instance: TokyoForexWorkCalendar
+    def __init__(self):
+        super().__init__(
+            tz = dates.TOKYO,
+            work_schedule=WorkSchedule.Builder(Hours(9, 18)).build()
+        )
+TokyoForexWorkCalendar.instance = TokyoForexWorkCalendar()
+
+@serializable_singleton
+class LondonForexWorkCalendar(BasicWorkCalendar, Serializable):
+    instance: LondonForexWorkCalendar
+    def __init__(self):
+        super().__init__(
+            tz = dates.LONDON,
+            work_schedule=WorkSchedule.Builder(Hours(8, 17)).build()
+        )
+LondonForexWorkCalendar.instance = LondonForexWorkCalendar()
+
+@serializable_singleton
+class NewYorkForexWorkCalendar(BasicWorkCalendar, Serializable):
+    instance: NewYorkForexWorkCalendar
+    def __init__(self):
+        super().__init__(
+            tz = dates.ET,
+            work_schedule=WorkSchedule.Builder(Hours(8, 17)).build()
+        )
+NewYorkForexWorkCalendar.instance = NewYorkForexWorkCalendar()
