@@ -11,7 +11,7 @@ from trading.models.base.tensors import get_moving_average, get_time_relativized
 class ModelConfig(BaseModelConfig):
     def __init__(
         self,
-        exchanges: list[Exchange],
+        exchanges: tuple[Exchange],
         estimator: PriceEstimator,
         target:  PriceTarget,
         timing: TimingConfig,

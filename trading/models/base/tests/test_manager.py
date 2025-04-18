@@ -21,7 +21,7 @@ class CountCollector(StatCollector):
         return torch.tensor(self.i, dtype=torch.float32)
 
 config = BaseModelConfig(
-    [Nasdaq.instance],
+    (Nasdaq.instance,),
     PricingDataConfig({Interval.H1: 10}),
     PriceEstimator(BarValues.C, Interval.H1, slice(1,2), Aggregation.AVG),
     PriceTarget.LINEAR_0_10,
@@ -85,21 +85,21 @@ class TestManager(unittest.TestCase):
         ModelManager.delete_all(Model)
     def test_model_config_storage(self):
         config1 = BaseModelConfig(
-            [Nasdaq.instance],
+            (Nasdaq.instance,),
             PricingDataConfig({Interval.H1: 10, Interval.D1: 100}),
             PriceEstimator(BarValues.C, Interval.H1, slice(1,2), Aggregation.AVG),
             PriceTarget.LINEAR_0_10,
             BasicTimingConfig.Builder().around(11, delta_minute=30).build()
         )
         config2 = BaseModelConfig(
-            [Nasdaq.instance],
+            (Nasdaq.instance,),
             PricingDataConfig({Interval.H1: 12, Interval.D1: 100}),
             PriceEstimator(BarValues.C, Interval.H1, slice(1,2), Aggregation.AVG),
             PriceTarget.TANH_10_10,
             BasicTimingConfig.Builder().around(11, delta_minute=30).build()
         )
         config1_copy = BaseModelConfig(
-            [Nasdaq.instance],
+            (Nasdaq.instance,),
             PricingDataConfig({Interval.H1: 10, Interval.D1: 100}),
             PriceEstimator(BarValues.C, Interval.H1, slice(1,2), Aggregation.AVG),
             PriceTarget.LINEAR_0_10,

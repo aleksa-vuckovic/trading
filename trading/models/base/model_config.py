@@ -188,7 +188,7 @@ class PricingDataConfig(Serializable):
 class BaseModelConfig(Serializable):
     def __init__(
         self,
-        exchanges: list[Exchange],
+        exchanges: tuple[Exchange],
         pricing_data_config: PricingDataConfig,
         price_estimator: PriceEstimator,
         price_target:  PriceTarget,
