@@ -20,6 +20,7 @@ class NotCachedError(Exception):
 class Persistor:
     """
     Key value storage provider.
+    The key can be any string.
     """
     def persist(self, key: str, data: object):
         raise NotImplementedError()
@@ -58,8 +59,7 @@ class FilePersistor(Persistor):
         self.serializer = serializer
     def _get_path(self, key: str) -> Path:
         path = self.root
-        if key:
-            for segment in key.split("/"): path/=escape_filename(segment)
+        for segment in key.split("/"): path/=escape_filename(segment)
         return path
     @override
     def persist(self, key: str, data: object):
@@ -78,7 +78,6 @@ class FilePersistor(Persistor):
     @override
     def keys(self):
         if not self.root.exists(): return
-        if self.root.is_file(): yield ""
         for folder, _, files in os.walk(self.root):
             folder = Path(folder)
             for file in files:
@@ -87,6 +86,7 @@ class FilePersistor(Persistor):
 
 class SqlitePersistor(Persistor):
     def __init__(self, db_path: Path, table: str, serializer: Serializer = TypedSerializer()):
+        db_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(db_path, isolation_level=None)
         self.table = table
         self.serializer = serializer
@@ -237,10 +237,14 @@ def cached_series(
     return decorate
 
 P = ParamSpec('P')
+class CachedScalarData(TypedDict):
+    data: Any
+    unix_time: float
 def cached_scalar(
     *,
     key_fn: Callable[P, str],
-    persistor_fn: Persistor|Callable[P,Persistor]
+    persistor_fn: Persistor|Callable[P,Persistor],
+    refresh_after: float|None = None
 ) -> Callable[[Callable[P, T]], Callable[P, T]]:
     get_key: Callable[P, str] = key_fn
     get_persistor: Callable[P, Persistor] = persistor_fn if callable(persistor_fn) else lambda *args, **kwargs: persistor_fn
@@ -248,11 +252,16 @@ def cached_scalar(
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
             key = get_key(*args, **kwargs)
             persistor = get_persistor(*args, **kwargs)
+            data: CachedScalarData
             try:
-                return persistor.read(key)
-            except:
+                data = persistor.read(key)
+                if refresh_after is not None and data['unix_time'] + refresh_after < time.time():
+                    raise NotCachedError()
+                return data['data']
+            except NotCachedError:
                 result = func(*args, **kwargs)
-                persistor.persist(key, result)
-            return result
+                data = {'data': result, 'unix_time': time.time()}
+                persistor.persist(key, data)
+                return result
         return wrapper
     return decorate

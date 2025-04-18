@@ -1,3 +1,4 @@
+from lib2to3.fixes.fix_operator import invocation
 import unittest
 import time
 import shutil
@@ -6,8 +7,17 @@ import math
 from typing import Any
 from enum import Enum
 from pathlib import Path
-from base.caching import cached_scalar, cached_series, FilePersistor, SqlitePersistor, Persistor, MetaDict
+from base.caching import MemoryPersistor, cached_scalar, cached_series, FilePersistor, SqlitePersistor, Persistor, MetaDict
 from base.serialization import serializer
+from base.types import Serializable, equatable, serializable
+
+@serializable()
+@equatable()
+class A(Serializable):
+    def __init__(self, a: str, b: float):
+        self.a = a
+        self.b = b
+    def __repr__(self) -> str: return f"A(a='{self.a}',b={self.b:.3f})"
 
 TEST_DATA = Path("./test_data")
 class TestCaching(unittest.TestCase):
@@ -16,7 +26,7 @@ class TestCaching(unittest.TestCase):
             if TEST_DATA.is_file(): TEST_DATA.unlink()
             else: shutil.rmtree(TEST_DATA)
     def make_files(self):
-        TEST_DATA.mkdir(parents=True, exist_ok=True)
+        TEST_DATA.mkdir(parents=True, exist_ok=False)
     def setUp(self):
         super().setUp()
         self.drop_files()
@@ -158,6 +168,7 @@ class TestCaching(unittest.TestCase):
     def test_cached_series_decorator_live_delay(self):
         time_step = 24*3600
         now = time.time()
+        persistor = MemoryPersistor()
         class Provider:
             @staticmethod
             def get_series_timestamp_fn(it: dict): return it['time']
@@ -165,7 +176,7 @@ class TestCaching(unittest.TestCase):
             @cached_series(
                 timestamp_fn=get_series_timestamp_fn,
                 key_fn=get_series_key_fn,
-                persistor_fn=FilePersistor(TEST_DATA),
+                persistor_fn=persistor,
                 time_step_fn= time_step,
                 live_delay_fn=2,
                 should_refresh_fn=0
@@ -180,7 +191,7 @@ class TestCaching(unittest.TestCase):
         unix_to = now
         test1 = provider.get_series(unix_from, unix_to)
         metapath = TEST_DATA / MetaDict.__name__
-        meta: MetaDict = serializer.deserialize(metapath.read_text())
+        meta: MetaDict = persistor.data[f"/{MetaDict.__name__}"]
         self.assertLess(meta['live_fetch'] or now, now-1) 
         self.assertEqual(0, len(test1))
         time.sleep(1.1)
@@ -198,7 +209,7 @@ class TestCaching(unittest.TestCase):
             @cached_series(
                 timestamp_fn=get_series_timestamp_fn,
                 key_fn=get_series_key_fn,
-                persistor_fn=FilePersistor(TEST_DATA),
+                persistor_fn=MemoryPersistor(),
                 time_step_fn= 1000,
                 live_delay_fn=0,
                 should_refresh_fn=get_series_refresh_fn
@@ -221,7 +232,7 @@ class TestCaching(unittest.TestCase):
         self.assertEqual(2, invocations)
         self.assertEqual(3, len(test))    
 
-    def test_cache_scalar_decorator(self):
+    def test_cached_scalar_decorator(self):
         invocations = 0
         class Test(Enum):
             A = 'aa'
@@ -247,3 +258,31 @@ class TestCaching(unittest.TestCase):
         )
         def get_scalar2(name: str) -> str: return name
         self.assertEqual('test', get_scalar2('test'))
+    
+    def test_cached_scalar_decorator_refresh(self):        
+        invocations = 0
+        def key_fn(a: str) -> str: return a
+        @cached_scalar(
+            key_fn=key_fn,
+            persistor_fn=FilePersistor(TEST_DATA),
+            refresh_after=0.1
+        )
+        def get_data(a: str) -> A:
+            nonlocal invocations
+            invocations += 1
+            return A(a, time.time())
+        
+        data1 = get_data("a")
+        time.sleep(0.05)
+        data2 = get_data("a")
+        self.assertEqual(data1, data2)
+        time.sleep(0.05)
+        data2 = get_data("a")
+        self.assertNotEqual(data1, data2)
+        self.assertGreater(data2.b, data1.b)
+        data2 = get_data("b") and get_data("b")
+        self.assertNotEqual(data1, data2)
+        self.assertEqual(invocations, 3)
+        
+        
+            

@@ -8,6 +8,7 @@ if os.name == "nt":
         *{f"LPT{i}" for i in range(1, 10)}
     }
     def escape_filename(name: str) -> str:
+        if not name: return "[[]]"
         if name.upper() in reserved_filenames: return f"[[{name}]]"
         return name
     def unescape_filename(name: str) -> str:
