@@ -95,7 +95,7 @@ class Yahoo(BasePricingProvider, DataProvider):
                 if isinstance(security, ForexSecurity):
                     date = security.exchange.calendar.unix_to_datetime(it)
                     if date.hour != 23 and date.hour != 0: skip(it)
-                    result.append(security.exchange.calendar.get_next_timestamp(it + 3600, interval))
+                    else: result.append(security.exchange.calendar.get_next_timestamp(it + 3600, interval))
                 else:
                     if it != security.exchange.calendar.set_open(it): skip(it)
                     else: result.append(security.exchange.calendar.get_next_timestamp(it - 1, interval))
