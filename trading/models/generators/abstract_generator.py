@@ -31,7 +31,7 @@ class AbstractGenerator:
         time_frame = self.get_time_frame(exchange)
         interval = self.get_interval()
         batch_size = self.get_batch_size()
-        securities: list[Security] = [it for it in exchange.securities if it.type == SecurityType.STOCK]
+        securities: list[Security] = [it for it in exchange.securities() if it.type == SecurityType.STOCK]
         securities.sort(key = lambda it: it.symbol)
         security_time_frame = {it:self.get_time_frame(it) for it in securities}
         persistor = SqlitePersistor(folder/AbstractGenerator.STATE_FILE, exchange.mic)

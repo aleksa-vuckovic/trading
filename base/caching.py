@@ -242,8 +242,8 @@ class CachedScalarData(TypedDict):
     unix_time: float
 def cached_scalar(
     *,
-    key_fn: Callable[P, str],
-    persistor_fn: Persistor|Callable[P,Persistor],
+    key_fn: Callable[P, str] = lambda *args, **kwargs: "",
+    persistor_fn: Persistor|Callable[P,Persistor] = MemoryPersistor(),
     refresh_after: float|None = None
 ) -> Callable[[Callable[P, T]], Callable[P, T]]:
     get_key: Callable[P, str] = key_fn

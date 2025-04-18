@@ -19,11 +19,10 @@ class Exchange(Serializable):
         self.name = name
         self.calendar = calendar
     
-    @cached_property
     def securities(self) -> Sequence[Security]: ...
     
     def get_security(self, symbol: str) -> Security:
-        sec = [it for it in self.securities if it.symbol == symbol]
+        sec = [it for it in self.securities() if it.symbol == symbol]
         return sec[0]
     
     _exchanges: dict[str, Exchange]|None = None

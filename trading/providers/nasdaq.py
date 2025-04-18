@@ -1,6 +1,5 @@
 #1
 from __future__ import annotations
-from functools import cached_property
 import logging
 import re
 from typing import Sequence, override
@@ -68,8 +67,8 @@ class Nasdaq(Exchange):
         response = scraper.get("https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt")
         return response.text.splitlines(False)
 
-    @cached_property
     @override
+    @cached_scalar()
     def securities(self) -> Sequence[NasdaqSecurity]:
         result: list[NasdaqSecurity] = []
         tests = 0

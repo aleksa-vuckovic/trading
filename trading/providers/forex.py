@@ -1,9 +1,9 @@
 #1
 from __future__ import annotations
 from enum import Enum, auto
-from functools import cached_property
 from typing import Sequence, override
 from datetime import datetime, timedelta
+from base.caching import cached_scalar
 from base.serialization import serializable_singleton
 from base.types import Serializable
 from base import dates
@@ -52,8 +52,8 @@ class Forex(Exchange):
     def __init__(self):
         super().__init__('XFX', 'Forex Exchange', ForexWorkCalendar.instance)
 
-    @cached_property
     @override
+    @cached_scalar()
     def securities(self) -> Sequence[ForexSecurity]:
         majors = [
             ForexSecurity(base, quote, ForexSecurity.Subtype.MAJOR) for base,quote in [

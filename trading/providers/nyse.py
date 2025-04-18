@@ -1,7 +1,5 @@
-
-
-from functools import cached_property
 from typing import Sequence, override
+from base.caching import cached_scalar
 from trading.core.securities import Exchange, Security
 
 
@@ -10,8 +8,8 @@ class NYSESecurity(Security):
 
 class NYSE(Exchange):
     
-    @cached_property
     @override
+    @cached_scalar()
     def securities(self) -> Sequence[NYSESecurity]:
         return []
     
