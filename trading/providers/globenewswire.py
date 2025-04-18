@@ -19,13 +19,7 @@ def _format_for_url(input: str) -> str:
     return parse.quote(input)
 
 class GlobeNewswireNews(News):
-    def __init__(self, time: float, title: str, url: str, preview: str):
-        try:
-            content = scraper.get(url).text
-            self.error = None
-        except Exception as e:
-            content = preview
-            self.error = str(e)
+    def __init__(self, time: float, title: str, content: str, url: str, preview: str):
         super().__init__(time, title, content)
         self.url = url
         self.preview = preview
@@ -59,25 +53,25 @@ class GlobeNewswire(BaseNewsProvider):
                 resp = scraper.get(url, params={'pageSize': 50})
             
             soup = BeautifulSoup(resp.text, 'html.parser')
-            divs = soup.find_all("div", class_="pagging-list-item-text-container")
+            divs = soup.find_all("div", class_="newsLink")
             for div in divs:
-                time_span = div.find("span", class_="pagging-list-item-text-date")
-                title_link_a = div.find('a', {'data-section': 'article-url'})
-                preview_span = div.find("span", class_="pagging-list-item-text-body")
-                if time_span and title_link_a:
+                try:
+                    time_span = div.select_one("div.date-source > span")
+                    title_link_a = div.select_one("div.mainLink > a")
+                    preview_span = div.select_one("div.newsTxt > p")
                     unix_time = Nasdaq.instance.calendar.str_to_unix(time_span.text.strip(), format="%B %d, %Y %H:%M ET")
+                    preview = preview_span.text.strip()
                     title = title_link_a.text
-                    link = title_link_a['href']
-                    link = f"{_BASE_URL}{link}" if link and link.startswith("/") else link
-                    preview = preview_span.text.strip() if preview_span else ""
-                    result.append(GlobeNewswireNews(unix_time, title, link, preview))
-                else:
-                    logger.error(f"Failed to parse div:\n{div.decode_contents()}")
-            next_div = soup.find('div', class_="pagnition-next")
-            if next_div and next_div.find('a'):
-                page += 1
-            else:
-                break
+                    link: str = title_link_a['href']
+                    link = f"{_BASE_URL}{link}" if link.startswith("/") else f"{_BASE_URL}/{link}"
+                    article = BeautifulSoup(scraper.get(link).text, "html.parser")
+                    article = article.select_one("div.article-body") or article.select_one("div.main-body-container") or article.select_one("body")
+                    assert article
+                    result.append(GlobeNewswireNews(unix_time, title, article.text, link, preview))
+                except:
+                    logger.error(f"Failed to parse div:\n{div.decode_contents()}", exc_info=True)
+            if soup.select_one('div.pagnition-next > a'): page += 1
+            else: break
         return result
     def _get_org(self, security: Security) -> str:
         try:
