@@ -7,7 +7,7 @@ from trading.core.securities import Exchange
 from trading.core.work_calendar import WorkCalendar, BasicWorkCalendar, WorkSchedule, Hours
 
 calendar = BasicWorkCalendar(tz=dates.ET, work_schedule=WorkSchedule.Builder(Hours(9, 16, open_minute=30)).build())
-exchange = Exchange('XTST', 'Test Exchange', calendar)
+exchange = Exchange('XTST', 'XTST', 'XTST', 'Test', calendar)
 
 class TestBasicWorkCalendar(unittest.TestCase):
     def test_add_intervals(self):

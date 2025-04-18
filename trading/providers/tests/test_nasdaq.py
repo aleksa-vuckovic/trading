@@ -2,7 +2,7 @@ from typing import override
 import unittest
 from base.serialization import serializer
 from trading.core.securities import Exchange, SecurityType
-from trading.providers import NasdaqSecurity, NasdaqMarket, Nasdaq
+from trading.providers.nasdaq import NasdaqSecurity, Nasdaq, NasdaqGS
 from trading.core.interval import Interval
 from trading.core.work_calendar import WorkCalendar
 from trading.core.tests.test_work_calendar import TestCalendar
@@ -14,11 +14,11 @@ class TestNasdaq(unittest.TestCase):
         abblw = NasdaqSecurity.from_line('ABLLW|Abacus Life, Inc. - Warrant|S|N|N|100|N|N')
         self.assertEqual('NVDA', nvda.symbol)
         self.assertEqual('NVIDIA Corporation - Common Stock', nvda.name)
-        self.assertEqual(NasdaqMarket.SELECT, nvda.market)
+        self.assertIs(NasdaqGS.instance, nvda.exchange)
         self.assertEqual(SecurityType.STOCK, nvda.type)
         self.assertEqual(SecurityType.ETF, nusi.type)
         self.assertEqual(SecurityType.WARRANT, abblw.type)
-        self.assertIs(Nasdaq.instance, nvda.exchange)
+        self.assertIs(NasdaqGS.instance, nvda.exchange)
 
     def test_serialization(self):
         serialized = serializer.serialize(Nasdaq.instance)

@@ -17,7 +17,7 @@ from matplotlib.gridspec import GridSpec
 from base import dates
 from base import text
 from base.types import ClassDict
-from base.serialization import serializable, Serializable, serializer
+from base.serialization import Serializable, serializer
 from base import plotutils
 from trading.core.timing_config import TimingConfig
 from trading.core import Interval
@@ -32,14 +32,12 @@ logger = logging.getLogger()
 FOLDER = Path(__file__).parent / 'backtests'
 if not FOLDER.exists(): FOLDER.mkdir()
 
-@serializable()
 class Result(Serializable):
     def __init__(self, security: Security, output: float):
         self.security = security
         self.output = output
         self.data = {}
 
-@serializable()
 class Selector(Serializable):
     results: list[Result]
     def __init__(self, top_count:int = 10):
@@ -90,7 +88,6 @@ class FirstTradeTimeSelector(Selector):
     def get_selected(self):
         return sorted(self.results[:self.top_count], key=lambda it: it.data[FirstTradeTimeSelector.KEY])
 
-@serializable()
 class BacktestFrame(Serializable, ClassDict[float]):
     def __init__(self, win: float, total_win: float, real_win: float, total_real_win: float):
         self.win = win
@@ -106,7 +103,6 @@ class BacktestFrame(Serializable, ClassDict[float]):
         total_real_win = prev.total_real_win*real_win if prev else real_win
         return BacktestFrame(win, total_win, real_win, total_real_win)
 
-@serializable()
 class BacktestResult(Serializable):
     def __init__(
         self,

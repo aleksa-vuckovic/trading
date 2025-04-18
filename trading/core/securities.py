@@ -1,21 +1,23 @@
 #1
 from __future__ import annotations
-from functools import cached_property
 from typing import Sequence
 from enum import Enum, auto
 from base.reflection import get_classes
-from base.serialization import Serializable, serializable_singleton
+from base.types import Singleton
 from trading.core.work_calendar import WorkCalendar
 
-@serializable_singleton
-class Exchange(Serializable):
+class Exchange(Singleton):
     def __init__(
         self,
-        mic: str,
+        mic: str, # The 'primary' mic, which might be be the segment_mic (e.g. NYSE) or operating_mic (e.g. NASDAQ)
+        segment_mic: str,
+        operating_mic: str,
         name: str,
         calendar: WorkCalendar
     ):
         self.mic = mic
+        self.segment_mic = segment_mic
+        self.operating_mic = operating_mic
         self.name = name
         self.calendar = calendar
     
@@ -54,15 +56,13 @@ class Security:
         self,
         symbol: str,
         name: str, # Full name, e.g. Company XYZ Inc. - Class A Common Shares
-        type: SecurityType
+        type: SecurityType,
+        exchange: Exchange
     ):
         self.symbol = symbol
         self.name = name
         self.type = type
-    
-    @property
-    def exchange(self) -> Exchange:
-        raise NotImplementedError()
+        self.exchange = exchange
 
 class DataProvider:
     """

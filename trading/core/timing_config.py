@@ -2,16 +2,14 @@
 from __future__ import annotations
 from typing import TypeVar, override
 from datetime import datetime
-from base.serialization import Serializable, serializable
-from base.types import equatable
+from base.serialization import Serializable
+from base.types import Equatable
 from trading.core import Interval
 from trading.core.securities import Exchange
 
 T = TypeVar('T', float, datetime)
 
-@serializable()
-@equatable()
-class TimingConfig(Serializable):
+class TimingConfig(Equatable, Serializable):
     def matches(self, time: float|datetime, exchange: Exchange) -> bool: ...
     def next(self, time: T,interval: Interval, exchange: Exchange) -> T:
         if not isinstance(time, datetime):

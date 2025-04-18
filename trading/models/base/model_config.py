@@ -3,13 +3,14 @@ from __future__ import annotations
 from functools import cached_property
 import logging
 import torch
-from typing import overload, Iterable, Iterator, override
+from typing import overload, Iterable, override
 from torch import Tensor
 from enum import Enum, auto
 from matplotlib import pyplot as plt
 
-from base.serialization import serializable, Serializable, serializer, json_type
-from base.types import ReadonlyDict, equatable
+from base.reflection import transient
+from base.serialization import Serializable, serializer, json_type
+from base.types import ReadonlyDict, Equatable
 from trading.core import Interval
 from trading.core.timing_config import TimingConfig
 from trading.core.securities import Exchange, Security
@@ -47,9 +48,7 @@ class Aggregation(Enum):
         if self==Aggregation.MIN: return data.min(dim=dim).values
         raise Exception(f"Unknown aggregation {self}")
 
-@serializable()
-@equatable()
-class PriceEstimator(Serializable):
+class PriceEstimator(Equatable, Serializable):
     """
     Estimates the sell price within a timeframe,
     in a way defined by the parameters.
@@ -149,9 +148,8 @@ class PriceTarget(Enum):
         [plt.figure(it).tight_layout() for it in plt.get_fignums()]
         plt.show()
 
-@serializable(include_keys=['_counts'])
-@equatable(include_keys=['_counts'])
-class PricingDataConfig(Serializable):
+@transient('intervals', 'min_interval', 'max_interval', 'min_interval_count', 'max_interval_count')
+class PricingDataConfig(Equatable, Serializable):
     def __init__(self, counts: dict[Interval, int]):
         self.counts = ReadonlyDict(counts)
 
@@ -175,17 +173,8 @@ class PricingDataConfig(Serializable):
         if isinstance(key, str) and any(it for it in Interval if it.name == key):
             return self.counts[Interval[key]]
         raise IndexError(f"Key {key} does not exist in this DataConfig.")
-    
-    @override
-    def to_json(self) -> dict: return {'pricing': {key.name: value for key,value in self.counts.items()}}
-    @staticmethod
-    def from_json(data: json_type) -> PricingDataConfig:
-        assert isinstance(data, dict)
-        return PricingDataConfig({Interval[key]: data['pricing'][key] for key in data['pricing']})
 
-@serializable()
-@equatable()
-class BaseModelConfig(Serializable):
+class BaseModelConfig(Equatable, Serializable):
     def __init__(
         self,
         exchanges: tuple[Exchange],

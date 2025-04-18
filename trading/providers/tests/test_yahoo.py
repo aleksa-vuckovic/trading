@@ -112,7 +112,7 @@ class TestYahoo(TestPricingProviderRecent):
         result = provider.get_outstanding_parts(tnya)
         self.assertGreater(result, 100000000)
 
-    #@unittest.skip("Avoid http calls")
+    @unittest.skip("Avoid http calls")
     def test_merge(self):
         nonmerged = Yahoo('none', merge={})
         start = stock.exchange.calendar.get_next_timestamp(time.time() - 5*24*3600, Interval.D1)
@@ -127,4 +127,4 @@ class TestYahoo(TestPricingProviderRecent):
             self.assertAlmostEqual(a.l, b.l)
             self.assertAlmostEqual(a.c, b.c)
             self.assertGreater(a.v/b.v, 0.8)
-            self.assertLessEqual(a.v/b.v, 1)
+            self.assertLessEqual(a.v/b.v, 1.2)

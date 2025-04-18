@@ -1,10 +1,9 @@
 #2
 from typing import Sequence, override
 from base.caching import cached_series, Persistor
-from base.serialization import serializable, Serializable
+from base.serialization import Serializable
 from trading.core.securities import Security
 
-@serializable()
 class News(Serializable):
     def __init__(self, time: float, title: str, content: str):
         self.time = time

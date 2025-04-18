@@ -3,15 +3,13 @@ from __future__ import annotations
 import math
 from typing import Iterable, Mapping, Sequence, override
 from base.algos import interpolate
-from base.types import equatable
-from base.serialization import serializable, Serializable
+from base.types import Equatable
+from base.serialization import Serializable
 from base.caching import cached_series, Persistor
 from trading.core import Interval
 from trading.core.securities import Security
 
-@serializable()
-@equatable()
-class OHLCV(Serializable):
+class OHLCV(Equatable, Serializable):
     def __init__(self, t: float, o: float, h: float, l: float, c: float, v: float):
         self.t = t
         self.o = o

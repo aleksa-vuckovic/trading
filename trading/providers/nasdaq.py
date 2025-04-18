@@ -5,19 +5,19 @@ import re
 from typing import Sequence, override
 from enum import Enum
 from base import dates
+from base.types import Singleton
+from base.utils import cached
 import config
 from base.caching import cached_scalar, FilePersistor
 from base.scraping import scraper
-from base.serialization import Serializable, serializable, serializable_singleton
+from base.serialization import Serializable
 from trading.core.work_calendar import WorkSchedule, BasicWorkCalendar, Hours
 from trading.core.securities import Security, SecurityType, Exchange
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
 
-@serializable_singleton
-class NasdaqCalendar(BasicWorkCalendar, Serializable):
-    instance: NasdaqCalendar
+class NasdaqCalendar(BasicWorkCalendar, Singleton):
     def __init__(self):
         super().__init__(
             tz = dates.ET, 
@@ -50,12 +50,22 @@ class NasdaqCalendar(BasicWorkCalendar, Serializable):
                 '2025-09-01', '2025-11-27', '2025-12-25'
             ).build()  
         )
-NasdaqCalendar.instance = NasdaqCalendar()
+
+class NasdaqGS(Exchange):
+    def __init__(self):
+        super().__init__('XNAS', 'XNGS', 'XNAS', 'Nasdaq Global Select', NasdaqCalendar.instance)
+
+class NasdaqMS(Exchange):
+    def __init__(self):
+        super().__init__('XNAS', 'XNMS', 'XNAS', 'Nasdaq Global Market', NasdaqCalendar.instance)
+
+class NasdaqCM(Exchange):
+    def __init__(self):
+        super().__init__('XNAS', 'XNCM', 'XNAS', 'Nasdaq Capital Market', NasdaqCalendar.instance)
 
 class Nasdaq(Exchange):
-    instance: Nasdaq
     def __init__(self):
-        super().__init__('XNAS', 'Nasdaq US', NasdaqCalendar.instance)
+        super().__init__('XNAS', 'XNAS', 'XNAS', 'Nasdaq All Markets', NasdaqCalendar.instance)
     
     def _get_entries_key_fn(self) -> str: return "nasdaqlisted.txt"
     @cached_scalar(
@@ -68,28 +78,24 @@ class Nasdaq(Exchange):
         return response.text.splitlines(False)
 
     @override
-    @cached_scalar()
+    @cached
     def securities(self) -> Sequence[NasdaqSecurity]:
         result: list[NasdaqSecurity] = []
         tests = 0
         failed = 0
+        error = None
         for row in self._get_entries():
             try:
                 sec = NasdaqSecurity.from_line(row)
                 if sec.type == SecurityType.TEST: tests += 1
                 else: result.append(sec)
-            except:
+            except Exception as e:
                 failed += 1
+                error = error if failed > 2 else e
         logger.info(f"Successfully parsed {len(result)} securities.")
         logger.info(f"Skipped {tests} test securities.")
-        logger.info(f"Failed to parse {failed} securities.")
+        logger.info(f"Failed to parse {failed} securities. {error}")
         return result
-Nasdaq.instance = Nasdaq()
-
-class NasdaqMarket(Enum):
-    SELECT = 'Q'
-    GLOBAL = 'G'
-    CAPITAL = 'S'
 
 class FinancialStatus(Enum):
     NORMAL = 'N'
@@ -104,24 +110,17 @@ def _yn_to_bool(yn: str) -> bool:
         return False
     raise ValueError(f'Invalid Y/N value: {yn}')
 
-@serializable()
 class NasdaqSecurity(Security, Serializable):
-    def __init__(self, symbol, name, type, market: NasdaqMarket, status: FinancialStatus):
-        super().__init__(symbol, name, type)
-        self.market = market
+    def __init__(self, symbol: str, name: str, type: SecurityType, exchange: Exchange, status: FinancialStatus):
+        super().__init__(symbol, name, type, exchange)
         self.status = status
-
-    @property
-    @override
-    def exchange(self) -> Nasdaq:
-        return Nasdaq.instance
 
     @staticmethod
     def from_line(line: str) -> NasdaqSecurity:
         data = line.split('|')
         symbol = data[0]
         name = data[1]
-        market = NasdaqMarket(data[2])
+        exchange = NasdaqGS.instance if data[2] == 'Q' else NasdaqMS.instance if data[2] == 'G' else NasdaqCM.instance
         test = _yn_to_bool(data[3])
         status = FinancialStatus(data[4])
         lot_size = int(data[5])
@@ -133,4 +132,4 @@ class NasdaqSecurity(Security, Serializable):
             else SecurityType.STOCK if not test\
             else SecurityType.TEST
         
-        return NasdaqSecurity(symbol, name, type, market, status)
+        return NasdaqSecurity(symbol, name, type, exchange, status)

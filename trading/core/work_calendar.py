@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta
 from base.caching import Persistor, cached_series, MemoryPersistor
 from base import dates
-from base.types import equatable
+from base.types import Equatable
 from trading.core import Interval
 
 
@@ -17,8 +17,7 @@ def nudge(time: datetime) -> datetime:
     if time == dates.to_zero(time): return time - timedelta(microseconds=1)
     return time
 
-@equatable()
-class Hours:
+class Hours(Equatable):
     def __init__(self, open_hour: int|None=None, close_hour: int= 0, *, open_minute: int = 0, close_minute: int = 0):
         self.open_hour = open_hour or 0
         self.close_hour = close_hour

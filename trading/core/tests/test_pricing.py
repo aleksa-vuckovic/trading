@@ -8,13 +8,10 @@ from trading.core.work_calendar import BasicWorkCalendar, Hours, WorkSchedule
 import time
 
 calendar = BasicWorkCalendar(tz=dates.ET, work_schedule=WorkSchedule.Builder(Hours(9, 16, open_minute=30)).build())
-exchange = Exchange('XNAS', 'Nasdaq', calendar)
+exchange = Exchange('XTST', 'XTST', 'XTST', 'Test', calendar)
 class MockSecurity(Security):
     def __init__(self):
-        super().__init__('NVDA', 'Nvidia', SecurityType.STOCK)
-    @property
-    def exchange(self):
-        return exchange
+        super().__init__('NVDA', 'Nvidia', SecurityType.STOCK, exchange)
 security = MockSecurity()
 
 class TestOHLCV(unittest.TestCase):

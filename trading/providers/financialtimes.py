@@ -12,18 +12,16 @@ from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
 from base.caching import cached_scalar, Persistor, FilePersistor, SqlitePersistor, NullPersistor
 from trading.core.securities import Security
 from trading.core.pricing import OHLCV, BasePricingProvider
-from trading.providers.nasdaq import NasdaqSecurity, NasdaqMarket
+from trading.providers.nasdaq import NasdaqGS, NasdaqMS, NasdaqCM
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
 
 def _get_exchange(security: Security) -> str:
-    if isinstance(security, NasdaqSecurity):
-        if security.market == NasdaqMarket.SELECT: return 'NSQ'
-        if security.market == NasdaqMarket.GLOBAL: return 'NMQ'
-        if security.market == NasdaqMarket.CAPITAL: return 'NAQ'
-        raise Exception(f"Unknown nasdaq market {security.market}.")
-    raise Exception(f"Unknown security type {type(security)}")
+    if isinstance(security.exchange, NasdaqGS): return 'NSQ'
+    if isinstance(security.exchange, NasdaqMS): return 'NMQ'
+    if isinstance(security.exchange, NasdaqCM): return 'NAQ'
+    raise Exception(f"Unknown market {type(security.exchange).__name__}.")
 def _get_interval(interval: Interval) -> tuple[str, int]:
     if interval > Interval.D1: raise Exception(f"Unsupported interval {interval}.")
     if interval == Interval.D1: return 'Day', 1
