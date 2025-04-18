@@ -1,26 +1,20 @@
-from lib2to3.fixes.fix_operator import invocation
-import unittest
+from unittest import TestCase
 import time
 import shutil
-import json
 import math
-from typing import Any
 from enum import Enum
 from pathlib import Path
 from base.caching import MemoryPersistor, cached_scalar, cached_series, FilePersistor, SqlitePersistor, Persistor, MetaDict
-from base.serialization import serializer
-from base.types import Serializable, equatable, serializable
+from base.types import Equatable, Serializable
 
-@serializable()
-@equatable()
-class A(Serializable):
+class A(Serializable, Equatable):
     def __init__(self, a: str, b: float):
         self.a = a
         self.b = b
     def __repr__(self) -> str: return f"A(a='{self.a}',b={self.b:.3f})"
 
 TEST_DATA = Path("./test_data")
-class TestCaching(unittest.TestCase):
+class TestCaching(TestCase):
     def drop_files(self):
         if TEST_DATA.exists():
             if TEST_DATA.is_file(): TEST_DATA.unlink()
@@ -283,6 +277,3 @@ class TestCaching(unittest.TestCase):
         data2 = get_data("b") and get_data("b")
         self.assertNotEqual(data1, data2)
         self.assertEqual(invocations, 3)
-        
-        
-            

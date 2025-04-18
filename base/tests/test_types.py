@@ -1,11 +1,16 @@
 import unittest
+from base.reflection import transient
 from base.serialization import serializer
-from base.types import Cloneable, ReadonlyDict, equatable
+from base.types import Cloneable, Equatable, ReadonlyDict, Singleton
+
+class TestSingleton(Singleton):
+    def __init__(self):
+        pass
 
 class TestTypes(unittest.TestCase):
     def test_equatable(self):
-        @equatable(skip_keys=['a'])
-        class A:
+        @transient('a')
+        class A(Equatable):
             def __init__(self, a, b, c):
                 self.a = a
                 self.b = b
@@ -24,8 +29,7 @@ class TestTypes(unittest.TestCase):
         self.assertNotEqual(obj4, obj6)
     
     def test_equatable_hashing(self):
-        @equatable()
-        class A:
+        class A(Equatable):
             def __init__(self, a, b, c):
                 self.a = a
                 self.b = b
@@ -48,15 +52,12 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(300, data[obj3_c])
 
     def test_cloneable(self):
-        @equatable()
-        class A(Cloneable):
+        class A(Equatable, Cloneable):
             def __init__(self, data: dict):
                 self.data = data
-        @equatable()
-        class B:
+        class B(Equatable):
             pass
-        @equatable()
-        class C(Cloneable):
+        class C(Equatable, Cloneable):
             def __init__(self):
                 self.a = {"a": [A({}), A({})]}
                 self.b = 10
@@ -77,3 +78,8 @@ class TestTypes(unittest.TestCase):
         b = serializer.serialize(a)
         c = serializer.deserialize(b, ReadonlyDict)
         self.assertEqual(a,c)
+
+    def test_singleton(self):
+        self.assertIs(TestSingleton.instance, TestSingleton.instance)
+        obj = serializer.deserialize(serializer.serialize(TestSingleton.instance), TestSingleton)
+        self.assertIs(TestSingleton.instance, obj)

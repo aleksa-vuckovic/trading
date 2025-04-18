@@ -3,18 +3,18 @@ import unittest
 import json
 from enum import Enum
 from pathlib import Path
-from base.serialization import serializable, TypedSerializer, Serializable, _TYPE, _VALUE, serializable_singleton
-from base.types import equatable
+from base.reflection import transient
+from base.serialization import TypedSerializer, Serializable, _TYPE, _VALUE
 from base import dates
+from base.types import Equatable
 
 class MyEnum(Enum):
     A = 'a'
     B = 'b'
 
 # skip_keys hierarchy
-@serializable(skip_keys=['b'])
-@equatable(skip_keys=['b'])
-class A(Serializable):
+@transient('b')
+class A(Equatable, Serializable):
     def __init__(self, a:int|None, b:str|None, c: list|None, d: A|None, e: object|None = None):
         self.a = a
         self.b = b
@@ -25,39 +25,27 @@ class A(Serializable):
     def f(self):
         pass
 
-@serializable(skip_keys=['x'])
-@equatable(skip_keys=['x'])
+@transient('x')
 class B(A):
     def __init__(self, a:int|None, b:str|None, c: list|None, d: A|None, e: object|None = None, x: int = 3, y: int = 5):
         super().__init__(a,b,c,d,e)
         self.x=x
         self.y=y
 
-# include_keys hierarchy
-@serializable(include_keys='a')
-@equatable(include_keys=['a'])
-class C(Serializable):
-    def __init__(self, a: int, b: int):
+class C(Equatable, Serializable):
+    def __init__(self, a: int):
         self.a = a
-        self.b = b
-@serializable(include_keys='x')
-@equatable(include_keys=['x'])
-class D(C):
-    def __init__(self, a: int, b: int, x: int, y: int):
-        super().__init__(a, b)
-        self.x = x
-        self.y = y
 
-@serializable()
-@equatable()
-class E(Serializable):
+class E(Equatable, Serializable):
     def __init__(self, a: tuple):
         self.a = a
 
-@serializable_singleton
-class TestSingleton(Serializable):
-    instance: TestSingleton
-TestSingleton.instance = TestSingleton()
+class Base(Serializable):
+    def __init__(self):
+        pass
+class Derived(Base):
+    def __init__(self):
+        pass
 
 class TestJsonutils(unittest.TestCase):
 
@@ -69,14 +57,6 @@ class TestJsonutils(unittest.TestCase):
 
         self.assertEqual(B(1, 'a', [], None, x=1, y=2), B(1, 'b', [], None, x=2, y=2))
         self.assertNotEqual(B(1, 'a', [], None, x=1, y=3), B(1, 'b', [], None, x=2, y=2))
-    
-    def test_equatable_with_includes(self):
-        self.assertEqual(C(1, 2), C(1, 3))
-        self.assertNotEqual(C(2, 2), C(1, 3))
-
-        self.assertEqual(D(1,2,3,4), D(1,20,3,40))
-        self.assertNotEqual(D(2,2,3,4), D(1,20,3,40))
-        self.assertNotEqual(D(1,2,4,4), D(1,20,3,40))
 
     def test_typed_serializer_with_skips(self):
         serializer = TypedSerializer()
@@ -94,18 +74,6 @@ class TestJsonutils(unittest.TestCase):
         self.assertFalse('x' in b[_VALUE])
         self.assertFalse('b' in b[_VALUE])
         self.assertTrue('y' in b[_VALUE])
-    
-    def test_typed_serializer_with_includes(self):
-        serializer = TypedSerializer()
-        def do(obj): return serializer.deserialize(serializer.serialize(obj))
-        c = C(1,2)
-        self.assertEqual(c, do(c))
-        d = D(1,2,3,4)
-        self.assertEqual(d, do(d))
-
-        d = json.loads(serializer.serialize(d))
-        self.assertTrue('a' in d[_VALUE] and 'x' in d[_VALUE])
-        self.assertFalse('b' in d[_VALUE] or 'y' in d[_VALUE])
 
     def test_typed_serializer_datetime(self):
         serializer = TypedSerializer()
@@ -127,7 +95,7 @@ class TestJsonutils(unittest.TestCase):
                 'c': E(('a', 'b', 'c', 1))
             }
         }
-        data_s = serializer.serialize(data, True)
+        data_s = serializer.serialize(data, typed=True)
         data_d = serializer.deserialize(data_s, dict)
         self.assertEqual(data, data_d)
 
@@ -145,18 +113,18 @@ class TestJsonutils(unittest.TestCase):
         serializer = TypedSerializer()
         data = {
             MyEnum.A: "Value 1",
-            C(1, 0): "Value 2",
-            C(2, 0): "Value 3",
+            C(1): "Value 2",
+            C(2): "Value 3",
             "abc": "Value 4"
         }
         data_s = serializer.serialize(data)
         data_d = serializer.deserialize(data_s)
         self.assertEqual(data, data_d)
-        self.assertEqual({MyEnum.A, C(1,0), C(2,0), "abc"}, set(data_d.keys()))
+        self.assertEqual({MyEnum.A, C(1), C(2), "abc"}, set(data_d.keys()))
 
-    def test_typed_serializer_singleton(self):
+    def test_serializable_inheritance(self):
         serializer = TypedSerializer()
-        data = {"singleton": TestSingleton.instance}
-        data_s = serializer.serialize(data, True)
-        data_d = serializer.deserialize(data_s)
-        self.assertEqual(data, data_d)
+        a = Derived()
+        a_s = serializer.serialize(a)
+        a_d = serializer.deserialize(a_s, Derived)
+        self.assertIsInstance(a_d, Derived)

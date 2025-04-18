@@ -1,10 +1,12 @@
-#1
+#2
+import functools
 import importlib
 import sys
 import os
 from pathlib import Path
 from types import ModuleType
 from typing import Callable, Iterable
+from base.utils import cached
 
 def get_full_classname(obj_or_cls: object) -> str:
     if not isinstance(obj_or_cls, type): cls = type(obj_or_cls)
@@ -16,12 +18,32 @@ def get_class_by_full_classname(full_classname: str) -> type:
     return getattr(module, class_name)
 def get_module(cls: type) -> ModuleType:
     return sys.modules[cls.__module__]
+@cached
 def get_no_args_cnst[T](cls: type[T]) -> Callable[[], T]:
     try:
         cls()
         return cls
     except:
         return lambda: object.__new__(cls)
+def _get_bases(cls: type, visited: set[type]) -> Iterable[type]:
+    visited.add(cls)
+    for base in cls.__bases__:
+        if base in visited: continue
+        for it in _get_bases(base, visited):
+            yield it
+    yield cls
+def get_bases(cls: type) -> Iterable[type]:
+    """Iterate over the entire class hierarchy, in depth-first left-to-right order."""
+    return _get_bases(cls, set())
+_TRAINSENT = '_reflection_transient'
+@cached
+def get_trainsent(cls: type) -> set[str]:
+    return functools.reduce(lambda skips, cls: skips.union(getattr(cls, _TRAINSENT, [])), get_bases(cls), set())
+def transient[T: type](*keys: str) -> Callable[[T], T]:
+    def decorate(cls: T) -> T:
+        setattr(cls, _TRAINSENT, set(keys))
+        return cls
+    return decorate
 
 _default_skip_folders = {"tests"}
 def _get_modules(folder: Path, prefix: str, recursive: bool = True, skip_folders:set[str]=_default_skip_folders) -> Iterable[str]:

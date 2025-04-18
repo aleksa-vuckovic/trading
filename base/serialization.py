@@ -1,23 +1,26 @@
-#2
+#3
 from __future__ import annotations
 import json
 import datetime
 import zoneinfo
 import builtins
-from typing import Any, Callable, Iterable, cast, overload, override
+from typing import Any, Self, cast, overload, override
 from sqlalchemy import String, TypeDecorator
 from enum import Enum
 from pathlib import Path
-from base.reflection import get_full_classname, get_class_by_full_classname, get_no_args_cnst
-
-_SKIP_KEYS = '_serializable_skip_keys'
-_INCLUDE_KEYS = '_serializable_include_keys'
+from base.reflection import get_full_classname, get_class_by_full_classname, get_no_args_cnst, get_trainsent
 
 type json_type = None|bool|int|float|str|list|dict
 class Serializable:
-    def to_json(self) -> json_type: ...
-    @staticmethod
-    def from_json(data: json_type) -> Any: ...
+    def to_json(self) -> json_type:
+        skips = get_trainsent(type(self))
+        return {key:self.__dict__[key] for key in self.__dict__ if key not in skips}
+    @classmethod
+    def from_json(cls: type[Self], data: json_type) -> Self:
+        assert isinstance(data, dict)
+        result = get_no_args_cnst(cls)()
+        result.__dict__.update(data)
+        return result
 
 class Serializer:
     def serialize(self, obj: object) -> str:
@@ -42,46 +45,6 @@ class BasicSerializer(Serializer):
         ret = json.loads(data)
         if assert_type: assert isinstance(ret, assert_type)
         return ret
-
-def serializable[T: Serializable](skip_keys: Iterable[str]|None = None, include_keys: Iterable[str]|None = None) -> Callable[[type[T]], type[T]]:
-    def decorate(cls: type[T]) -> type[T]:
-        create = get_no_args_cnst(cls)
-        skips: set[str]|None = set(skip_keys) if skip_keys else None
-        includes: set[str]|None = set(include_keys) if include_keys else None
-        for base in cls.__bases__:
-            if hasattr(base, _SKIP_KEYS): skips = (skips or set()).union(getattr(base, _SKIP_KEYS))
-            if hasattr(base, _INCLUDE_KEYS): includes = (includes or set()).union(getattr(base, _INCLUDE_KEYS))
-        if skips and includes: raise Exception(f"A class cannot define both skip_keys and include_keys.")
-        if skips: setattr(cls, _SKIP_KEYS, skips)
-        if includes: setattr(cls, _INCLUDE_KEYS, includes)
-        if skips:
-            def to_json(self) -> dict:
-                return {key:self.__dict__[key] for key in self.__dict__ if key not in skips}
-        elif includes:
-            def to_json(self) -> dict:
-                return {key:self.__dict__[key] for key in self.__dict__ if key in includes}
-        else:
-            def to_json(self) -> dict:
-                return self.__dict__
-        def from_json(data:json_type) -> Any:
-            assert isinstance(data, dict)
-            result = create()
-            result.__dict__.update(data)
-            return result
-        cls.to_json = to_json
-        cls.from_json = from_json
-        return cls
-    return decorate
-
-def serializable_singleton[T: Serializable](cls: type[T]) -> type[T]:
-    def to_json(self) -> json_type:
-        return get_full_classname(self) # This is just for clarity when serializing with typed=False
-    def from_json(data: json_type):
-        assert isinstance(data, str)
-        return get_class_by_full_classname(data).instance
-    cls.to_json = to_json
-    cls.from_json = from_json
-    return cls
     
 _TYPE = '$T'
 _VALUE = '$V'
@@ -99,7 +62,7 @@ class TypedSerializer(Serializer):
         elif isinstance(obj, datetime.datetime): val = repr(obj)
         elif isinstance(obj, Path): val = str(obj)
         elif isinstance(obj, Serializable):
-            val = cast(Serializable, obj).to_json()
+            val = obj.to_json()
             if isinstance(val, list): val = [self._serialize(it, typed) for it in val]
             elif isinstance(val, dict): val = {key: self._serialize(value, typed) for key,value in val.items()}
         else: raise Exception(f"Can't serialize {obj} of type {type(obj)}.")
@@ -107,7 +70,12 @@ class TypedSerializer(Serializer):
         if typed: return {_TYPE: get_full_classname(obj), _VALUE: val}
         else: return val
     @override
-    def serialize(self, obj: object, typed:bool = True, indent:int|str|None=None) -> str:
+    def serialize(self, obj: object, *, indent:int|str|None=None, typed:bool = True) -> str:
+        """
+        Args:
+            typed - When set to false, type info will not be preserved, and deserialization will
+                yield undefined results! Use only for display, and never for preservation.
+        """
         return json.dumps(self._serialize(obj, typed), indent=indent)
     
     def _deserialize(self, obj: json_type) -> Any:

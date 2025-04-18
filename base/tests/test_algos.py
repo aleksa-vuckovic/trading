@@ -1,7 +1,7 @@
-import unittest
+from unittest import TestCase
 from base.algos import binary_search, BinarySearchEdge, interpolate, is_sorted
 
-class TestAlgos(unittest.TestCase):
+class TestAlgos(TestCase):
     def test_binary_search(self):
         collection = [
             {"time": 1},
