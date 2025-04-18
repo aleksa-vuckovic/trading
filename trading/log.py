@@ -1,4 +1,5 @@
 #1
+import sys
 import logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
@@ -19,12 +20,12 @@ def configure_logging(console: bool = False, name: str = "main"):
     timed_simple_formatter = logging.Formatter('%(asctime)s \t- %(name)s - %(levelname)s - %(message)s')
 
     #handlers
-    console_handler = logging.StreamHandler()
+    console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setFormatter(simple_formatter)
     file_handler_names = ["providers", "yahoo", "models", "http", "others"]
     file_handlers = {}
     for name in file_handler_names:
-        handler = RotatingFileHandler(filename=output / f"{date} - {name}.txt", mode="w", maxBytes=1024*1024, backupCount=3)
+        handler = RotatingFileHandler(filename=output / f"{date} - {name}.txt", mode="w", maxBytes=1024*1024, backupCount=3, encoding='utf-8')
         handler.setFormatter(timed_simple_formatter)
         file_handlers[name] = handler
 
@@ -37,9 +38,6 @@ def configure_logging(console: bool = False, name: str = "main"):
     yahoo = logging.getLogger("trading.providers.yahoo")
     yahoo.propagate = False
     yahoo.addHandler(file_handlers["yahoo"])
-    #nasdaq = logging.getLogger("trading.providers.nasdaq")
-    #nasdaq.propagate = False
-    #nasdaq.addHandler(logging.NullHandler())
     models = logging.getLogger("trading.models")
     models.propagate = False
     models.addHandler(file_handlers["models"])
