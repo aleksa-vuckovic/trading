@@ -185,7 +185,7 @@ class Evaluator:
         Returns total gain in percentages
         """
         securities = [it for it in exchange.securities() if it.type == SecurityType.STOCK]
-        logger.info(f"Backtesting on {exchange.mic} from {exchange.calendar.unix_to_datetime(unix_from)} to {exchange.calendar.unix_to_datetime(unix_to)}")
+        logger.info(f"Backtesting on {exchange.name} from {exchange.calendar.unix_to_datetime(unix_from)} to {exchange.calendar.unix_to_datetime(unix_to)}")
         unix_time = unix_from
         history: list[BacktestFrame] = []
         plt.ion()

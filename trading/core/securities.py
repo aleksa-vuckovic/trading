@@ -4,12 +4,13 @@ from typing import Sequence
 from enum import Enum, auto
 from base.reflection import get_classes
 from base.types import Singleton
+from base.utils import cached
 from trading.core.work_calendar import WorkCalendar
 
 class Exchange(Singleton):
     def __init__(
         self,
-        mic: str, # The 'primary' mic, which might be be the segment_mic (e.g. NYSE) or operating_mic (e.g. NASDAQ)
+        mic: str,
         segment_mic: str,
         operating_mic: str,
         name: str,
@@ -28,21 +29,24 @@ class Exchange(Singleton):
         return sec[0]
     
     _exchanges: dict[str, Exchange]|None = None
+
     @staticmethod
-    def init():
-        if Exchange._exchanges is None:
-            exchanges: set[Exchange] = set(it.instance for it in get_classes("trading.providers", recursive=False, base=Exchange))
-            Exchange._exchanges = {it.mic:it for it in exchanges}
+    @cached
+    def all() -> set[Exchange]:
+        return set(it.instance for it in get_classes("trading.providers", recursive=False, base=Exchange))
     @staticmethod
-    def all() -> list[Exchange]:
-        Exchange.init()
-        assert Exchange._exchanges is not None
-        return list(Exchange._exchanges.values())
-    @staticmethod
+    @cached
     def for_mic(mic: str) -> Exchange:
-        Exchange.init()
-        assert Exchange._exchanges is not None
-        return Exchange._exchanges[mic]
+        return [it for it in Exchange.all() if it.mic == mic][0]
+    @staticmethod
+    @cached
+    def for_segment_mic(mic: str) -> Exchange:
+        return [it for it in Exchange.all() if it.segment_mic == mic][0]
+    @staticmethod
+    @cached
+    def for_operating_mic(mic: str) -> Exchange:
+        return [it for it in Exchange.all() if it.operating_mic == mic][0]
+
 
 class SecurityType(Enum):
     STOCK = auto()
