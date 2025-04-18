@@ -6,6 +6,8 @@ import re
 from typing import Sequence, override
 from enum import Enum
 from base import dates
+import config
+from base.caching import cached_scalar, FilePersistor
 from base.scraping import scraper
 from base.serialization import Serializable, serializable, serializable_singleton
 from trading.core.work_calendar import WorkSchedule, BasicWorkCalendar, Hours
@@ -56,6 +58,12 @@ class Nasdaq(Exchange):
     def __init__(self):
         super().__init__('XNAS', 'Nasdaq US', NasdaqCalendar.instance)
     
+    def _get_entries_key_fn(self) -> str: return "nasdaqlisted.txt"
+    @cached_scalar(
+        key_fn=_get_entries_key_fn,
+        persistor_fn=FilePersistor(config.caching.file_path/_MODULE/"listed"),
+        refresh_after=24*3600
+    )
     def _get_entries(self) -> list[str]:
         response = scraper.get("https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt")
         return response.text.splitlines(False)
