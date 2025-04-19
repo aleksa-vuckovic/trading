@@ -2,6 +2,8 @@
 from __future__ import annotations
 from typing import Sequence
 from enum import Enum, auto
+
+from sqlalchemy.engine.processors import str_to_datetime
 from base.reflection import get_classes
 from base.types import Singleton
 from base.utils import cached
@@ -67,6 +69,13 @@ class Security:
         self.name = name
         self.type = type
         self.exchange = exchange
+    
+    def __str__(self) -> str:
+        return f"{self.exchange.segment_mic}/{self.type.name}/{self.symbol}"
+    
+    def __repr__(self) -> str:
+        return str(self)
+
 
 class DataProvider:
     """
