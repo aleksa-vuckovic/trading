@@ -16,7 +16,7 @@ class providers:
     live_time_frame: float = 5*24*3600.0
 
 class http:
-    log_response=True
+    log_response=False
     log_response_short=True
-    log_request=True
+    log_request=False
     log_request_short=True
