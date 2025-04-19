@@ -5,7 +5,7 @@ from typing import Literal, Sequence, TypedDict, override
 import config
 from base.types import Singleton
 from base.caching import cached_scalar, FilePersistor
-from base.scraping import scraper
+from base.scraping import backup_timeout, scraper
 from base.utils import cached
 from trading.core.securities import Exchange, Security, SecurityType, WorkCalendar
 
@@ -44,9 +44,10 @@ class _FetchResult(TypedDict):
     micCode: str
 @cached_scalar(
     key_fn=lambda instrumentType: instrumentType,
-    persistor_fn=FilePersistor(config.caching.file_path/_MODULE/"listed.json"),
+    persistor_fn=FilePersistor(config.caching.file_path/_MODULE/"listed"),
     refresh_after=24*3600
 )
+@backup_timeout()
 def _fetch_listed(instrumentType: Literal['EQUITY', 'EXCHANGE_TRADED_FUND']) -> list[_FetchResult]:
     pageSize = 500
     page = 1
@@ -76,7 +77,7 @@ def _fetch_listed(instrumentType: Literal['EQUITY', 'EXCHANGE_TRADED_FUND']) -> 
 def _get_securities() -> Sequence[NYSESecurity]:
     result = []
     total = 0
-    for entry in chain(_fetch_listed('STOCK'), _fetch_listed('EXCHANGE_TRADED_FUND')):
+    for entry in chain(_fetch_listed('EQUITY'), _fetch_listed('EXCHANGE_TRADED_FUND')):
         total += 1
         if entry['instrumentType'] not in _security_type_map: continue
         mic = entry['micCode']
