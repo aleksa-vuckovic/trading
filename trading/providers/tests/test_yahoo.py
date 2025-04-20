@@ -6,7 +6,8 @@ from trading.core.interval import Interval
 from trading.core.pricing import PricingProvider
 from trading.core.securities import Security
 from trading.core.tests.test_pricing import TestPricingProviderRecent
-from trading.providers import Yahoo, Nasdaq
+from trading.providers.yahoo import Yahoo
+from trading.providers.nasdaq import Nasdaq
 from trading.providers.forex import Forex
 
 stock = Nasdaq.instance.get_security('NVDA')

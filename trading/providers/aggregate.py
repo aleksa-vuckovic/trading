@@ -7,7 +7,11 @@ from trading.core import Interval
 from trading.core.securities import Security, DataProvider
 from trading.core.pricing import PricingProvider, OHLCV
 from trading.core.news import News, NewsProvider
-from trading.providers import Yahoo, FinancialTimes, WallStreetJournal, SeekingAlpha, GlobeNewswire
+from trading.providers.yahoo import Yahoo
+from trading.providers.financialtimes import FinancialTimes
+from trading.providers.wallstreetjournal import WallStreetJournal
+from trading.providers.seekingalpha import SeekingAlpha
+from trading.providers.globenewswire import GlobeNewswire
 
 logger = logging.getLogger(__name__)
 

@@ -3,7 +3,8 @@ import config
 from trading.core.pricing import PricingProvider
 from trading.core.securities import Security
 from trading.core.tests.test_pricing import TestPricingProviderRecent
-from trading.providers import Nasdaq, WallStreetJournal
+from trading.providers.nasdaq import Nasdaq
+from trading.providers.wallstreetjournal import WallStreetJournal
 
 class TestWallStreetJournal(TestPricingProviderRecent):
     @override

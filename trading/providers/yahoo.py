@@ -12,7 +12,7 @@ from base.scraping import scraper, backup_timeout, BadResponseException, TooMany
 from trading.core import Interval
 from trading.core.securities import Security, DataProvider, SecurityType
 from trading.core.pricing import OHLCV, BasePricingProvider
-from trading.providers import NasdaqSecurity
+from trading.providers.nasdaq import NasdaqSecurity
 from trading.providers.nyse import NYSESecurity
 from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
 from trading.providers.forex import ForexSecurity

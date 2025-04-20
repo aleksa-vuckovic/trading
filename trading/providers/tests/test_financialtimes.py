@@ -3,7 +3,8 @@ import config
 from trading.core.pricing import PricingProvider
 from trading.core.securities import Security
 from trading.core.tests.test_pricing import TestPricingProviderRecent
-from trading.providers import FinancialTimes, Nasdaq
+from trading.providers.financialtimes import FinancialTimes
+from trading.providers.nasdaq import Nasdaq
 
 class TestFinancialtimes(TestPricingProviderRecent):
     @override

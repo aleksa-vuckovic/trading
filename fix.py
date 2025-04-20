@@ -7,7 +7,7 @@ import config
 from datetime import timedelta
 from pathlib import Path
 from trading.core import work_calendar
-from trading.providers import Nasdaq
+from trading.providers.nasdaq import Nasdaq
 from trading.core.interval import Interval
 from base.caching import FilePersistor, SqlitePersistor
 from tqdm import tqdm

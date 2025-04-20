@@ -11,9 +11,9 @@ from base.caching import FilePersistor, NullPersistor, Persistor, SqlitePersisto
 from trading.core.interval import Interval
 from trading.core.securities import Security
 from trading.core.pricing import OHLCV, BasePricingProvider
-from trading.providers import NasdaqSecurity
 from trading.providers.forex import ForexSecurity
 from trading.providers.nyse import NYSESecurity
+from trading.providers.nasdaq import NasdaqSecurity
 from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
 
 logger = logging.getLogger(__name__)

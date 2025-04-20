@@ -8,14 +8,13 @@ import config
 from base import dates
 from base.scraping import scraper, backup_timeout
 from trading.core.interval import Interval
-from trading.providers import NasdaqSecurity
 from trading.providers.forex import ForexSecurity
 from trading.providers.nyse import NYSE, NYSEAmerican, NYSEArca, NYSESecurity
 from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
 from base.caching import cached_scalar, Persistor, FilePersistor, SqlitePersistor, NullPersistor
 from trading.core.securities import Security
 from trading.core.pricing import OHLCV, BasePricingProvider
-from trading.providers.nasdaq import NasdaqGS, NasdaqMS, NasdaqCM
+from trading.providers.nasdaq import NasdaqSecurity, NasdaqGS, NasdaqMS, NasdaqCM
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]

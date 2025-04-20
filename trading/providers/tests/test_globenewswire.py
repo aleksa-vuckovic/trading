@@ -1,6 +1,7 @@
 import unittest
 import config
-from trading.providers import GlobeNewswire, Nasdaq
+from trading.providers.globenewswire import GlobeNewswire
+from trading.providers.nasdaq import Nasdaq
 
 security = Nasdaq.instance.get_security("NVDA")
 provider = GlobeNewswire(config.caching.storage)

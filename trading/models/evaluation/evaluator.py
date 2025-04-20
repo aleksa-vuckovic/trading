@@ -22,7 +22,7 @@ from base import plotutils
 from trading.core.timing_config import TimingConfig
 from trading.core import Interval
 from trading.core.securities import Exchange, Security, SecurityType
-from trading.models.base import ModelManager
+from trading.models.base.manager import ModelManager
 from trading.providers.aggregate import AggregateProvider
 from trading.models.base.model_config import PriceEstimator, BaseModelConfig
 from trading.models.base.abstract_model import AbstractModel

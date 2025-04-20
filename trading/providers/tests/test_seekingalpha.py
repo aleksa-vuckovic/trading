@@ -1,6 +1,7 @@
 import config
 import unittest
-from trading.providers import Nasdaq, SeekingAlpha
+from trading.providers.nasdaq import Nasdaq
+from trading.providers.seekingalpha import SeekingAlpha
 
 security = Nasdaq.instance.get_security('NVDA')
 calendar = Nasdaq.instance.calendar

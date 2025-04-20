@@ -2,7 +2,7 @@ from pathlib import Path
 from trading.models.base.model_config import PricingDataConfig
 from trading.core.interval import Interval
 from trading.core.timing_config import TimingConfig, BasicTimingConfig
-from trading.providers import Nasdaq
+from trading.providers.nasdaq import Nasdaq
 
 class generator:
     data_config = PricingDataConfig({
