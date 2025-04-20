@@ -3,11 +3,14 @@ import json
 import logging
 import time
 import math
-from typing import Literal, Sequence, override
+from typing import Literal, Sequence, TypedDict, override
 import config
 from base import dates
 from base.scraping import scraper, backup_timeout
 from trading.core.interval import Interval
+from trading.providers import NasdaqSecurity
+from trading.providers.forex import ForexSecurity
+from trading.providers.nyse import NYSE, NYSEAmerican, NYSEArca, NYSESecurity
 from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
 from base.caching import cached_scalar, Persistor, FilePersistor, SqlitePersistor, NullPersistor
 from trading.core.securities import Security
@@ -17,11 +20,20 @@ from trading.providers.nasdaq import NasdaqGS, NasdaqMS, NasdaqCM
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
 
-def _get_exchange(security: Security) -> str:
-    if isinstance(security.exchange, NasdaqGS): return 'NSQ'
-    if isinstance(security.exchange, NasdaqMS): return 'NMQ'
-    if isinstance(security.exchange, NasdaqCM): return 'NAQ'
-    raise Exception(f"Unknown market {type(security.exchange).__name__}.")
+def _get_identifiers(security: Security) -> list[str]:
+    if isinstance(security, (NasdaqSecurity, NYSESecurity)):
+        codes = ['NSQ'] if security.exchange == NasdaqGS.instance\
+        else ['NMQ'] if security.exchange == NasdaqMS.instance\
+        else ['NAQ'] if security.exchange == NasdaqCM.instance\
+        else ['NYQ'] if security.exchange == NYSE.instance\
+        else ['ASE', 'ASQ'] if security.exchange == NYSEAmerican.instance\
+        else ['PCQ:USD'] if security.exchange == NYSEArca.instance\
+        else None
+        if not codes: raise Exception(f"Unknown exchange {security.exchange}")
+        return [f"{security.symbol}:{it}" for it in codes]
+    if isinstance(security, ForexSecurity):
+        return [f"{security.base}{security.quote}"]
+    raise Exception(f"Unsupported security {security}")
 def _get_interval(interval: Interval) -> tuple[str, int]:
     if interval > Interval.D1: raise Exception(f"Unsupported interval {interval}.")
     if interval == Interval.D1: return 'Day', 1
@@ -43,10 +55,14 @@ class FinancialTimes(BasePricingProvider):
         self.pricing_persistor = FilePersistor(config.caching.file_path/_MODULE/'pricing') if storage =='file'\
             else SqlitePersistor(config.caching.db_path, f"{_MODULE}_pricing") if storage == 'db'\
             else NullPersistor()
-
-    def _get_identifier(self, security: Security) -> str:
-        return f"{security.symbol}:{_get_exchange(security)}"
     
+    class _InfoDict(TypedDict):
+        url: str
+        urlChart: str
+        name: str
+        symbol: str
+        xid: str
+        assetClass: str
     def _get_info_key_fn(self, security: Security) -> str:
         return f"{security.exchange.mic}_{security.symbol}"
     def _get_info_persistor_fn(self, security: Security) -> Persistor:
@@ -55,13 +71,13 @@ class FinancialTimes(BasePricingProvider):
         key_fn=_get_info_key_fn,
         persistor_fn=_get_info_persistor_fn
     )
-    def _get_info(self, security: Security) -> dict:
+    def _get_info(self, security: Security) -> _InfoDict|None:
         url = f"https://markets.ft.com/data/searchapi/searchsecurities"
-        id = self._get_identifier(security)
+        ids = _get_identifiers(security)
         resp = scraper.get(url, params={'query': id})
         data = json.loads(resp.text)
-        data = [it for it in data['data']['security'] if 'symbol' in it and it['symbol'] == id]
-        if not data: return {}
+        data = [it for it in data['data']['security'] if 'symbol' in it and it['symbol'] in ids]
+        if not data: return None
         return data[0]
 
     @backup_timeout()
@@ -136,7 +152,7 @@ class FinancialTimes(BasePricingProvider):
         days = math.ceil((time.time() - unix_from)/(24*3600)) + 1
         days = max(min(days, 15), 4)
         info = self._get_info(security)
-        if 'xid' not in info or not info['xid']: raise Exception(f"No xid for '{security.symbol}'.")
+        if not info or 'xid' not in info or not info['xid']: raise Exception(f"No xid for '{security.symbol}'.")
         data = self._fetch_pricing(info['xid'], days, *_get_interval(interval), realtime=True)
         timestamps = self._fix_timestamps(data['Dates'], interval, security)
         elements = data['Elements']

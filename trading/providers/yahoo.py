@@ -13,6 +13,7 @@ from trading.core import Interval
 from trading.core.securities import Security, DataProvider, SecurityType
 from trading.core.pricing import OHLCV, BasePricingProvider
 from trading.providers import NasdaqSecurity
+from trading.providers.nyse import NYSESecurity
 from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
 from trading.providers.forex import ForexSecurity
 
@@ -76,7 +77,9 @@ class Yahoo(BasePricingProvider, DataProvider):
         if isinstance(security, ForexSecurity):
             if security.base == "USD": return f"{security.quote}=X"
             else: return f"{security.base}{security.quote}=X"
-        return security.symbol
+        elif isinstance(security, (NasdaqSecurity, NYSESecurity)):
+            return security.symbol
+        raise Exception(f"Unsupported security {security}.")
 
     def _fix_timestamps(self, timestamps: list[float], interval: Interval, security: Security) -> list[float | None]:
         if interval == Interval.H1 and isinstance(security, NasdaqSecurity):

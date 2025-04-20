@@ -8,10 +8,20 @@ from base.scraping import scraper, backup_timeout
 from base.caching import NullPersistor, Persistor, FilePersistor, SqlitePersistor
 from trading.core.securities import Security
 from trading.core.news import BaseNewsProvider, News
+from trading.providers.forex import ForexSecurity
+from trading.providers.nasdaq import NasdaqSecurity
+from trading.providers.nyse import NYSESecurity
 from trading.providers.utils import filter_news
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
+
+def _get_symbol(security: Security):
+    if isinstance(security, (NasdaqSecurity, NYSESecurity)):
+        return security.symbol
+    if isinstance(security, ForexSecurity):
+        return f"{security.base.lower()}.{security.quote.lower()}"
+    raise Exception(f"Unsupported security {security}.")
 
 class SeekingAlpha(BaseNewsProvider):
     def __init__(self, storage: Literal['file','db','none']='db'):
@@ -45,5 +55,5 @@ class SeekingAlpha(BaseNewsProvider):
         return self.news_persistor
     @override
     def get_news_raw(self, unix_from: float, unix_to: float, security: Security) -> list[News]:
-        return filter_news(self._fetch_news(unix_from, unix_to, security.symbol), unix_from, unix_to)
+        return filter_news(self._fetch_news(unix_from, unix_to, _get_symbol(security)), unix_from, unix_to)
     #endregion

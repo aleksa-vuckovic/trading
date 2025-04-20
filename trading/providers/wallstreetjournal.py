@@ -11,6 +11,9 @@ from base.caching import FilePersistor, NullPersistor, Persistor, SqlitePersisto
 from trading.core.interval import Interval
 from trading.core.securities import Security
 from trading.core.pricing import OHLCV, BasePricingProvider
+from trading.providers import NasdaqSecurity
+from trading.providers.forex import ForexSecurity
+from trading.providers.nyse import NYSESecurity
 from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
 
 logger = logging.getLogger(__name__)
@@ -18,6 +21,15 @@ _TOKEN_KEY='Dylan2010.Entitlementtoken'
 _TOKEN_VALUE='57494d5ed7ad44af85bc59a51dd87c90'
 _CKEY='57494d5ed7'
 _MODULE: str = __name__.split(".")[-1]
+
+def _get_symbol(security: Security) -> str:
+    if isinstance(security, NasdaqSecurity):
+        return f"STOCK/US/{security.exchange.operating_mic}/{security.symbol}"
+    if isinstance(security, NYSESecurity):
+        return f"STOCK/US/{security.exchange.segment_mic}/{security.symbol}"
+    if isinstance(security, ForexSecurity):
+        return f"CURRENCY/US/XTUP/{security.base}{security.quote}"
+    raise Exception(f"Unsupported security {security}.")
 
 class WallStreetJournal(BasePricingProvider):
     def __init__(self, storage: Literal['file','db','none']='db'):
@@ -114,7 +126,7 @@ class WallStreetJournal(BasePricingProvider):
         return 120
     @override
     def get_pricing_raw(self, unix_from, unix_to, security, interval) -> list[OHLCV]:
-        data = self._fetch_pricing(f"STOCK/US/{security.exchange.mic}/{security.symbol}", self._get_interval(interval), 'D5')
+        data = self._fetch_pricing(_get_symbol(security), self._get_interval(interval), 'D5')
         def extract_data_points(series: dict) -> dict:
             return {key: [it[index] for it in series['DataPoints']] for index,key in enumerate(series['DesiredDataPoints'])}
         quotes = {'Timestamp': self._fix_timestamps(data['TimeInfo']['Ticks'], interval, security)}

@@ -8,8 +8,9 @@ from base.scraping import scraper, backup_timeout
 from base.caching import NullPersistor, Persistor, FilePersistor, SqlitePersistor
 from trading.core.securities import Security
 from trading.core.news import News, BaseNewsProvider
+from trading.providers.nyse import NYSESecurity
 from trading.providers.utils import filter_news
-from trading.providers.nasdaq import Nasdaq
+from trading.providers.nasdaq import Nasdaq, NasdaqSecurity
 
 logger = logging.getLogger(__name__)
 _MODULE = __name__.split(".")[-1]
@@ -74,6 +75,8 @@ class GlobeNewswire(BaseNewsProvider):
             else: break
         return result
     def _get_org(self, security: Security) -> str:
+        if not isinstance(security, (NasdaqSecurity, NYSESecurity)):
+            raise Exception(f"Unsupported security {security}")
         try:
             return security.name[:security.name.index(' - ')].strip()
         except:
