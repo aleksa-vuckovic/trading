@@ -78,12 +78,12 @@ class TestMerge(unittest.TestCase):
         result = merge_pricing(input, t1, t2+5400, Interval.H1, security)
         self.assertEqual(expect, result)
 
-class TestPricingProviderRecent(unittest.TestCase):
+class TestPricingProvider(unittest.TestCase):
     def get_provider(self) -> PricingProvider: ...
     def get_securities(self) -> list[Security]: ...
 
     def test_get_pricing(self):
-        if type(self) == TestPricingProviderRecent: return
+        if type(self) == TestPricingProvider: return
         now = time.time()
         provider = self.get_provider()
         securities = self.get_securities()

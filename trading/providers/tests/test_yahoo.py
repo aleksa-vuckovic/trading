@@ -5,7 +5,7 @@ import config
 from trading.core.interval import Interval
 from trading.core.pricing import PricingProvider
 from trading.core.securities import Security
-from trading.core.tests.test_pricing import TestPricingProviderRecent
+from trading.core.tests.test_pricing import TestPricingProvider
 from trading.providers.yahoo import Yahoo
 from trading.providers.nasdaq import Nasdaq
 from trading.providers.forex import Forex
@@ -15,7 +15,7 @@ fx = Forex.instance.get_security('EURUSD')
 calendar = Nasdaq.instance.calendar
 provider = Yahoo(config.caching.storage)
 
-class TestYahoo(TestPricingProviderRecent):
+class TestYahoo(TestPricingProvider):
     @override
     def get_provider(self) -> PricingProvider:
         return provider

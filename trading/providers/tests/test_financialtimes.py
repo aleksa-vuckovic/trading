@@ -2,11 +2,11 @@ from typing import override
 import config
 from trading.core.pricing import PricingProvider
 from trading.core.securities import Security
-from trading.core.tests.test_pricing import TestPricingProviderRecent
+from trading.core.tests.test_pricing import TestPricingProvider
 from trading.providers.financialtimes import FinancialTimes
 from trading.providers.nasdaq import Nasdaq
 
-class TestFinancialtimes(TestPricingProviderRecent):
+class TestFinancialtimes(TestPricingProvider):
     @override
     def get_provider(self) -> PricingProvider:
         return FinancialTimes(config.caching.storage)
