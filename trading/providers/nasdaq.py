@@ -80,8 +80,8 @@ class NasdaqCM(Exchange):
 
 @cached_scalar(
     key_fn=lambda:"nasdaqlisted.txt",
-    persistor_fn=FilePersistor(config.caching.file_path/_MODULE/"listed.json"),
-    refresh_after=24*3600
+    persistor_fn=FilePersistor(config.caching.file_path/_MODULE/"listed"),
+    refresh_after=7*24*3600
 )
 def _fetch_listed() -> list[str]:
     response = scraper.get("https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt")

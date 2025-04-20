@@ -45,7 +45,7 @@ class _FetchResult(TypedDict):
 @cached_scalar(
     key_fn=lambda instrumentType: instrumentType,
     persistor_fn=FilePersistor(config.caching.file_path/_MODULE/"listed"),
-    refresh_after=24*3600
+    refresh_after=7*24*3600
 )
 @backup_timeout()
 def _fetch_listed(instrumentType: Literal['EQUITY', 'EXCHANGE_TRADED_FUND']) -> list[_FetchResult]:
