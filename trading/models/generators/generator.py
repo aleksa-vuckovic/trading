@@ -1,5 +1,6 @@
 
 import logging
+from sqlalchemy import modifier
 import torch
 import random
 import time
@@ -9,12 +10,13 @@ from matplotlib import pyplot as plt
 from torch import Tensor
 from pathlib import Path
 
+from blank import PriceModifier
 import config
 from trading.core import Interval
 from trading.core.securities import Exchange, Security
 from trading.core.timing_config import TimingConfig, BasicTimingConfig
 from trading.providers.aggregate import AggregateProvider
-from trading.models.base.model_config import Aggregation, BarValues, AFTER, PriceEstimator, PricingDataConfig, PriceTarget
+from trading.models.base.model_config import Aggregation, BarValues, AFTER, PriceEstimator, PricingDataConfig, SigmoidPriceModifier
 from trading.models.base.tensors import check_tensors
 from trading.models.base.batches import BatchFile
 from trading.models.generators.abstract_generator import AbstractGenerator
@@ -106,7 +108,7 @@ class Generator(AbstractGenerator):
         *,
         timing: TimingConfig = BasicTimingConfig.Builder().any().build(),
         estimator: PriceEstimator = PriceEstimator(BarValues.C, Interval.H1, slice(0,7), Aggregation.LAST),
-        targets: list[PriceTarget] = list(PriceTarget),
+        modifiers: list[PriceModifier] = [SigmoidPriceModifier(-0.1, 0.1, True)],
         title: str = "",
         **kwargs
     ):
@@ -120,7 +122,7 @@ class Generator(AbstractGenerator):
             data = (estimator.estimate_example(example) - close)/close
             temp.append(data)
         data = torch.concat(temp, dim=0)
-        fig, axes = plt.subplots(1, 1+len(targets), figsize=(5,3+3*len(targets)))
+        fig, axes = plt.subplots(1, 1+len(modifiers), figsize=(5,3+3*len(modifiers)))
         fig.suptitle(title)
         axes: list[Axes] = axes
         
@@ -128,10 +130,10 @@ class Generator(AbstractGenerator):
         axes[0].set_xlabel('Percentage change')
         axes[0].hist(data*100, bins=range(-20,21,1), edgecolor='black')
 
-        for i, target in enumerate(targets):
-            axes[i].set_title(f"{target.name}")
+        for i, modifier in enumerate(modifiers):
+            axes[i].set_title(repr(modifier))
             axes[i].set_xlabel('Expected output')
-            axes[i].hist(target.get_price(data), bins=20, edgecolor='black')
+            axes[i].hist(modifier.modify(data), bins=20, edgecolor='black')
         fig.tight_layout()
         plt.show()
 

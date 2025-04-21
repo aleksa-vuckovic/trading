@@ -30,6 +30,7 @@ class Exchange(Singleton):
         sec = [it for it in self.securities() if it.symbol == symbol]
         return sec[0]
     
+    def __repr__(self) -> str: return f"{type(self).__name__}()"
     _exchanges: dict[str, Exchange]|None = None
 
     @staticmethod

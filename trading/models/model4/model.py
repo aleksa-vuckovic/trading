@@ -1,10 +1,9 @@
 import torch
 from torch import Tensor
 from typing import Literal, overload, override
-from storage import PricingDataConfig
 from trading.core.timing_config import TimingConfig
 from trading.core.securities import Exchange
-from trading.models.base.model_config import BaseModelConfig, PriceEstimator, PriceTarget, BarValues
+from trading.models.base.model_config import BaseModelConfig, PriceEstimator, PricingDataConfig, PriceModifier, BarValues
 from trading.models.base.abstract_model import AbstractModel
 from trading.models.base.tensors import get_moving_average, get_time_relativized, check_tensors, check_tensor
 
@@ -13,12 +12,12 @@ class ModelConfig(BaseModelConfig):
         self,
         exchanges: tuple[Exchange],
         estimator: PriceEstimator,
-        target:  PriceTarget,
+        modifier:  PriceModifier,
         timing: TimingConfig,
         pricing_data_config: PricingDataConfig,
         mvg_window: int = 10
     ):
-        super().__init__(exchanges, pricing_data_config, estimator, target, timing)
+        super().__init__(exchanges, pricing_data_config, estimator, modifier, timing)
         self.mvg_window = mvg_window
 
 class RecursiveLayer(torch.nn.Module):
@@ -81,7 +80,7 @@ class Model(AbstractModel):
             torch.nn.Sigmoid(),
             torch.nn.BatchNorm1d(num_features=total_features//20),
             torch.nn.Linear(in_features=total_features//20, out_features=1),
-            self.config.price_target.get_layer()
+            self.config.price_modifier.layer()
         )
 
     #region Overrides
@@ -126,7 +125,7 @@ class Model(AbstractModel):
             after = self.config.price_estimator.estimate_example(example)
             close = example[self.config.pricing_data_config.min_interval.name][:,-1,BarValues.C.value]
             after = (after[:,-1] - close) / close
-            after = self.config.price_target.get_price(after)
+            after = self.config.price_modifier.modify(after)
             check_tensor(after)
             return tensors, after
         return tensors

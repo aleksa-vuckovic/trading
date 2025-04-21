@@ -4,7 +4,7 @@ from typing import NamedTuple
 
 from trading.core import Interval
 from trading.core.timing_config import TimingConfig
-from trading.models.base.model_config import Aggregation, BaseModelConfig, PriceTarget, BarValues, PriceEstimator
+from trading.models.base.model_config import Aggregation, BaseModelConfig, BarValues, PriceEstimator
 
 
 

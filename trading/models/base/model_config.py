@@ -2,11 +2,14 @@
 from __future__ import annotations
 from functools import cached_property
 import logging
+from matplotlib.axes import Axes
+from numpy import ndarray
 import torch
-from typing import overload, Iterable, override
+from typing import overload, Iterable, override, TypeVar
 from torch import Tensor
 from enum import Enum, auto
 from matplotlib import pyplot as plt
+from torch.nn.modules import Module
 
 from base.reflection import transient
 from base.serialization import Serializable, serializer, json_type
@@ -90,63 +93,88 @@ class PriceEstimator(Equatable, Serializable):
         tensor = torch.tensor([it[self.value.name] for it in prices], dtype=torch.float64)
         return float(self.agg.apply(tensor, dim=-1).item())
 
-class PriceTarget(Enum):
-    LINEAR_0_5 = 'Linear 0 to 5%'
-    LINEAR_0_10 = 'Linear 0 to 10%'
-    LINEAR_5_5 = 'Linear -5 to 5%'
-    LINEAR_10_10 = 'Linear -10 to 10%'
-    SIGMOID_0_5 = 'Sigmoid 0 to 5%'
-    SIGMOID_0_10 = 'Sigmoid 0 to 10%'
-    TANH_5_5 = 'Tanh -5 to 5%'
-    TANH_10_10 = 'Tanh -10 to 10%'
+class PriceModifier(Equatable, Serializable):
+    """
+    Modifies price change percentages to values that should be used as model outputs.
+    """
+    #abstract
+    def _modify(self, values: Tensor) -> Tensor: ...
+    def _revert(self, values: Tensor) -> Tensor: ...
+    def layer(self) -> torch.nn.Module: ...
+    #endregion
 
-    def get_price(self, normalized_values: Tensor):
-        x = normalized_values
-        if self == PriceTarget.LINEAR_0_5:
-            return torch.clamp(x, min=0, max=0.05)
-        if self == PriceTarget.LINEAR_0_10:
-            return torch.clamp(x, min=0, max=0.1)
-        if self == PriceTarget.LINEAR_5_5:
-            return torch.clamp(x, min=-0.05, max=0.05)
-        if self == PriceTarget.LINEAR_10_10:
-            return torch.clamp(x, min=-0.1, max=0.1)
-        if self == PriceTarget.SIGMOID_0_5:
-            x = torch.clamp(x, min=-0.2, max=0.2)
-            x = torch.exp(300*x-6)
-            return x/(1+x)
-        if self == PriceTarget.SIGMOID_0_10:
-            x = torch.exp(150*x-7.5)
-            return x/(1+x)
-        if self == PriceTarget.TANH_5_5:
-            x = torch.exp(-150*x)
-            return (1-x)/(1+x)
-        if self == PriceTarget.TANH_10_10:
-            x = torch.exp(-60*x)
-            return (1-x)/(1+x)
-        raise Exception("Unknown price target type")
+    def modify[T: (Tensor, float, list[float])](self, values: T) -> T:
+        if isinstance(values, Tensor): return self._modify(values)
+        if isinstance(values, float): return self._modify(torch.tensor(values, dtype=torch.float64)).item()
+        if isinstance(values, list): return self._modify(torch.tensor(values, dtype=torch.float64)).tolist()
+        raise Exception(f"Unsupported arg type {type(values)}.")
+    def revert[T: (Tensor, float, list[float])](self, values: T) -> T:
+        if isinstance(values, Tensor): return self._revert(values)
+        if isinstance(values, float): return self._revert(torch.tensor(values, dtype=torch.float64)).item()
+        if isinstance(values, list): return self._revert(torch.tensor(values, dtype=torch.float64)).tolist()
+        raise Exception(f"Unsupported arg type {type(values)}.")
     
-    def get_layer(self) -> torch.nn.Module:
-        if self in [PriceTarget.LINEAR_0_10, PriceTarget.LINEAR_0_5, PriceTarget.LINEAR_10_10, PriceTarget.LINEAR_5_5]:
-            return torch.nn.Identity()
-        if self in [PriceTarget.SIGMOID_0_10, PriceTarget.SIGMOID_0_5]:
-            return torch.nn.Sigmoid()
-        if self in [PriceTarget.TANH_10_10, PriceTarget.TANH_5_5]:
-            return torch.nn.Tanh()
-        raise Exception(f"Unknown PriceTarget {self}.")
-    
-    @staticmethod
-    def plot():
-        x = torch.linspace(-0.15, 0.15, 100, dtype=torch.float32)
-        for i, pt in enumerate(PriceTarget):
-            fig = plt.figure(i // 4)
-            fig.suptitle(f'Window {i//4}')
-            axes = fig.add_subplot(2,2,i%4 + 1)
-            axes.plot(x, pt.get_price(x), label=pt.name)
-            axes.set_title(pt.name)
-            axes.grid(True)
+    def plot(self):
+        fig = plt.figure(figsize=(10,6))
+        fig.suptitle(repr(self))
+        axes: list[Axes] = fig.subplots(1, 2)
+
+        axes[0].set_title("Modify")
+        x = torch.linspace(-0.5, 0.5, 200, dtype=torch.float32)
+        axes[0].plot(x, self.modify(x), label="modified")
+        axes[0].grid(True)
+
+        axes[1].set_title("Revert")
+        axes[1].plot(self.modify(x), self.revert(self.modify(x)), label="reverted")
+        axes[1].grid(True)
 
         [plt.figure(it).tight_layout() for it in plt.get_fignums()]
         plt.show()
+    
+class LinearPriceModifier(PriceModifier):
+    def __init__(self, lower: float, upper: float):
+        self.lower = lower
+        self.upper = upper
+    @override
+    def _modify(self, values: Tensor) -> Tensor:
+        return torch.clamp(values, min=self.lower, max=self.upper)
+    @override
+    def _revert(self, values: Tensor) -> Tensor:
+        return values
+    @override
+    def layer(self) -> Module: return torch.nn.Identity()
+    @override
+    def __repr__(self) -> str: return f"{type(self).__name__}({self.lower}, {self.upper})"
+    
+class SigmoidPriceModifier(PriceModifier):
+    """
+    output = m*sigmoid(ax+b)+n
+    input = 1/a*sigrev((x-n)/m)-b
+    """
+    def __init__(self, price_lower: float, price_upper: float, tanh: bool = False):
+        self.price_lower = price_lower
+        self.price_upper = price_upper
+        self.tanh = tanh
+
+    @property
+    def range(self) -> float: return 8
+    @cached_property
+    def a(self) -> float: return self.range/(self.price_upper-self.price_lower)
+    @cached_property
+    def b(self) -> float: return -self.range*self.price_lower/(self.price_upper-self.price_lower)-self.range/2
+    @cached_property
+    def m(self) -> float: return 2 if self.tanh else 1
+    @cached_property
+    def n(self) -> float: return -1 if self.tanh else 0
+    
+    @override
+    def _modify(self, values: Tensor) -> Tensor: return self.m*torch.sigmoid(self.a*values+self.b)+self.n
+    @override
+    def _revert(self, values: Tensor) -> Tensor: return (torch.logit((values-self.n)/self.m)-self.b)/self.a
+    @override
+    def layer(self) -> Module: return torch.nn.Tanh() if self.tanh else torch.nn.Sigmoid()
+    @override
+    def __repr__(self) -> str: return f"{type(self).__name__}({self.price_lower}, {self.price_upper}, {self.tanh})"
 
 @transient('intervals', 'min_interval', 'max_interval', 'min_interval_count', 'max_interval_count')
 class PricingDataConfig(Equatable, Serializable):
@@ -180,20 +208,22 @@ class BaseModelConfig(Equatable, Serializable):
         exchanges: tuple[Exchange],
         pricing_data_config: PricingDataConfig,
         price_estimator: PriceEstimator,
-        price_target:  PriceTarget,
+        price_modifier:  PriceModifier,
         timing: TimingConfig
     ):
         self.exchanges = exchanges
         self.pricing_data_config = pricing_data_config
         self.price_estimator = price_estimator
-        self.price_target = price_target
+        self.price_modifier = price_modifier
         self.timing = timing
     
-    def __str__(self) -> str:
-        return f"""
-pricing_data_config = {serializer.serialize(self.pricing_data_config, typed=False, indent=2)}
-price_estimator = {serializer.serialize(self.price_estimator, typed=False, indent=2)}
-price_target = {self.price_target.name}
-timing = {serializer.serialize(self.timing, typed=False, indent=2)}
+    def __repr__(self) -> str:
+        return f"""BaseModelConfig(
+    exchanges = {repr(self.exchanges)},
+    pricing_data_config = {serializer.serialize(self.pricing_data_config, typed=False, indent=2)},
+    price_estimator = {serializer.serialize(self.price_estimator, typed=False, indent=2)},
+    price_modifier = {repr(self.price_modifier)},
+    timing = {serializer.serialize(self.timing, typed=False, indent=2)}
+)
 """
     
