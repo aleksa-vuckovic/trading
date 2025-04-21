@@ -3,7 +3,7 @@ from torch import Tensor
 from typing import Literal, overload, override
 from trading.core.timing_config import TimingConfig
 from trading.core.securities import Exchange
-from trading.models.base.model_config import BaseModelConfig, PriceEstimator, PricingDataConfig, PriceModifier, BarValues
+from trading.models.base.model_config import BaseModelConfig, PriceEstimator, PriceOutputTarget, PricingDataConfig, PriceModifier, BarValues
 from trading.models.base.abstract_model import AbstractModel
 from trading.models.base.tensors import get_moving_average, get_time_relativized, check_tensors, check_tensor
 
@@ -11,13 +11,12 @@ class ModelConfig(BaseModelConfig):
     def __init__(
         self,
         exchanges: tuple[Exchange],
-        estimator: PriceEstimator,
-        modifier:  PriceModifier,
-        timing: TimingConfig,
         pricing_data_config: PricingDataConfig,
+        price_output_target: PriceOutputTarget,
+        timing: TimingConfig,
         mvg_window: int = 10
     ):
-        super().__init__(exchanges, pricing_data_config, estimator, modifier, timing)
+        super().__init__(exchanges, pricing_data_config, price_output_target, timing)
         self.mvg_window = mvg_window
 
 class RecursiveLayer(torch.nn.Module):
@@ -80,7 +79,7 @@ class Model(AbstractModel):
             torch.nn.Sigmoid(),
             torch.nn.BatchNorm1d(num_features=total_features//20),
             torch.nn.Linear(in_features=total_features//20, out_features=1),
-            self.config.price_modifier.layer()
+            self.config.price_output_target.modifier.layer()
         )
 
     #region Overrides
@@ -122,10 +121,10 @@ class Model(AbstractModel):
         }
         check_tensors(tensors)
         if with_output:
-            after = self.config.price_estimator.estimate_example(example)
+            after = self.config.price_output_target.estimate(example)
             close = example[self.config.pricing_data_config.min_interval.name][:,-1,BarValues.C.value]
             after = (after[:,-1] - close) / close
-            after = self.config.price_modifier.modify(after)
+            after = self.config.price_output_target.modifier.modify(after)
             check_tensor(after)
             return tensors, after
         return tensors

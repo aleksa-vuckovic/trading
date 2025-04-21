@@ -51,6 +51,25 @@ class Aggregation(Enum):
         if self==Aggregation.MIN: return data.min(dim=dim).values
         raise Exception(f"Unknown aggregation {self}")
 
+class PriceOutputTarget(Equatable, Serializable):
+    def __init__(self, interval: Interval, value: BarValues, index: slice, agg: Aggregation, modifier: PriceModifier):
+        self.interval = interval
+        self.value = value
+        self.index = index
+        self.agg = agg
+        self.modifier = modifier
+
+    def estimate(self, example: dict[str, Tensor]) -> Tensor:
+        key = f"{AFTER}_{self.interval.name}"
+        if key not in example: raise Exception(f"Can't estimate without {key}.")
+        tensor = example[key]
+        dims = len(tensor.shape)
+        index = tuple(slice(None,None) if it < dims-2 else self.index if it < dims - 1 else self.value.value for it in range(dims))
+        return self.agg.apply(tensor[index])
+
+    def __repr__(self) -> str:
+        return f"""PriceOutputTarget(interval={repr(self.interval)}, value={repr(self.value)}, index={repr(self.index)}, agg={repr(self.agg)}, modifier={repr(self.modifier)})"""
+
 class PriceEstimator(Equatable, Serializable):
     """
     Estimates the sell price within a timeframe,
@@ -207,23 +226,19 @@ class BaseModelConfig(Equatable, Serializable):
         self,
         exchanges: tuple[Exchange],
         pricing_data_config: PricingDataConfig,
-        price_estimator: PriceEstimator,
-        price_modifier:  PriceModifier,
+        price_output_target: PriceOutputTarget,
         timing: TimingConfig
     ):
         self.exchanges = exchanges
         self.pricing_data_config = pricing_data_config
-        self.price_estimator = price_estimator
-        self.price_modifier = price_modifier
+        self.price_output_target = price_output_target
         self.timing = timing
     
     def __repr__(self) -> str:
         return f"""BaseModelConfig(
     exchanges = {repr(self.exchanges)},
     pricing_data_config = {serializer.serialize(self.pricing_data_config, typed=False, indent=2)},
-    price_estimator = {serializer.serialize(self.price_estimator, typed=False, indent=2)},
-    price_modifier = {repr(self.price_modifier)},
+    price_output_target = {repr(self.price_output_target)},
     timing = {serializer.serialize(self.timing, typed=False, indent=2)}
 )
 """
-    

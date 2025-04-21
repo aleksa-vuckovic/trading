@@ -6,7 +6,7 @@ from torch import Tensor
 from trading.core import Interval
 from trading.core.timing_config import BasicTimingConfig
 from trading.providers.nasdaq import Nasdaq
-from trading.models.base.model_config import Aggregation, BarValues, PricingDataConfig, BaseModelConfig, PriceEstimator, LinearPriceModifier, SigmoidPriceModifier
+from trading.models.base.model_config import Aggregation, BarValues, PriceOutputTarget, PricingDataConfig, BaseModelConfig, PriceEstimator, LinearPriceModifier, SigmoidPriceModifier
 from trading.models.base.manager import HistoryFrame, ModelManager, StatTrigger, EpochTrigger
 from trading.models.base.stats import StatCollector, StatContainer
 from trading.models.base.tests.model import Model
@@ -23,8 +23,7 @@ class CountCollector(StatCollector):
 config = BaseModelConfig(
     (Nasdaq.instance,),
     PricingDataConfig({Interval.H1: 10}),
-    PriceEstimator(BarValues.C, Interval.H1, slice(1,2), Aggregation.AVG),
-    LinearPriceModifier(0, 0.1),
+    PriceOutputTarget(Interval.H1, BarValues.C, slice(1,2), Aggregation.AVG, LinearPriceModifier(0, 0.1)),
     BasicTimingConfig.Builder().at(9).build()
 )
 
@@ -87,22 +86,19 @@ class TestManager(unittest.TestCase):
         config1 = BaseModelConfig(
             (Nasdaq.instance,),
             PricingDataConfig({Interval.H1: 10, Interval.D1: 100}),
-            PriceEstimator(BarValues.C, Interval.H1, slice(1,2), Aggregation.AVG),
-            LinearPriceModifier(0, 0.1),
+            PriceOutputTarget(Interval.H1, BarValues.C, slice(1,2), Aggregation.AVG, LinearPriceModifier(0, 0.1)),
             BasicTimingConfig.Builder().around(11, delta_minute=30).build()
         )
         config2 = BaseModelConfig(
             (Nasdaq.instance,),
             PricingDataConfig({Interval.H1: 12, Interval.D1: 100}),
-            PriceEstimator(BarValues.C, Interval.H1, slice(1,2), Aggregation.AVG),
-            SigmoidPriceModifier(0, 0.1),
+            PriceOutputTarget(Interval.H1, BarValues.C, slice(1,2), Aggregation.AVG, LinearPriceModifier(0, 0.1)),
             BasicTimingConfig.Builder().around(11, delta_minute=30).build()
         )
         config1_copy = BaseModelConfig(
             (Nasdaq.instance,),
             PricingDataConfig({Interval.H1: 10, Interval.D1: 100}),
-            PriceEstimator(BarValues.C, Interval.H1, slice(1,2), Aggregation.AVG),
-            LinearPriceModifier(0, 0.1),
+            PriceOutputTarget(Interval.H1, BarValues.C, slice(1,2), Aggregation.AVG, LinearPriceModifier(0, 0.1)),
             BasicTimingConfig.Builder().around(11, delta_minute=30).build()
         )
         self.assertEqual(0, len(ModelManager.get_all(Model)))
