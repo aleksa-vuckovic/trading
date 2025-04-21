@@ -8,14 +8,14 @@ from base.caching import cached_scalar, FilePersistor
 from base.scraping import backup_timeout, scraper
 from base.utils import cached
 from trading.core.securities import Exchange, Security, SecurityType, WorkCalendar
+from trading.providers.nasdaq import NasdaqCalendar
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
 
-class NYSEWorkCalendar(WorkCalendar, Singleton):
+class NYSECalendar(NasdaqCalendar):
     def __init__(self):
-        pass
-    pass
+        super().__init__()
 
 class NYSESecurity(Security):
     def __init__(self, symbol: str, name: str, type: SecurityType, exchange: Exchange):
@@ -91,7 +91,7 @@ def _get_securities() -> Sequence[NYSESecurity]:
 
 class NYSE(Exchange):
     def __init__(self):
-        super().__init__('XNYS', 'XNYS', 'XNYS', 'NYSE', NYSEWorkCalendar.instance)
+        super().__init__('XNYS', 'XNYS', 'XNYS', 'NYSE', NYSECalendar.instance)
     @override
     @cached
     def securities(self) -> Sequence[NYSESecurity]:
@@ -99,7 +99,7 @@ class NYSE(Exchange):
 
 class NYSEAmerican(Exchange):
     def __init__(self):
-        super().__init__('XASE', 'XASE', 'XNYS', 'NYSE', NYSEWorkCalendar.instance)
+        super().__init__('XASE', 'XASE', 'XNYS', 'NYSE', NYSECalendar.instance)
     @override
     @cached
     def securities(self) -> Sequence[NYSESecurity]:
@@ -107,7 +107,7 @@ class NYSEAmerican(Exchange):
     
 class NYSEArca(Exchange):
     def __init__(self):
-        super().__init__('ARCX', 'ARCX', 'XNYS', 'NYSE', NYSEWorkCalendar.instance)
+        super().__init__('ARCX', 'ARCX', 'XNYS', 'NYSE', NYSECalendar.instance)
     @override
     @cached
     def securities(self) -> Sequence[NYSESecurity]:
