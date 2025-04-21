@@ -3,7 +3,7 @@ import config
 from trading.core.pricing import PricingProvider
 from trading.core.securities import Security
 from trading.core.tests.test_pricing import TestPricingProvider
-from trading.providers.nasdaq import Nasdaq
+from trading.providers.nasdaq import NasdaqGS, NasdaqMS, NasdaqCM
 from trading.providers.forex import Forex
 from trading.providers.wallstreetjournal import WallStreetJournal
 
@@ -13,4 +13,9 @@ class TestWallStreetJournal(TestPricingProvider):
         return WallStreetJournal(config.caching.storage)
     @override
     def get_securities(self) -> list[Security]:
-        return [Nasdaq.instance.get_security('NVDA'),Forex.instance.get_security('EURUSD')]
+        return [
+            NasdaqGS.instance.get_security('NVDA'),
+            NasdaqMS.instance.get_security('LUNR'),
+            NasdaqCM.instance.get_security('RGTI'),   
+            Forex.instance.get_security('EURUSD')
+        ]

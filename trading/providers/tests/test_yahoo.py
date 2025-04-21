@@ -7,11 +7,10 @@ from trading.core.pricing import PricingProvider
 from trading.core.securities import Security
 from trading.core.tests.test_pricing import TestPricingProvider
 from trading.providers.yahoo import Yahoo
-from trading.providers.nasdaq import Nasdaq
+from trading.providers.nasdaq import Nasdaq, NasdaqGS, NasdaqMS, NasdaqCM
 from trading.providers.forex import Forex
 
 stock = Nasdaq.instance.get_security('NVDA')
-fx = Forex.instance.get_security('EURUSD')
 calendar = Nasdaq.instance.calendar
 provider = Yahoo(config.caching.storage)
 
@@ -21,7 +20,12 @@ class TestYahoo(TestPricingProvider):
         return provider
     @override
     def get_securities(self) -> list[Security]:
-        return [stock, fx]
+        return [
+            NasdaqGS.instance.get_security('NVDA'),
+            NasdaqMS.instance.get_security('LUNR'),
+            NasdaqCM.instance.get_security('RGTI'),   
+            Forex.instance.get_security('EURUSD')
+        ]
     
     def test_pricing_l1(self):
         data = provider.get_pricing(
