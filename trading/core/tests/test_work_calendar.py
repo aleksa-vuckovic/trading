@@ -10,6 +10,19 @@ calendar = BasicWorkCalendar(tz=dates.ET, work_schedule=WorkSchedule.Builder(Hou
 exchange = Exchange('XTST', 'XTST', 'XTST', 'Test', calendar)
 
 class TestBasicWorkCalendar(unittest.TestCase):
+
+    def test_set_open_close(self):
+        examples = [
+            ('2025-04-17 00:00:00', '2025-04-16 09:30:00', '2025-04-16 16:00:00'),
+            ('2025-04-21 00:00:01', '2025-04-21 09:30:00', '2025-04-21 16:00:00')
+        ]
+        for time, open, close in examples:
+            time = calendar.str_to_datetime(time)
+            open = calendar.str_to_datetime(open)
+            close = calendar.str_to_datetime(close)
+            self.assertEqual(open, calendar.set_open(time))
+            self.assertEqual(close, calendar.set_close(time))
+            
     def test_add_intervals(self):
         dates = [
             '2025-02-21 13:34:12', '2025-02-21 16:00:00', '2025-02-21 18:23:23',

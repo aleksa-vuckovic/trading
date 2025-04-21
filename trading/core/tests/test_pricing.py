@@ -87,12 +87,12 @@ class TestPricingProvider(unittest.TestCase):
         now = time.time()
         provider = self.get_provider()
         securities = self.get_securities()
-        unix_from = now - 5*24*3600
         unix_to = now
         for interval in provider.get_intervals():
-            if interval > Interval.D1: continue
+            if interval > Interval.D1: unix_from = unix_to - interval.time()*10
+            else: unix_from = unix_to - 5*24*3600
             for security in securities:
-                context = f"Provider {type(self).__name__}, Interval {interval}, Security {security.symbol}"
+                context = f"Provider {type(self).__name__}, Interval {interval}, Security {security.symbol}, From {security.exchange.calendar.unix_to_datetime(unix_from)}, To {security.exchange.calendar.unix_to_datetime(unix_to)}"
                 data = provider.get_pricing(unix_from, unix_to, security, interval)
                 expect = len(security.exchange.calendar.get_timestamps(unix_from, unix_to, interval))
                 self.assertGreater(len(data), 0.7*expect, context)

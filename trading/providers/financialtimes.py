@@ -73,11 +73,15 @@ class FinancialTimes(BasePricingProvider):
     def _get_info(self, security: Security) -> _InfoDict|None:
         url = f"https://markets.ft.com/data/searchapi/searchsecurities"
         ids = _get_identifiers(security)
-        resp = scraper.get(url, params={'query': id})
-        data = json.loads(resp.text)
-        data = [it for it in data['data']['security'] if 'symbol' in it and it['symbol'] in ids]
-        if not data: return None
-        return data[0]
+        for id in ids:
+            try:
+                resp = scraper.get(url, params={'query': id})
+                data = json.loads(resp.text)
+                data = [it for it in data['data']['security'] if 'symbol' in it and it['symbol'] in ids]
+                if data: return data[0]
+            except:
+                logger.warning(f"Failed to fetch info for {id}. Might return None.")
+        return None
 
     @backup_timeout()
     def _fetch_pricing(self, xid: str, days: int, data_period: str, data_interval: int, realtime: bool):

@@ -37,12 +37,12 @@ class Hours(Equatable):
         return daysecs > self.open and daysecs <= (self.close or 24*3600)
     def set_open(self, time: datetime) -> datetime:
         if self.open is None: raise Exception(f"Can't set to open on closed hours.")
-        return nudge(time).replace(hour=self.open_hour, minute=self.open_minute)
+        return nudge(time).replace(hour=self.open_hour, minute=self.open_minute, second=0, microsecond=0)
     def set_close(self, time: datetime) -> datetime:
         if self.open is None: raise Exception(f"Can't set to close on closed hours.")
         time = nudge(time)
         if not self.close: return dates.to_zero(time + timedelta(days=1))
-        return time.replace(hour=self.close_hour, minute=self.close_minute)
+        return time.replace(hour=self.close_hour, minute=self.close_minute, second=0, microsecond=0)
     def is_off(self) -> bool: return self.open is None
 
 class WorkSchedule:

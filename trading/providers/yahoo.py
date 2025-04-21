@@ -90,18 +90,19 @@ class Yahoo(BasePricingProvider, DataProvider):
             result.append(None)
         for it in timestamps:
             if not it: result.append(None)
-            elif interval <= Interval.D1 and security.exchange.calendar.is_off(it): skip(it)
-            elif interval > Interval.D1:
+            if isinstance(security, ForexSecurity) and interval >= Interval.D1:
+                # Because apparently yahoo uses DST for forex
+                if security.exchange.calendar.unix_to_datetime(it).hour == 23: it += 3600
+            if interval > Interval.D1:
                 if it != security.exchange.calendar.to_zero(it): skip(it)
-                else: result.append(security.exchange.calendar.get_next_timestamp(it + 1, interval))
+                else: result.append(security.exchange.calendar.get_next_timestamp(it, interval))
             elif interval == Interval.D1:
                 if isinstance(security, ForexSecurity):
-                    date = security.exchange.calendar.unix_to_datetime(it)
-                    if date.hour != 23 and date.hour != 0: skip(it)
-                    else: result.append(security.exchange.calendar.get_next_timestamp(it + 3600, interval))
+                    if security.exchange.calendar.is_off(it) or it != security.exchange.calendar.to_zero(it): skip(it)
+                    else: result.append(security.exchange.calendar.get_next_timestamp(it, interval))
                 else:
-                    if it != security.exchange.calendar.set_open(it): skip(it)
-                    else: result.append(security.exchange.calendar.get_next_timestamp(it - 1, interval))
+                    if security.exchange.calendar.is_off(it) or it != security.exchange.calendar.set_open(it): skip(it)
+                    else: result.append(security.exchange.calendar.get_next_timestamp(it, interval))
             else:
                 timestamp = security.exchange.calendar.get_next_timestamp(it, interval)
                 if interval.time() != timestamp-it: skip(it)
