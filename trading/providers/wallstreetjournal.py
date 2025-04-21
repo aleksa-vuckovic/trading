@@ -41,7 +41,7 @@ class WallStreetJournal(BasePricingProvider):
             else NullPersistor()
 
     @backup_timeout()
-    def _fetch_pricing(self, key: str, step: str, time_frame: str, **kwargs):
+    def _fetch_pricing(self, key: str, step: str, time_frame: Literal['D5', 'D10'], **kwargs):
         """
         WSJ timestamps represent the start of the relevant interval.
         1 hour data is provided at full hours (10:00, 11:00...).
@@ -126,7 +126,8 @@ class WallStreetJournal(BasePricingProvider):
         return 120
     @override
     def get_pricing_raw(self, unix_from, unix_to, security, interval) -> list[OHLCV]:
-        data = self._fetch_pricing(_get_symbol(security), self._get_interval(interval), 'D5')
+        time_frame = 'D5'
+        data = self._fetch_pricing(_get_symbol(security), self._get_interval(interval), time_frame)
         def extract_data_points(series: dict) -> dict:
             return {key: [it[index] for it in series['DataPoints']] for index,key in enumerate(series['DesiredDataPoints'])}
         quotes = {'Timestamp': self._fix_timestamps(data['TimeInfo']['Ticks'], interval, security)}

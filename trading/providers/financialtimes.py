@@ -152,6 +152,7 @@ class FinancialTimes(BasePricingProvider):
         return 17*60
     @override
     def get_pricing_raw(self, unix_from: float, unix_to: float, security: Security, interval: Interval) -> list[OHLCV]:
+        if isinstance(security, ForexSecurity): raise Exception(f"FinancialTimes returns sparse data for forex securities.")
         days = math.ceil((time.time() - unix_from)/(24*3600)) + 1
         days = max(min(days, 15), 4)
         info = self._get_info(security)
@@ -163,8 +164,10 @@ class FinancialTimes(BasePricingProvider):
             raise Exception(f"Expected 2 objects in the Elements array (prices and volumes) but got less. Data:\n{data}")
         prices = [it for it in elements if it['Type'] == 'price'][0]
         volumes = [it for it in elements if it['Type'] == 'volume'][0]
+        if 'Error' in volumes and volumes['Error']['Code'] == '0':
+            volumes['ComponentSeries'] = [{'Type': 'Volume', 'Values': [None for _ in timestamps]}]
         def extract_component_series_values(element):
-            return {it['Type']:it['Values'] for it in element['ComponentSeries']}
+            return {it['Type']: it['Values'] for it in element['ComponentSeries']}
         data = {**extract_component_series_values(prices), **extract_component_series_values(volumes)}
         data['t'] = timestamps
         return filter_ohlcv(arrays_to_ohlcv(data), unix_from, unix_to)
