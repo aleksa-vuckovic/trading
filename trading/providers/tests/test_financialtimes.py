@@ -5,6 +5,7 @@ from trading.core.securities import Security
 from trading.core.tests.test_pricing import TestPricingProvider
 from trading.providers.financialtimes import FinancialTimes
 from trading.providers.nasdaq import NasdaqGS, NasdaqMS, NasdaqCM
+from trading.providers.nyse import NYSE, NYSEAmerican, NYSEArca
 
 class TestFinancialtimes(TestPricingProvider):
     @override
@@ -15,5 +16,8 @@ class TestFinancialtimes(TestPricingProvider):
         return [
             NasdaqGS.instance.get_security('NVDA'),
             NasdaqMS.instance.get_security('LUNR'),
-            NasdaqCM.instance.get_security('RGTI')
+            NasdaqCM.instance.get_security('RGTI'),
+            NYSE.instance.get_security('KO'),
+            NYSEAmerican.instance.get_security('IMO'),
+            NYSEArca.instance.get_security('SPY')
         ]

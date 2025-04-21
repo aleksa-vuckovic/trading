@@ -99,7 +99,7 @@ class NYSE(Exchange):
 
 class NYSEAmerican(Exchange):
     def __init__(self):
-        super().__init__('XASE', 'XASE', 'XNYS', 'NYSE', NYSECalendar.instance)
+        super().__init__('XASE', 'XASE', 'XNYS', 'NYSE American', NYSECalendar.instance)
     @override
     @cached
     def securities(self) -> Sequence[NYSESecurity]:
@@ -107,7 +107,7 @@ class NYSEAmerican(Exchange):
     
 class NYSEArca(Exchange):
     def __init__(self):
-        super().__init__('ARCX', 'ARCX', 'XNYS', 'NYSE', NYSECalendar.instance)
+        super().__init__('ARCX', 'ARCX', 'XNYS', 'NYSE Arca', NYSECalendar.instance)
     @override
     @cached
     def securities(self) -> Sequence[NYSESecurity]:

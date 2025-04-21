@@ -9,6 +9,7 @@ from trading.core.tests.test_pricing import TestPricingProvider
 from trading.providers.yahoo import Yahoo
 from trading.providers.nasdaq import Nasdaq, NasdaqGS, NasdaqMS, NasdaqCM
 from trading.providers.forex import Forex
+from trading.providers.nyse import NYSE, NYSEAmerican, NYSEArca
 
 stock = Nasdaq.instance.get_security('NVDA')
 calendar = Nasdaq.instance.calendar
@@ -24,7 +25,10 @@ class TestYahoo(TestPricingProvider):
             NasdaqGS.instance.get_security('NVDA'),
             NasdaqMS.instance.get_security('LUNR'),
             NasdaqCM.instance.get_security('RGTI'),   
-            Forex.instance.get_security('EURUSD')
+            Forex.instance.get_security('EURUSD'),
+            NYSE.instance.get_security('KO'),
+            NYSEAmerican.instance.get_security('IMO'),
+            NYSEArca.instance.get_security('SPY')
         ]
     
     def test_pricing_l1(self):

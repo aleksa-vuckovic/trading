@@ -5,6 +5,7 @@ from trading.core.securities import Security
 from trading.core.tests.test_pricing import TestPricingProvider
 from trading.providers.nasdaq import NasdaqGS, NasdaqMS, NasdaqCM
 from trading.providers.forex import Forex
+from trading.providers.nyse import NYSE, NYSEAmerican, NYSEArca
 from trading.providers.wallstreetjournal import WallStreetJournal
 
 class TestWallStreetJournal(TestPricingProvider):
@@ -17,5 +18,8 @@ class TestWallStreetJournal(TestPricingProvider):
             NasdaqGS.instance.get_security('NVDA'),
             NasdaqMS.instance.get_security('LUNR'),
             NasdaqCM.instance.get_security('RGTI'),   
-            Forex.instance.get_security('EURUSD')
+            Forex.instance.get_security('EURUSD'),
+            NYSE.instance.get_security('KO'),
+            NYSEAmerican.instance.get_security('IMO'),
+            NYSEArca.instance.get_security('SPY')
         ]

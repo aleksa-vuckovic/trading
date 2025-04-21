@@ -9,7 +9,7 @@ from base import dates
 from base.scraping import scraper, backup_timeout
 from base.caching import FilePersistor, NullPersistor, Persistor, SqlitePersistor
 from trading.core.interval import Interval
-from trading.core.securities import Security
+from trading.core.securities import Security, SecurityType
 from trading.core.pricing import OHLCV, BasePricingProvider
 from trading.providers.forex import ForexSecurity
 from trading.providers.nyse import NYSESecurity
@@ -22,13 +22,19 @@ _TOKEN_VALUE='57494d5ed7ad44af85bc59a51dd87c90'
 _CKEY='57494d5ed7'
 _MODULE: str = __name__.split(".")[-1]
 
+_security_types = {
+    SecurityType.STOCK: 'STOCK',
+    SecurityType.ETF: 'FUND',
+    SecurityType.FX: 'CURRENCY'
+}
 def _get_symbol(security: Security) -> str:
+    typestr = _security_types[security.type]
     if isinstance(security, NasdaqSecurity):
-        return f"STOCK/US/{security.exchange.operating_mic}/{security.symbol}"
+        return f"{typestr}/US/{security.exchange.operating_mic}/{security.symbol}"
     if isinstance(security, NYSESecurity):
-        return f"STOCK/US/{security.exchange.segment_mic}/{security.symbol}"
+        return f"{typestr}/US/{security.exchange.segment_mic}/{security.symbol}"
     if isinstance(security, ForexSecurity):
-        return f"CURRENCY/US/XTUP/{security.base}{security.quote}"
+        return f"{typestr}/US/XTUP/{security.base}{security.quote}"
     raise Exception(f"Unsupported security {security}.")
 
 class WallStreetJournal(BasePricingProvider):
