@@ -171,7 +171,7 @@ class BasePricingProvider(PricingProvider):
     def _get_pricing_live_delay_fn(self, security: Security, interval: Interval) -> float:
         return self.get_pricing_delay(security, interval)
     def _get_pricing_should_refresh_fn(self, fetch: float, now: float, security: Security, interval: Interval) -> bool:
-        return security.exchange.calendar.get_next_timestamp(fetch, interval) < now
+        return security.exchange.calendar.get_next_timestamp(fetch, interval) < now and now-fetch > 3600
     @cached_series(
         timestamp_fn=_get_pricing_timestamp_fn,
         key_fn=_get_pricing_key_fn,
