@@ -68,3 +68,18 @@ class TestAlgos(TestCase):
             for a,b in zip(expect,result):
                 self.assertAlmostEqual(a,b,3)
 
+
+    def test_interpolate_stair(self):
+        x = [1, 10, 100, 1000]
+        y = [2, 20, 200, 2000]
+        x_ret = [0, 1, 5, 10, 50, 100, 500, 1000, 1500]
+        expect = [2, 2, 2, 20, 20, 200, 200, 2000, 2000]
+        result = interpolate(x, y, x_ret, 'stair')
+        self.assertEqual(expect, result)
+
+        class A:
+            pass
+        y = [A(), A(), A(), A()]
+        expect = [y[0], y[0], y[0], y[1], y[1], y[2], y[2], y[3], y[3]]
+        result = interpolate(x, y, x_ret, 'stair')
+        self.assertEqual(expect, result)

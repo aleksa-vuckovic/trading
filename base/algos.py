@@ -1,5 +1,6 @@
 #1
-from typing import Callable, Sequence, Iterable, Any, overload, Protocol, Literal
+from os import curdir
+from typing import Callable, Sequence, Iterable, Any, no_type_check, overload, Protocol, Literal, cast
 from enum import Enum
 import itertools
 import math
@@ -77,22 +78,30 @@ class LineSegment:
         return x >= self.start and x <= self.end
     def __call__(self, x: float) -> float:
         return self.k*x+self.n
-type InterpolationMetod = Literal['linear', 'linear_edge']
-def interpolate(x: Sequence[float], y: Sequence[float], x_ret: Sequence[float], method: InterpolationMetod = 'linear_edge') -> list[float]:
+type InterpolationMethod = Literal['linear', 'linear_edge', 'stair']
+@overload
+def interpolate(x: Sequence[float], y: Sequence[float], x_ret: Iterable[float], method: InterpolationMethod = 'linear_edge') -> list[float]: ...
+@overload
+def interpolate[T](x: Sequence[float], y: Sequence[T], x_ret: Iterable[float], method: Literal['stair']) -> list[T]: ...
+def interpolate(x: Sequence[float], y: Sequence, x_ret: Iterable[float], method: InterpolationMethod = 'linear_edge') -> list:
     assert len(x) == len(y)
     i = 0 #x_ret cursor
     if method == 'linear_edge':
-        y_ret: list[float] = []
-        for segment in itertools.chain(
-            [LineSegment((float('-inf'), y[0]), (x[0], y[0]))],
-            [LineSegment((x[i-1], y[i-1]), (x[i], y[i])) for i in range(1,len(x))],
-            [LineSegment((x[-1], y[-1]), (float('+inf'), y[-1]))]
-        ):
-            while i < len(x_ret) and x_ret[i] in segment:
-                y_ret.append(segment(x_ret[i]))
-                i += 1
-            if i == len(x_ret): break
-        return y_ret
+        ret = []
+        try:
+            items = iter(x_ret)
+            cur = next(items)
+            for segment in itertools.chain(
+                [LineSegment((float('-inf'), y[0]), (x[0], y[0]))],
+                (LineSegment((x[i-1], y[i-1]), (x[i], y[i])) for i in range(1,len(x))),
+                [LineSegment((x[-1], y[-1]), (float('+inf'), y[-1]))]
+            ):
+                while cur in segment:
+                    ret.append(segment(cur))
+                    cur = next(items)
+        except StopIteration:
+            pass
+        return ret
     elif method == 'linear':
         N = len(x)
         if not N: k,n = 0,0
@@ -102,4 +111,11 @@ def interpolate(x: Sequence[float], y: Sequence[float], x_ret: Sequence[float], 
             k /= N*sum(a**2 for a in x)-sum(x)**2
             n = (sum(y)-k*sum(x))/N
         return [k*a+n for a in x_ret]
+    elif method == 'stair':
+        ret = []
+        index = 0
+        for val in x_ret:
+            while index+1 < len(x) and x[index+1] <= val: index += 1
+            ret.append(y[index])
+        return ret
     else: raise Exception(f"Unknown interpolation methods {method}.")
