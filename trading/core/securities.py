@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import Sequence
 from enum import Enum, auto
 
-from sqlalchemy.engine.processors import str_to_datetime
 from base.reflection import get_classes
-from base.types import Singleton
+from base.types import Equatable, Singleton
 from base.utils import cached
+from base.serialization import Serializable
 from trading.core.work_calendar import WorkCalendar
 
 class Exchange(Singleton):
@@ -58,7 +58,7 @@ class SecurityType(Enum):
     FX = auto()
     TEST = auto()
 
-class Security:
+class Security(Equatable, Serializable):
     def __init__(
         self,
         symbol: str,

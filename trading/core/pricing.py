@@ -58,6 +58,7 @@ class PricingProvider:
         2. Raise an exception if the interval is not supported.
         3. Ignore interval parts that are unavailable.
     """
+    #region Abstract
     def get_pricing(
         self,
         unix_from: float,
@@ -86,7 +87,12 @@ class PricingProvider:
         Get the unix timestamp of the start-of-availability for the given interval.
         """
         raise NotImplementedError()
+    #endregion
 
+    def get_pricing_at(self, unix_time: float, security: Security, interval: Interval = Interval.M1) -> float:
+        unix_from = security.exchange.calendar.add_intervals(unix_time, interval, -1)
+        p = self.get_pricing(unix_from, unix_time, security, interval, interpolate=True)[-1]
+        return (p.o+p.c)/2
 
 def merge_pricing(
     data: Sequence[OHLCV],

@@ -1,11 +1,12 @@
 #3
 from __future__ import annotations
-from typing import TypeVar, override
+import time
+from typing import Iterable, Iterator, TypeVar, override
 from datetime import datetime
 from base.serialization import Serializable
 from base.types import Equatable
 from trading.core import Interval
-from trading.core.securities import Exchange
+from trading.core.securities import Exchange, Security
 
 T = TypeVar('T', float, datetime)
 
@@ -73,3 +74,15 @@ class ForexTimingConfig(TimingConfig):
             if config.matches(time, exchange):
                 return True
         return False
+
+def execution_spots(securities: Iterable[Security], timing_config: TimingConfig, interval: Interval, start: float|None = None, end: float|None = None):
+    unix_time = start or time.time()
+    end = end or float('+inf')
+    securities = set(securities)
+    exchanges = set(it.exchange for it in securities)
+
+    while True:
+        times: dict[Exchange, float] = {it: timing_config.next(unix_time, interval, it) for it in exchanges}
+        unix_time = min(times.values())
+        if unix_time > end: break
+        yield unix_time, {it for it in securities if times[it.exchange] == unix_time}
