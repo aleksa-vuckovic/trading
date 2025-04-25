@@ -84,7 +84,6 @@ def interpolate(x: Sequence[float], y: Sequence[float], x_ret: Iterable[float], 
 @overload
 def interpolate[T](x: Sequence[float], y: Sequence[T], x_ret: Iterable[float], method: Literal['stair']) -> list[T]: ...
 def interpolate(x: Sequence[float], y: Sequence, x_ret: Iterable[float], method: InterpolationMethod = 'linear_edge') -> list:
-    assert len(x) == len(y)
     i = 0 #x_ret cursor
     if method == 'linear_edge':
         ret = []
