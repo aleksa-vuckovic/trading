@@ -9,3 +9,7 @@ def cached(func: Callable[[*Args], T]) -> Callable[[*Args], T]:
         if args not in values: values[args] = func(*args)
         return values[args]
     return wrapper
+
+def get_or_set[K,V](data: dict[K,V], key: K, create: Callable[[K], V]) -> V:
+    if key not in data: data[key] = create(key)
+    return data[key]

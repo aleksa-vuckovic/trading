@@ -1,5 +1,6 @@
 from unittest import TestCase
-from base.algos import binary_search, BinarySearchEdge, interpolate, is_sorted
+from base.algos import binary_search, BinarySearchEdge, binsert, interpolate, is_sorted
+from base.types import Equatable
 
 class TestAlgos(TestCase):
     def test_binary_search(self):
@@ -21,6 +22,22 @@ class TestAlgos(TestCase):
         self.assertEqual(4, binary_search(collection, 10.5, key=get_time, edge=BinarySearchEdge.LOW))
         collection.pop()
         self.assertEqual(2, binary_search(collection, 3, key=get_time, edge=BinarySearchEdge.HIGH))
+    
+    def test_binsert(self):
+        class A(Equatable):
+            def __init__(self, x: int):
+                self.x = x
+        collection = [A(1), A(3)]
+        binsert(collection, A(2), key=lambda it: it.x)
+        binsert(collection, A(0), key=lambda it: it.x)
+        binsert(collection, A(4), key=lambda it: it.x)
+        self.assertEqual([A(0),A(1),A(2),A(3),A(4)], collection)
+
+        collection = [1,3]
+        binsert(collection, 4)
+        binsert(collection, 2)
+        binsert(collection, 0)
+        self.assertEqual([0,1,2,3,4], collection)
 
     def test_is_sorted(self):
         true_examples = [[1,1,5,6],[],[1],[1.2,1.2,1.20001,1231.2]]

@@ -51,6 +51,15 @@ def binary_search(collection: Sequence, value: Comparable, key: Callable[..., Co
         else: i = mid
     return i if edge == BinarySearchEdge.LOW else j if edge == BinarySearchEdge.HIGH else None
 
+@overload
+def binsert[T, K](collection: list[T], item: T, key: Callable[[T], K]) -> None: ...
+@overload
+def binsert[T: Comparable](collection: list[T], item: T) -> None: ...
+def binsert(collection: list, item: Any, key: Callable[[Any], Any]=lambda it:it) -> None:
+    index = binary_search(collection, key(item), key=key, edge=BinarySearchEdge.LOW)
+    collection.insert(index+1, item)
+
+
 def is_sorted(collection: Iterable[Comparable]) -> bool:
     iter1 = iter(collection)
     iter2 = iter(collection)
