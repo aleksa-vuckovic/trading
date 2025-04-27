@@ -163,7 +163,7 @@ Params = ParamSpec('Params')
 
 class CachedSeriesDescriptor(Generic[S, *Args, T]):
     def __init__(self,
-        method: Callable[[S, float, float, *Args], Sequence[T]],
+        func: Callable[[S, float, float, *Args], Sequence[T]],
         get_timestamp: Callable[[T], float],
         get_key: Callable[[S, *Args], str],
         get_persistor: Callable[[S, *Args], Persistor],
@@ -171,7 +171,7 @@ class CachedSeriesDescriptor(Generic[S, *Args, T]):
         get_delay: Callable[[S, *Args], float],
         should_refresh: Callable[[S, float, float, *Args], bool],    
     ):
-        self.method = method
+        self.func = func
         self.get_timestamp = get_timestamp
         self.get_key = get_key
         self.get_persistor = get_persistor
@@ -207,14 +207,14 @@ class CachedSeriesDescriptor(Generic[S, *Args, T]):
                 slot_to <= unix_now or self.should_refresh(instance, meta.partials[key], unix_now, *args)
             ):
                 data: list[T] = persistor.read(key)
-                data.extend(self.method(instance, meta.partials[key], min(slot_to, unix_now), *args))
+                data.extend(self.func(instance, meta.partials[key], min(slot_to, unix_now), *args))
                 persistor.persist(key, data)
                 extend(data)
                 if slot_to <= unix_now: del meta.partials[key]
                 else: meta.partials[key] = unix_now
             elif persistor.has(key): extend(persistor.read(key))
             else:
-                data = list(self.method(instance, slot_from, min(slot_to, unix_now), *args))
+                data = list(self.func(instance, slot_from, min(slot_to, unix_now), *args))
                 persistor.persist(key, data)
                 extend(data)
                 if slot_to > unix_now: meta.partials[key] = unix_now
@@ -280,31 +280,60 @@ def cached_series(
         )
     return decorate
 
-class CachedScalarData(TypedDict):
-    data: Any
-    unix_time: float
+
+class CachedScalarData(Serializable, Generic[T]):
+    def __init__(self, data: T, unix_time: float):
+        self.data = data
+        self.unix_time = unix_time
+
+class CachedScalarDescriptor(Generic[S, *Args, T]):
+    def __init__(
+        self,
+        func: Callable[[S, *Args], T],
+        get_key: Callable[[S, *Args], str],
+        get_persistor: Callable[[S, *Args], Persistor],
+        refresh_after: float|None
+    ):
+        self.func = func
+        self.get_key = get_key
+        self.get_persistor = get_persistor
+        self.refresh_after = refresh_after
+    
+    def cached_method(self, instance: S, *args: *Args) -> T:
+        key = self.get_key(instance, *args)
+        persistor = self.get_persistor(instance, *args)
+        if persistor.has(key):
+            data = persistor.read(key, CachedScalarData)
+            if self.refresh_after is None or data.unix_time + self.refresh_after > time.time():
+                return data.data
+        result = self.func(instance, *args)
+        persistor.persist(key, CachedScalarData(result, time.time()))
+        return result
+    
+    def invalidate(self, instance: S, *args: *Args):
+        key = self.get_key(instance, *args)
+        persistor = self.get_persistor(instance, *args)
+        persistor.delete(key)
+    
+    @overload
+    def __get__(self, instance: None, owner: type[S]) -> Self: ...
+    @overload
+    def __get__(self, instance: S, owner: type[S]) -> Callable[[*Args], T]: ...
+    def __get__(self, instance: S|None, owner: type[S]) -> Callable[[*Args], T]|Self:
+        if instance is None: return self
+        else: return lambda *args: self.cached_method(instance, *args)
+
 def cached_scalar(
     *,
-    key_fn: Callable[Params, str],
-    persistor_fn: Persistor|Callable[Params, Persistor],
+    key_fn: Callable[[S, *Args], str],
+    persistor_fn: Persistor|Callable[[S, *Args], Persistor],
     refresh_after: float|None = None
-) -> Callable[[Callable[Params, T]], Callable[Params, T]]:
-    get_key: Callable[Params, str] = key_fn
-    get_persistor: Callable[Params, Persistor] = persistor_fn if callable(persistor_fn) else lambda *args, **kwargs: persistor_fn
-    def decorate(func: Callable[Params, T]) -> Callable[Params, T]:
-        def wrapper(*args: Params.args, **kwargs: Params.kwargs) -> T:
-            key = get_key(*args, **kwargs)
-            persistor = get_persistor(*args, **kwargs)
-            data: CachedScalarData
-            try:
-                data = persistor.read(key)
-                if refresh_after is not None and data['unix_time'] + refresh_after < time.time():
-                    raise NotCachedError()
-                return data['data']
-            except NotCachedError:
-                result = func(*args, **kwargs)
-                data = {'data': result, 'unix_time': time.time()}
-                persistor.persist(key, data)
-                return result
-        return wrapper
+) -> Callable[[Callable[[S, *Args], T]], CachedScalarDescriptor[S, *Args, T]]:
+    def decorate(func: Callable[[S, *Args], T]) -> CachedScalarDescriptor[S, *Args, T]:
+        return CachedScalarDescriptor(
+            func,
+            key_fn,
+            persistor_fn if callable(persistor_fn) else lambda self, *args: cast(Persistor, persistor_fn),
+            refresh_after
+        )
     return decorate

@@ -4,7 +4,6 @@ from enum import Enum, auto
 from tokenize import Single
 from typing import Sequence, override
 from datetime import datetime, timedelta
-from base.caching import cached_scalar
 from base.types import Serializable, Singleton
 from base import dates
 from base.utils import cached

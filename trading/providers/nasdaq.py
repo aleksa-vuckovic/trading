@@ -78,18 +78,20 @@ class NasdaqCM(Exchange):
     def securities(self) -> Sequence[Security]:
         return [it for it in Nasdaq.instance.securities() if it.exchange is NasdaqCM.instance]
 
-@cached_scalar(
-    key_fn=lambda:"nasdaqlisted.txt",
-    persistor_fn=FilePersistor(config.caching.file_path/_MODULE/"listed"),
-    refresh_after=7*24*3600
-)
-def _fetch_listed() -> list[str]:
-    response = scraper.get("https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt")
-    return response.text.splitlines(False)
 class Nasdaq(Exchange):
     def __init__(self):
         super().__init__('XNAS', 'XNAS', 'XNAS', 'Nasdaq All Markets', NasdaqCalendar.instance)
     
+    @cached_scalar(
+        key_fn=lambda self:"nasdaqlisted.txt",
+        persistor_fn=FilePersistor(config.caching.file_path/_MODULE/"listed"),
+        refresh_after=7*24*3600
+    )
+
+    def _fetch_listed(self) -> list[str]:
+        response = scraper.get("https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt")
+        return response.text.splitlines(False)
+
     @override
     @cached
     def securities(self) -> Sequence[NasdaqSecurity]:
@@ -97,7 +99,7 @@ class Nasdaq(Exchange):
         tests = 0
         failed = 0
         error = None
-        for row in _fetch_listed():
+        for row in self._fetch_listed():
             try:
                 sec = NasdaqSecurity.from_line(row)
                 if sec.type == SecurityType.TEST: tests += 1

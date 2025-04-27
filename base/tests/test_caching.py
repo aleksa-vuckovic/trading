@@ -195,6 +195,28 @@ class TestCaching(TestCase):
         test2= provider.get_series(unix_from, unix_to)
         self.assertEqual(1, len(test2))
 
+    def test_cached_series_invalidate(self):
+        invocations = 0
+        class Provider:
+            @staticmethod
+            def get_series_timestamp_fn(it: dict) -> float: return it['time']
+            def get_series_key_fn(self, type: str) -> str: return type
+            def get_series_time_step_fn(self, type: str) -> float: return 10 if type == 'type10' else 30
+            @cached_series(
+                timestamp_fn=get_series_timestamp_fn,
+                key_fn=get_series_key_fn,
+                persistor_fn=FilePersistor(TEST_DATA),
+                timestep_fn=get_series_time_step_fn
+            )
+            def get_series(self, unix_from: float, unix_to: float, type: str) -> list[dict]:
+                nonlocal invocations
+                invocations += 1
+                return [{"time": float(it)} for it in range(math.floor(unix_from)+1, math.floor(unix_to)+1 )]
+        provider = Provider()
+        provider.get_series(5, 10, 'a')
+
+            
+
     def test_cached_series_decorator_live_refresh(self):
         now = time.time()
         invocations = 0
@@ -233,50 +255,76 @@ class TestCaching(TestCase):
         invocations = 0
         class Test(Enum):
             A = 'aa'
-        def get_scalar_key_fn(name: str, typ: Test) -> str: return f"{name}/{typ.name}"
-        @cached_scalar(
-            key_fn=get_scalar_key_fn,
-            persistor_fn=FilePersistor(TEST_DATA)
-        )
-        def get_scalar(name: str, typ: Test) -> dict:
-            nonlocal invocations
-            invocations += 1
-            return {'name': name, 'typ': typ.name}
+        class Provider:
+            def get_scalar_key_fn(self, name: str, typ: Test) -> str: return f"{name}/{typ.name}"
+            @cached_scalar(
+                key_fn=get_scalar_key_fn,
+                persistor_fn=FilePersistor(TEST_DATA)
+            )
+            def get_scalar(self, name: str, typ: Test) -> dict:
+                nonlocal invocations
+                invocations += 1
+                return {'name': name, 'typ': typ.name}
+            
+            def get_scalar_key_fn2(self, name: str) -> str: return f"test-{name}"
+            @cached_scalar(
+                key_fn=get_scalar_key_fn2,
+                persistor_fn=FilePersistor(TEST_DATA)
+            )
+            def get_scalar2(self, name: str) -> str: return name
         
-        data = get_scalar('test', Test.A)
+        provider = Provider()
+        data = provider.get_scalar('test', Test.A)
         self.assertEqual({'name':'test','typ':Test.A.name}, data)
-        self.assertEqual(data, get_scalar('test', Test.A))
+        self.assertEqual(data, provider.get_scalar('test', Test.A))
         self.assertEqual(1, invocations)
 
-        def get_scalar_key_fn2(name: str) -> str: return f"test-{name}"
-        @cached_scalar(
-            key_fn=get_scalar_key_fn2,
-            persistor_fn=FilePersistor(TEST_DATA)
-        )
-        def get_scalar2(name: str) -> str: return name
-        self.assertEqual('test', get_scalar2('test'))
+        self.assertEqual('test', provider.get_scalar2('test'))
     
     def test_cached_scalar_decorator_refresh(self):        
         invocations = 0
-        def key_fn(a: str) -> str: return a
-        @cached_scalar(
-            key_fn=key_fn,
-            persistor_fn=FilePersistor(TEST_DATA),
-            refresh_after=0.1
-        )
-        def get_data(a: str) -> A:
-            nonlocal invocations
-            invocations += 1
-            return A(a, time.time())
-        
-        data1 = get_data("a")
+        class Provider:
+            def key_fn(self, a: str) -> str: return a
+            @cached_scalar(
+                key_fn=key_fn,
+                persistor_fn=FilePersistor(TEST_DATA),
+                refresh_after=0.1
+            )
+            def get_data(self, a: str) -> A:
+                nonlocal invocations
+                invocations += 1
+                return A(a, time.time())
+        provider = Provider()
+        data1 = provider.get_data("a")
         time.sleep(0.05)
-        data2 = get_data("a")
+        data2 = provider.get_data("a")
         self.assertEqual(data1, data2)
         time.sleep(0.05)
-        data2 = get_data("a")
+        data2 = provider.get_data("a")
         self.assertNotEqual(data1, data2)
         self.assertGreater(data2.b, data1.b)
-        data2 = get_data("b") and get_data("b")
+        data2 = provider.get_data("b") and provider.get_data("b")
         self.assertNotEqual(data1, data2)
         self.assertEqual(invocations, 3)
+
+    def test_cached_scalar_invalidate(self):
+        invocations = 0
+        class Provider:
+            def key_fn(self, a: str) -> str: return a
+            @cached_scalar(
+                key_fn=key_fn,
+                persistor_fn=FilePersistor(TEST_DATA)
+            )
+            def get_data(self, a: str) -> A:
+                nonlocal invocations
+                invocations += 1
+                return A(a, time.time())
+        provider = Provider()
+        a1 = provider.get_data('1')
+        a2 = provider.get_data('2')
+        self.assertEqual(a1, provider.get_data('1'))
+        Provider.get_data.invalidate(provider, '1')
+        a12 = provider.get_data('1')
+        self.assertNotEqual(a1, a12)
+        self.assertEqual(a2, provider.get_data('2'))
+        self.assertEqual(3, invocations)

@@ -1,4 +1,5 @@
 #1
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import overload
@@ -40,5 +41,6 @@ def to_zero(time: datetime|float, tz=UTC) -> datetime|float:
     if not isinstance(time, datetime):
         return to_zero(unix_to_datetime(time, tz=tz)).timestamp()
     return time.replace(hour=0, minute=0, second=0, microsecond=0)
-def now(tz=UTC) -> datetime:
-    return datetime.now(tz=tz)
+def now(tz=UTC) -> datetime: return datetime.now(tz=tz)
+unix_time: float|None = None
+def unix() -> float: return unix_time or time.time()
