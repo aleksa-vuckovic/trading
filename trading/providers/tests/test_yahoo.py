@@ -2,6 +2,7 @@ from typing import override
 import time
 import unittest
 import config
+from base import dates
 from trading.core.interval import Interval
 from trading.core.pricing import PricingProvider
 from trading.core.securities import Security
@@ -124,8 +125,8 @@ class TestYahoo(TestPricingProvider):
     @unittest.skip("Avoid http calls")
     def test_merge(self):
         nonmerged = Yahoo('none', merge={})
-        start = stock.exchange.calendar.get_next_timestamp(time.time() - 5*24*3600, Interval.D1)
-        end = stock.exchange.calendar.get_next_timestamp(time.time()-3*24*3600, Interval.D1)
+        start = stock.exchange.calendar.get_next_timestamp(dates.unix() - 5*24*3600, Interval.D1)
+        end = stock.exchange.calendar.get_next_timestamp(dates.unix()-3*24*3600, Interval.D1)
 
         result1 = provider.get_pricing(start, end, stock, Interval.M30)
         result2 = nonmerged.get_pricing(start, end, stock, Interval.M30)

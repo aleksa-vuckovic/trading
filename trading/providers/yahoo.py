@@ -6,6 +6,7 @@ import time
 import math
 from typing import Literal, Mapping, override
 import config
+from base import dates
 from base.algos import BinarySearchEdge, binary_search
 from base.caching import NullPersistor, cached_scalar, Persistor, FilePersistor, SqlitePersistor
 from base.scraping import scraper, backup_timeout, BadResponseException, TooManyRequestsException
@@ -111,7 +112,7 @@ class Yahoo(BasePricingProvider, DataProvider):
 
     @override
     def get_interval_start(self, interval):
-        now = time.time()
+        now = dates.unix()
         if interval >= Interval.D1: return now - 10*365*24*3600
         if interval == Interval.H1: return now - 729*24*3600
         if interval in {Interval.M30, Interval.M15, Interval.M5}: return now - 59*24*3600
@@ -126,7 +127,7 @@ class Yahoo(BasePricingProvider, DataProvider):
     @override
     def get_pricing_raw(self, unix_from: float, unix_to: float, security: Security, interval: Interval) -> list[OHLCV]:
         first_trade_time = self.get_first_trade_time(security) if not security.type == SecurityType.FX else 0
-        now = time.time()
+        now = dates.unix()
         query_from = max(unix_from - interval.time(), first_trade_time + _MIN_AFTER_FIRST_TRADE)
         query_from = max(query_from, self.get_interval_start(interval))
         query_to = unix_to
@@ -177,7 +178,7 @@ class Yahoo(BasePricingProvider, DataProvider):
             info = yfinance.Ticker(self._get_symbol(security)).info
         except json.JSONDecodeError:
             raise TooManyRequestsException()
-        mock_time = int(time.time() - 15*24*3600)
+        mock_time = int(dates.unix() - 15*24*3600)
         try:
             meta = self._fetch_pricing(mock_time-3*24*3600, mock_time, security.symbol, self._get_interval(Interval.D1))['chart']['result'][0]['meta']
         except BadResponseException:

@@ -7,6 +7,7 @@ import sqlite3
 from typing import Callable, Generic, Iterable, Any, Self, Sequence, cast, overload, override, TypeVar, ParamSpec, TypeVarTuple, TypedDict
 from pathlib import Path
 
+from base import dates
 from base.serialization import TypedSerializer
 from base.algos import binary_search, BinarySearchEdge
 from base.files import escape_filename, unescape_filename
@@ -192,7 +193,7 @@ class CachedSeriesDescriptor(Generic[S, *Args, T]):
     def cached_method(self, instance: S, unix_from: float, unix_to: float, *args: *Args) -> list[T]:
         persistor = self.get_persistor(instance, *args)
         meta_key = self._meta_key(instance, *args)
-        unix_now = time.time() - self.get_delay(instance, *args)
+        unix_now = dates.unix() - self.get_delay(instance, *args)
         result: list[T] = []
         def extend(data: Sequence[T]):
             if not data: return
@@ -304,10 +305,10 @@ class CachedScalarDescriptor(Generic[S, *Args, T]):
         persistor = self.get_persistor(instance, *args)
         if persistor.has(key):
             data = persistor.read(key, CachedScalarData)
-            if self.refresh_after is None or data.unix_time + self.refresh_after > time.time():
+            if self.refresh_after is None or data.unix_time + self.refresh_after > dates.unix():
                 return data.data
         result = self.func(instance, *args)
-        persistor.persist(key, CachedScalarData(result, time.time()))
+        persistor.persist(key, CachedScalarData(result, dates.unix()))
         return result
     
     def invalidate(self, instance: S, *args: *Args):

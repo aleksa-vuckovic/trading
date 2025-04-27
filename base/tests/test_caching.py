@@ -4,6 +4,7 @@ import shutil
 import math
 from enum import Enum
 from pathlib import Path
+from base import dates
 from base.caching import MemoryPersistor, cached_scalar, cached_series, FilePersistor, SqlitePersistor, Persistor, Metadata
 from base.types import Equatable, Serializable
 
@@ -143,7 +144,7 @@ class TestCaching(TestCase):
                 return [{"time": unix_from+0.1}, {"time": unix_to-0.1}]
         
         provider = Provider()
-        unix_to = time.time()
+        unix_to = dates.unix()
         unix_from = unix_to - 1000
         test1 = provider.get_series(unix_from, unix_to)
         self.assertEqual(1, len(test1)) #get_series will be invoked with the lower chunk border, therefore the first entry will be filtered out
@@ -152,7 +153,7 @@ class TestCaching(TestCase):
         provider.get_series(unix_from, unix_to + 1)
         self.assertEqual(1, invocations)
         time.sleep(1)
-        new_unix_to = time.time()
+        new_unix_to = dates.unix()
         series = provider.get_series(unix_from, new_unix_to)
         self.assertEqual(3, len(series)) #now get_series will be invoked with the previous upper border
         self.assertGreaterEqual(series[2]["time"], unix_to)
@@ -165,7 +166,7 @@ class TestCaching(TestCase):
 
     def test_cached_series_decorator_live_delay(self):
         time_step = 24*3600
-        now = time.time()
+        now = dates.unix()
         persistor = MemoryPersistor()
         class Provider:
             @staticmethod
@@ -218,7 +219,7 @@ class TestCaching(TestCase):
             
 
     def test_cached_series_decorator_live_refresh(self):
-        now = time.time()
+        now = dates.unix()
         invocations = 0
         class Provider:
             @staticmethod
@@ -240,14 +241,14 @@ class TestCaching(TestCase):
         
         provider = Provider()
         unix_from = now-3
-        test = provider.get_series(unix_from, time.time())
+        test = provider.get_series(unix_from, dates.unix())
         self.assertEqual(1, invocations)
         self.assertTrue(test)
         time.sleep(0.2)
-        test = provider.get_series(unix_from, time.time())
+        test = provider.get_series(unix_from, dates.unix())
         self.assertEqual(1, invocations)
         time.sleep(1)
-        test = provider.get_series(unix_from, time.time())
+        test = provider.get_series(unix_from, dates.unix())
         self.assertEqual(2, invocations)
         self.assertEqual(3, len(test))    
 
@@ -293,7 +294,7 @@ class TestCaching(TestCase):
             def get_data(self, a: str) -> A:
                 nonlocal invocations
                 invocations += 1
-                return A(a, time.time())
+                return A(a, dates.unix())
         provider = Provider()
         data1 = provider.get_data("a")
         time.sleep(0.05)
@@ -318,7 +319,7 @@ class TestCaching(TestCase):
             def get_data(self, a: str) -> A:
                 nonlocal invocations
                 invocations += 1
-                return A(a, time.time())
+                return A(a, dates.unix())
         provider = Provider()
         a1 = provider.get_data('1')
         a2 = provider.get_data('2')

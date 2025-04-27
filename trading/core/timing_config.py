@@ -81,7 +81,7 @@ class ForexTimingConfig(TimingConfig):
         return False
 
 def execution_spots(securities: Iterable[Security], timing_config: TimingConfig, interval: Interval, start: float|None = None, end: float|None = None):
-    unix_time = start or time.time()
+    unix_time = start or dates.unix()
     end = end or float('+inf')
     securities = set(securities)
     exchanges = set(it.exchange for it in securities)

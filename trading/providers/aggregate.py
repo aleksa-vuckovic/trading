@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from typing import Callable, override, ParamSpec, TypeVar, Sequence
+from base import dates
 from trading.core import Interval
 from trading.core.securities import Security, DataProvider
 from trading.core.pricing import PricingProvider, OHLCV
@@ -37,8 +38,8 @@ class AggregateProvider(PricingProvider, NewsProvider, DataProvider):
         try:
             return self.pricing_providers[0].get_pricing(unix_from, unix_to, security, interval, interpolate=interpolate, max_fill_ratio=max_fill_ratio)
         except:
-            if unix_to < time.time() - 4*24*3600 or interval > Interval.D1: raise
-            sep = max(time.time() - 4*24*3600, unix_from)
+            if unix_to < dates.unix() - 4*24*3600 or interval > Interval.D1: raise
+            sep = max(dates.unix() - 4*24*3600, unix_from)
             if unix_from < sep:
                 old = self.pricing_providers[0].get_pricing(unix_from, sep, security, interval, interpolate=interpolate, max_fill_ratio=max_fill_ratio)
             else:

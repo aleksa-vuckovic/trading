@@ -7,9 +7,9 @@ import re
 import time
 import config
 from typing import Callable, Any, override
-from base import text
 from http import HTTPStatus
 from enum import Flag, auto
+from base import text, dates
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +120,7 @@ def backup_timeout[T: Callable](
             nonlocal last_exception
             nonlocal last_timeout
             if last_break and last_exception and last_timeout:
-                backup_time = last_break + last_timeout - time.time()
+                backup_time = last_break + last_timeout - dates.unix()
                 if backup_time > 0:
                     if BackupBehavior.SLEEP in behavior:
                         time.sleep(backup_time)
@@ -137,7 +137,7 @@ def backup_timeout[T: Callable](
                 return func(*args, **kwargs)
             except Exception as ex:
                 if isinstance(ex, exc_type):
-                    last_break = time.time()
+                    last_break = dates.unix()
                     last_exception = ex
                     last_timeout = timeout
                     logger.error(f"Timing {func.__name__} out for {timeout} with behavior {behavior}.", exc_info = True)

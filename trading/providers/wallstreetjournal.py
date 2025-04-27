@@ -121,8 +121,8 @@ class WallStreetJournal(BasePricingProvider):
 
     @override
     def get_interval_start(self, interval) -> float:
-        if interval == Interval.D1: return time.time() - 365*24*3600
-        if interval in {Interval.M30, Interval.M15, Interval.M5, Interval.M1}: return time.time() - 5*25*3600
+        if interval == Interval.D1: return dates.unix() - 365*24*3600
+        if interval in {Interval.M30, Interval.M15, Interval.M5, Interval.M1}: return dates.unix() - 5*25*3600
         raise Exception(f"Unsupported interval {interval}.")
     @override
     def get_pricing_persistor(self, security, interval) -> Persistor:

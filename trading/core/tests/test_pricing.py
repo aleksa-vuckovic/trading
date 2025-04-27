@@ -84,7 +84,7 @@ class TestPricingProvider(unittest.TestCase):
 
     def test_get_pricing(self):
         if type(self) == TestPricingProvider: return
-        now = time.time()
+        now = dates.unix()
         provider = self.get_provider()
         securities = self.get_securities()
         unix_to = now

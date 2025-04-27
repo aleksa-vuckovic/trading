@@ -143,7 +143,7 @@ class FinancialTimes(BasePricingProvider):
 
     @override
     def get_interval_start(self, interval):
-        return time.time() - 15*24*3600
+        return dates.unix() - 15*24*3600
     @override
     def get_pricing_persistor(self, security: Security, interval: Interval) -> Persistor:
         return self.pricing_persistor
@@ -153,7 +153,7 @@ class FinancialTimes(BasePricingProvider):
     @override
     def get_pricing_raw(self, unix_from: float, unix_to: float, security: Security, interval: Interval) -> list[OHLCV]:
         if isinstance(security, ForexSecurity): raise Exception(f"FinancialTimes returns sparse data for forex securities.")
-        days = math.ceil((time.time() - unix_from)/(24*3600)) + 1
+        days = math.ceil((dates.unix() - unix_from)/(24*3600)) + 1
         days = max(min(days, 15), 4)
         info = self._get_info(security)
         if not info or 'xid' not in info or not info['xid']: raise Exception(f"No xid for '{security.symbol}'.")
