@@ -4,7 +4,7 @@ import shutil
 import math
 from enum import Enum
 from pathlib import Path
-from base.caching import MemoryPersistor, cached_scalar, cached_series, FilePersistor, SqlitePersistor, Persistor, MetaDict
+from base.caching import MemoryPersistor, cached_scalar, cached_series, FilePersistor, SqlitePersistor, Persistor, Metadata
 from base.types import Equatable, Serializable
 
 class A(Serializable, Equatable):
@@ -41,12 +41,16 @@ class TestCaching(TestCase):
         self.assertEqual(sorted([key, key2]), sorted(persistor.keys()))
         persistor.delete(key)
         self.assertEqual([key2], list(persistor.keys()))
+        self.assertFalse(persistor.has(key))
+        self.assertTrue(persistor.has(key2))
     def _test_persistor_none(self, persistor: Persistor):
         self.assertEqual(0, len(list(persistor.keys())))
         data = "Some data."
         persistor.persist("", data)
         self.assertEqual([""], list(persistor.keys()))
         self.assertEqual(data, persistor.read(""))
+        self.assertTrue(persistor.has(""))
+        self.assertFalse(persistor.has(data))
 
     def test_file_persistor_multi(self):
         self._test_persistor_multi(FilePersistor(TEST_DATA))
@@ -154,8 +158,8 @@ class TestCaching(TestCase):
         self.assertGreaterEqual(series[2]["time"], unix_to)
         self.assertAlmostEqual(series[0]["time"] + 0.2, series[1]["time"], places=6)
         self.assertEqual(2, invocations)
-
         series = provider.get_series(unix_from, new_unix_to)
+
         self.assertEqual(3, len(series))
         self.assertEqual(2, invocations)
 
@@ -184,9 +188,8 @@ class TestCaching(TestCase):
         unix_from = now-3
         unix_to = now
         test1 = provider.get_series(unix_from, unix_to)
-        metapath = TEST_DATA / MetaDict.__name__
-        meta: MetaDict = persistor.data[f"/{MetaDict.__name__}"]
-        self.assertLess(meta['live_fetch'] or now, now-1) 
+        meta: Metadata = persistor.data[f"/{Metadata.__name__}"]
+        self.assertLess(next(iter(meta.partials.values())), now-1) 
         self.assertEqual(0, len(test1))
         time.sleep(1.1)
         test2= provider.get_series(unix_from, unix_to)

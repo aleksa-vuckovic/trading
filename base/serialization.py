@@ -25,23 +25,14 @@ class Serializable:
 class Serializer:
     def serialize(self, obj: object) -> str:
         raise NotImplementedError()
-    @overload
-    def deserialize[T](self, data: str, assert_type: type[T]) -> T: ...
-    @overload
-    def deserialize(self, data: str) -> Any: ...
-    def deserialize(self, data: str, assert_type: type|None = None) -> Any:
+    def deserialize[T](self, data: str, assert_type: type[T]|None = None) -> T:
         raise NotImplementedError()
 
 class BasicSerializer(Serializer):
     @override
     def serialize(self, obj: object) -> str:
         return json.dumps(obj)
-    @overload
-    def deserialize[T](self, data: str, assert_type: type[T]) -> T: ...
-    @overload
-    def deserialize(self, data: str) -> Any: ...
-    @override
-    def deserialize(self, data, assert_type: type|None = None):
+    def deserialize[T](self, data, assert_type: type[T]|None = None) -> T:
         ret = json.loads(data)
         if assert_type: assert isinstance(ret, assert_type)
         return ret
@@ -98,12 +89,8 @@ class TypedSerializer(Serializer):
             elif isinstance(val, dict): val = {key: self._deserialize(value) for key,value in val.items()}
             return cls.from_json(val)
         else: raise Exception(f"Can't deserialize {val} into type {cls}.")
-    @overload
-    def deserialize[T](self, data: str, assert_type: type[T]) -> T: ...
-    @overload
-    def deserialize(self, data: str) -> Any: ...
     @override
-    def deserialize(self, data: str, assert_type: type|None = None) -> Any:
+    def deserialize[T](self, data: str, assert_type: type[T]|None = None) -> T:
         ret = self._deserialize(json.loads(data))
         if assert_type: assert isinstance(ret, assert_type)
         return ret
