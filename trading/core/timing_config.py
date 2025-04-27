@@ -2,7 +2,8 @@
 from __future__ import annotations
 import time
 from typing import Iterable, Iterator, TypeVar, override
-from datetime import datetime
+from datetime import datetime, tzinfo
+from base import dates
 from base.serialization import Serializable
 from base.types import Equatable
 from trading.core import Interval
@@ -11,6 +12,11 @@ from trading.core.securities import Exchange, Security
 T = TypeVar('T', float, datetime)
 
 class TimingConfig(Equatable, Serializable):
+    """
+    Delimits tradable and untradable periods. Can be exchange specific
+    (e.g. trade the first 2 hours after open for any exchange) of general
+    (e.g. trade 12 to 6 pm CET).
+    """
     def matches(self, time: float|datetime, exchange: Exchange) -> bool: ...
     def next(self, time: T,interval: Interval, exchange: Exchange) -> T:
         if not isinstance(time, datetime):
@@ -20,15 +26,13 @@ class TimingConfig(Equatable, Serializable):
         return cur
 
 class BasicTimingConfig(TimingConfig):
-    """
-    Represents a set of timing intervals or points during a single day.
-    """
-    def __init__(self, components: tuple[float|tuple[float,float],...]):
+    def __init__(self, components: tuple[float|tuple[float,float],...], tz: tzinfo|None = None):
         self.components = components
+        self.tz = tz
     class Builder:
-        
-        def __init__(self):
+        def __init__(self, tz: tzinfo|None = None):
             self.components = []
+            self.tz = tz
         def at(self, hour: int = 9, minute: int = 30) -> BasicTimingConfig.Builder:
             self.components.append(float(hour*3600 + minute*60))
             return self
@@ -49,12 +53,13 @@ class BasicTimingConfig(TimingConfig):
         def any(self) -> BasicTimingConfig.Builder:
             return self.starting(0,0).until(0,0)
         def build(self) -> TimingConfig:
-            return BasicTimingConfig(tuple(self.components))
+            return BasicTimingConfig(tuple(self.components), self.tz)
 
     @override
     def matches(self, time: datetime|float, exchange: Exchange) -> bool:
         if isinstance(time, datetime): time = time.timestamp()
-        date = exchange.calendar.unix_to_datetime(time)
+        if self.tz: date = dates.unix_to_datetime(time)
+        else: date = exchange.calendar.unix_to_datetime(time)
         daysecs = date.hour*3600+date.minute*60+date.second+date.microsecond
         for it in self.components:
             if isinstance(it, tuple):
