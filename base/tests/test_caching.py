@@ -71,7 +71,7 @@ class TestCaching(TestCase):
                 timestamp_fn = _timestamp_fn,
                 key_fn=_key_fn,
                 persistor_fn=FilePersistor(TEST_DATA),
-                time_step_fn=step
+                timestep_fn=step
             )
             def get_series(self, unix_from: float, unix_to: float) -> list[dict]:
                 nonlocal invocations
@@ -102,7 +102,7 @@ class TestCaching(TestCase):
                 timestamp_fn=get_series_timestamp_fn,
                 key_fn=get_series_key_fn,
                 persistor_fn=FilePersistor(TEST_DATA),
-                time_step_fn=get_series_time_step_fn
+                timestep_fn=get_series_time_step_fn
             )
             def get_series(self, unix_from: float, unix_to: float, type: str) -> list[dict]:
                 nonlocal invocations
@@ -133,7 +133,7 @@ class TestCaching(TestCase):
                 timestamp_fn=timestamp_fn,
                 key_fn=get_series_key_fn,
                 persistor_fn=FilePersistor(TEST_DATA),
-                time_step_fn= time_step,
+                timestep_fn= time_step,
                 live_delay_fn=0,
                 should_refresh_fn=1
             )
@@ -175,7 +175,7 @@ class TestCaching(TestCase):
                 timestamp_fn=get_series_timestamp_fn,
                 key_fn=get_series_key_fn,
                 persistor_fn=persistor,
-                time_step_fn= time_step,
+                timestep_fn= time_step,
                 live_delay_fn=2,
                 should_refresh_fn=0
             )
@@ -207,7 +207,7 @@ class TestCaching(TestCase):
                 timestamp_fn=get_series_timestamp_fn,
                 key_fn=get_series_key_fn,
                 persistor_fn=MemoryPersistor(),
-                time_step_fn= 1000,
+                timestep_fn= 1000,
                 live_delay_fn=0,
                 should_refresh_fn=get_series_refresh_fn
             )

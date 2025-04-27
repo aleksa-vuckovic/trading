@@ -187,7 +187,7 @@ class WorkCalendar:
         timestamp_fn=_get_timestamps_timestamp_fn,
         key_fn=_get_timestamps_key_fn,
         persistor_fn=_get_timestamps_persistor_fn,
-        time_step_fn=_get_timestamps_time_step_fn,
+        timestep_fn=_get_timestamps_time_step_fn,
         live_delay_fn=None
     )
     def _get_timestamps(self, unix_from: float, unix_to: float, interval: Interval) -> list[datetime]:

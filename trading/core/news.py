@@ -41,7 +41,7 @@ class BaseNewsProvider(NewsProvider):
         timestamp_fn=_get_news_timestamp_fn,
         key_fn=_get_news_key_fn,
         persistor_fn=_get_news_persistor_fn,
-        time_step_fn=10000000,
+        timestep_fn=10000000,
         live_delay_fn=3600, #let's say that news is an hour late usually
         should_refresh_fn=2*3600
     )
