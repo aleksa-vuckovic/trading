@@ -42,5 +42,12 @@ def to_zero(time: datetime|float, tz=UTC) -> datetime|float:
         return to_zero(unix_to_datetime(time, tz=tz)).timestamp()
     return time.replace(hour=0, minute=0, second=0, microsecond=0)
 def now(tz=UTC) -> datetime: return datetime.now(tz=tz)
-unix_time: float|None = None
-def unix() -> float: return unix_time or time.time()
+_unix_time: float|None = None
+def set(unix_time: float|None):
+    global _unix_time
+    _unix_time = unix_time
+def add(seconds: float):
+    global _unix_time
+    _unix_time = _unix_time or 0
+    _unix_time += seconds
+def unix() -> float: return _unix_time or time.time()

@@ -154,8 +154,8 @@ class MemoryPersistor(Persistor):
     def has(self, key: str) -> bool: return key in self.data
 
 class Metadata(Serializable):
-    def __init__(self, partials: dict[str, float] = {}):
-        self.partials = partials
+    def __init__(self, partials: dict[str, float]|None = None):
+        self.partials = partials or {}
 
 S = TypeVar('S')
 T = TypeVar('T')
@@ -241,7 +241,7 @@ class CachedSeriesDescriptor(Generic[S, *Args, T]):
     @overload
     def __get__(self, instance: None, owner: type[S]) -> Self: ...
     @overload
-    def __get__(self, instance: S, owner: type[S]) -> Callable[[float, float, *Args]]: ...
+    def __get__(self, instance: S, owner: type[S]) -> Callable[[float, float, *Args], list[T]]: ...
     def __get__(self, instance: S|None, owner: type[S]) -> Callable[[float, float, *Args], list[T]]|Self:
         if instance is None: return self
         else: return lambda unix_from, unix_to, *args: self.cached_method(instance, unix_from, unix_to, *args)
@@ -293,19 +293,19 @@ class CachedScalarDescriptor(Generic[S, *Args, T]):
         func: Callable[[S, *Args], T],
         get_key: Callable[[S, *Args], str],
         get_persistor: Callable[[S, *Args], Persistor],
-        refresh_after: float|None
+        refresh: Callable[[S, *Args], float]
     ):
         self.func = func
         self.get_key = get_key
         self.get_persistor = get_persistor
-        self.refresh_after = refresh_after
+        self.refresh = refresh
     
     def cached_method(self, instance: S, *args: *Args) -> T:
         key = self.get_key(instance, *args)
         persistor = self.get_persistor(instance, *args)
         if persistor.has(key):
             data = persistor.read(key, CachedScalarData)
-            if self.refresh_after is None or data.unix_time + self.refresh_after > dates.unix():
+            if data.unix_time + self.refresh(instance, *args) > dates.unix():
                 return data.data
         result = self.func(instance, *args)
         persistor.persist(key, CachedScalarData(result, dates.unix()))
@@ -328,13 +328,13 @@ def cached_scalar(
     *,
     key_fn: Callable[[S, *Args], str],
     persistor_fn: Persistor|Callable[[S, *Args], Persistor],
-    refresh_after: float|None = None
+    refresh_fn: float|Callable[[S, *Args], float] = float('+inf')
 ) -> Callable[[Callable[[S, *Args], T]], CachedScalarDescriptor[S, *Args, T]]:
     def decorate(func: Callable[[S, *Args], T]) -> CachedScalarDescriptor[S, *Args, T]:
         return CachedScalarDescriptor(
             func,
             key_fn,
             persistor_fn if callable(persistor_fn) else lambda self, *args: cast(Persistor, persistor_fn),
-            refresh_after
+            refresh_fn if callable(refresh_fn) else (lambda self, *args: cast(float, refresh_fn))
         )
     return decorate
