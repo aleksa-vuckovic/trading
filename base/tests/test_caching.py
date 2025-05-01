@@ -208,7 +208,7 @@ class TestCaching(TestCase):
         self.assertEqual(series, provider.get_series(unix_from, new_unix_to))
         self.assertEqual(2, provider.invocations)
 
-    def test_cached_series_decorator_live_delay(self):
+    def test_cached_series_live_delay(self):
         persistor = MemoryPersistor()
         provider = EdgeProvider(persistor=persistor, live_delay=15, timestep=100)
         unix_from = 50
@@ -224,40 +224,34 @@ class TestCaching(TestCase):
         self.assertEqual(55, test2[0]['t'])
 
     def test_cached_series_invalidate(self):
-        invocations = 0
-        class Provider:
-            @staticmethod
-            def get_series_timestamp_fn(it: dict) -> float: return it['time']
-            def get_series_key_fn(self, type: str) -> str: return type
-            def get_series_time_step_fn(self, type: str) -> float: return 10 if type == 'type10' else 30
-            @cached_series(
-                timestamp_fn=get_series_timestamp_fn,
-                key_fn=get_series_key_fn,
-                persistor_fn=FilePersistor(TEST_DATA),
-                timestep_fn=get_series_time_step_fn
-            )
-            def get_series(self, unix_from: float, unix_to: float, type: str) -> list[dict]:
-                nonlocal invocations
-                invocations += 1
-                return [{"time": float(it)} for it in range(math.floor(unix_from)+1, math.floor(unix_to)+1 )]
-        provider = Provider()
-        provider.get_series
-        dates.set(5)
-        provider.get_series(0, 10, 'a')
+        provider = EdgeProvider(timestep=10)
+        dates.set(15)
+        series = provider.get_series(0, 20)
+        self.assertEqual([1,10,11,15], [it['t'] for it in series])
+
+        EdgeProvider.get_series.invalidate(provider, 13, 15)
+        series = provider.get_series(0, 20)
+        self.assertEqual([1,10,11,14,15], [it['t'] for it in series])
+
+        EdgeProvider.get_series.invalidate(provider, 17, 150)
+        series = provider.get_series(0, 20)
+        self.assertEqual([1,10,11,14,15], [it['t'] for it in series])
+
+        self.assertEqual(3, provider.invocations)
 
     def test_cached_scalar(self):
-        invocations = 0
         class Test(Enum):
             A = 'aa'
         class Provider:
+            def __init__(self):
+                self.invocations = 0
             def get_scalar_key_fn(self, name: str, typ: Test) -> str: return f"{name}/{typ.name}"
             @cached_scalar(
                 key_fn=get_scalar_key_fn,
                 persistor_fn=FilePersistor(TEST_DATA)
             )
             def get_scalar(self, name: str, typ: Test) -> dict:
-                nonlocal invocations
-                invocations += 1
+                self.invocations += 1
                 return {'name': name, 'typ': typ.name}
             
             def get_scalar_key_fn2(self, name: str) -> str: return f"test-{name}"
@@ -271,10 +265,10 @@ class TestCaching(TestCase):
         data = provider.get_scalar('test', Test.A)
         self.assertEqual({'name':'test','typ':Test.A.name}, data)
         self.assertEqual(data, provider.get_scalar('test', Test.A))
-        self.assertEqual(1, invocations)
+        self.assertEqual(1, provider.invocations)
         self.assertEqual('test', provider.get_scalar2('test'))
     
-    def test_cached_scalar_decorator_refresh(self):        
+    def test_cached_scalar_refresh(self):        
         provider = SimpleScalarProvider(refresh_after=10)
         KEY1 = "a"
         KEY2 = "b"

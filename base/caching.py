@@ -204,8 +204,8 @@ class CachedSeriesDescriptor(Generic[S, *Args, T]):
         meta = persistor.try_read(meta_key, Metadata) or Metadata()
         for key, slot_from, slot_to in self._slots(instance, unix_from, unix_to, *args):
             if slot_from >= unix_now: continue
-            elif key in meta.partials and unix_to > meta.partials[key] and (
-                slot_to <= unix_now or self.should_refresh(instance, meta.partials[key], unix_now, *args)
+            elif key in meta.partials and min(unix_to, unix_now) > meta.partials[key] and (
+                unix_now >= slot_to or self.should_refresh(instance, meta.partials[key], unix_now, *args)
             ):
                 data: list[T] = persistor.read(key)
                 data.extend(self.func(instance, meta.partials[key], min(slot_to, unix_now), *args))
