@@ -104,7 +104,7 @@ class TestCaching(TestBase):
         self.assertEqual(provider.invocations, 1)
         self.assertEqual(expect, provider.get_series(start, end))
 
-    def test_cached_series_decorator_simple(self):
+    def test_cached_series_simple(self):
         for args in [(7,8,10),(7,15,10),(7,25,10),(7,30,10),(0,100,10),(12,12345,12)]:
             self.setUp()
             self._test_cached_series_simple(*args)
@@ -175,6 +175,20 @@ class TestCaching(TestBase):
         self.assertEqual([1,14,15], [it['t'] for it in series])
 
         self.assertEqual(2, provider.invocations)
+
+    def test_cached_series_delete_multi(self):
+        storage = MemoryKSStorage[SimpleDict](lambda it: it['t'])
+        provider = SimpleProvider(storage=storage, batch_size=5)
+
+        series = provider.get_series(5,55)
+        self.assertEqual(list(range(6,56)), [it['t'] for it in series])
+        self.assertEqual(1, provider.invocations)
+        
+        storage.delete("", 20, 35)
+        storage.delete("", 45, 50)
+        series = provider.get_series(0, 60)
+        self.assertEqual(list(range(1,61)), [it['t'] for it in series])
+        self.assertEqual(5, provider.invocations)
 
     def test_cached_scalar(self):        
         provider = SimpleScalarProvider()

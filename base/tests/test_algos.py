@@ -1,5 +1,5 @@
 from unittest import TestCase
-from base.algos import SearchSide, binary_search, binsert, interpolate, is_sorted
+from base.algos import SearchSide, binary_search, binsert, interpolate, is_sorted, lower_whole, upper_whole
 from base.types import Equatable
 
 class TestAlgos(TestCase):
@@ -106,3 +106,12 @@ class TestAlgos(TestCase):
         expect = [y[0], y[0], y[0], y[1], y[1], y[2], y[2], y[3], y[3]]
         result = interpolate(x, y, x_ret, 'stair')
         self.assertEqual(expect, result)
+
+    def test_upper_whole(self):
+        self.assertEqual(10.5, upper_whole(9, 3.5))
+        self.assertEqual(10.5, upper_whole(10.5, 3.5))
+    
+    def test_lower_whole(self):
+        self.assertEqual(7, lower_whole(9, 3.5))
+        self.assertEqual(7, lower_whole(9, 3.5))
+    
