@@ -1,27 +1,33 @@
 from unittest import TestCase
-from base.algos import binary_search, BinarySearchEdge, binsert, interpolate, is_sorted
+from base.algos import SearchSide, binary_search, binsert, interpolate, is_sorted
 from base.types import Equatable
 
 class TestAlgos(TestCase):
     def test_binary_search(self):
         collection = [
             {"time": 1},
-            {"time": 2},
+            {"time": 3},
             {"time": 5},
             {"time": 8},
             {"time": 10}
         ]
         def get_time(item):
             return item["time"]
-        self.assertEqual(0, binary_search(collection, 0, key=get_time, edge=BinarySearchEdge.HIGH))
-        self.assertEqual(-1, binary_search(collection, 0, key=get_time, edge=BinarySearchEdge.LOW))
-        self.assertEqual(0, binary_search(collection, 1, key=get_time, edge=BinarySearchEdge.HIGH))
-        self.assertEqual(1, binary_search(collection, 1.5, key=get_time, edge=BinarySearchEdge.HIGH))
-        self.assertEqual(0, binary_search(collection, 1.5, key=get_time, edge=BinarySearchEdge.LOW))
-        self.assertIsNone(binary_search(collection, 1.5, key=get_time, edge=BinarySearchEdge.NONE))
-        self.assertEqual(4, binary_search(collection, 10.5, key=get_time, edge=BinarySearchEdge.LOW))
+        examples: list[tuple[float, SearchSide, int|None]] = [
+            (0, 'EQ', None),    (0, 'GE', 0),   (0, 'GT', 0),   (0, 'LE', -1),  (0, 'LT', -1),
+            (1, 'EQ', 0),       (1, 'GE', 0),   (1, 'GT', 1),   (1, 'LE', 0),   (1, 'LT', -1),
+            (2, 'EQ', None),    (2, 'GE', 1),   (2, 'GT', 1),   (2, 'LE', 0),   (2, 'LT', 0),
+            (9, 'EQ', None),    (9, 'GE', 4),   (9, 'GT', 4),   (9, 'LE', 3),   (9, 'LT', 3),
+            (10, 'EQ', 4),      (10, 'GE', 4),  (10, 'GT', 5),  (10, 'LE', 4),  (10, 'LT', 3),
+            (11, 'EQ', None),   (11, 'GE', 5),  (11, 'GT', 5),  (11, 'LE', 4),  (11, 'LT', 4),
+        ]
+        for num, side, expect in examples:
+            self.assertEqual(expect, binary_search(collection, num, key=get_time, side=side))
+
         collection.pop()
-        self.assertEqual(2, binary_search(collection, 3, key=get_time, edge=BinarySearchEdge.HIGH))
+        examples = [(4, 'EQ', None), (4, 'GE', 2), (4, 'GT', 2), (4, 'LE', 1), (4, 'LT', 1)]
+        for num, side, expect in examples:
+            self.assertEqual(expect, binary_search(collection, num, key=get_time, side=side))
     
     def test_binsert(self):
         class A(Equatable):

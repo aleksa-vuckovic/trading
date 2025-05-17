@@ -1,26 +1,22 @@
 #1
-from os import curdir
-from typing import Callable, Sequence, Iterable, Any, no_type_check, overload, Protocol, Literal, cast
-from enum import Enum
+from typing import Callable, Sequence, Iterable, Any, overload, Protocol, Literal
 import itertools
 import math
 
 class Comparable(Protocol):
     def __lt__(self, other: Any, /) -> bool: ...
 
-class BinarySearchEdge(Enum):
-    LOW ='low'
-    HIGH = 'high'
-    NONE = 'none'
+type SearchSide = Literal['EQ', 'GT','GE','LT','LE']
+
 @overload
-def binary_search[T](collection: Sequence[T], value: Comparable, key: Callable[[T], Comparable], *, edge: Literal[BinarySearchEdge.LOW,BinarySearchEdge.HIGH]) -> int: ...
+def binary_search[T](collection: Sequence[T], value: Comparable, key: Callable[[T], Comparable], *, side: Literal['GT','GE','LT','LE']) -> int: ...
 @overload
-def binary_search[T](collection: Sequence[T], value: Comparable, key: Callable[[T], Comparable], *, edge: Literal[BinarySearchEdge.NONE]) -> int|None: ...
+def binary_search[T](collection: Sequence[T], value: Comparable, key: Callable[[T], Comparable], *, side: Literal['EQ']) -> int|None: ...
 @overload
-def binary_search[T: Comparable](collection: Sequence[T], value: T, *, edge: Literal[BinarySearchEdge.LOW,BinarySearchEdge.HIGH]) -> int: ...
+def binary_search[T: Comparable](collection: Sequence[T], value: T, *, side: Literal['GT','GE','LT','LE']) -> int: ...
 @overload
-def binary_search[T: Comparable](collection: Sequence[T], value: T, *, edge: Literal[BinarySearchEdge.NONE]) -> int|None: ...
-def binary_search(collection: Sequence, value: Comparable, key: Callable[..., Comparable]=lambda x:x, *, edge: BinarySearchEdge = BinarySearchEdge.NONE) -> int|None:
+def binary_search[T: Comparable](collection: Sequence[T], value: T, *, side: Literal['EQ']) -> int|None: ...
+def binary_search(collection: Sequence, value: Comparable, key: Callable[..., Comparable]=lambda x:x, *, side: SearchSide = 'EQ') -> int|None:
     """
     Returns the index of value.
     If the value is not there, returns the index of:
@@ -33,31 +29,31 @@ def binary_search(collection: Sequence, value: Comparable, key: Callable[..., Co
         value: The searched-for value.
         edge: Determines the result when the value is not found.
     """
-    if not collection: return -1 if edge == BinarySearchEdge.LOW else 0 if edge == BinarySearchEdge.HIGH else None
+    if not collection: return -1 if side[0]=='L' else 0 if side[0]=='G' else None
     i = 0 # Always strictly smaller
     j = len(collection)-1 # Always strictly larger
     #Ensure proper initial conditions
     ival = key(collection[i])
     jval = key(collection[j])
-    if ival == value: return i
-    if jval == value: return j
-    if value < ival: return i-1 if edge == BinarySearchEdge.LOW else i if edge == BinarySearchEdge.HIGH else None
-    if jval < value: return j if edge == BinarySearchEdge.LOW else j+1 if edge == BinarySearchEdge.HIGH else None
+    if ival == value: return i-1 if side=='LT' else i+1 if side=='GT' else i
+    if jval == value: return j-1 if side=='LT' else j+1 if side=='GT' else j
+    if value < ival: return i-1 if side[0]=='L' else i if side[0]=='G' else None
+    if jval < value: return j if side[0]=='L' else j+1 if side[0]=='G' else None
     while j - i > 1:
         mid = (i + j) // 2
         midval = key(collection[mid])
-        if midval == value: return mid
+        if midval == value: return mid-1 if side == 'LT' else mid+1 if side == 'GT' else mid
         if value < midval: j = mid
         else: i = mid
-    return i if edge == BinarySearchEdge.LOW else j if edge == BinarySearchEdge.HIGH else None
+    return i if side[0]=='L' else j if side[0]=='G' else None
 
 @overload
 def binsert[T, K](collection: list[T], item: T, key: Callable[[T], K]) -> None: ...
 @overload
 def binsert[T: Comparable](collection: list[T], item: T) -> None: ...
 def binsert(collection: list, item: Any, key: Callable[[Any], Any]=lambda it:it) -> None:
-    index = binary_search(collection, key(item), key=key, edge=BinarySearchEdge.LOW)
-    collection.insert(index+1, item)
+    index = binary_search(collection, key(item), key=key, side='GT')
+    collection.insert(index, item)
 
 
 def is_sorted(collection: Iterable[Comparable]) -> bool:
@@ -127,3 +123,8 @@ def interpolate(x: Sequence[float], y: Sequence, x_ret: Iterable[float], method:
             ret.append(y[index])
         return ret
     else: raise Exception(f"Unknown interpolation methods {method}.")
+
+
+def lower_whole(x: float, step: float) -> float: return math.floor(x/step)*step
+
+def upper_whole(x: float, step: float) -> float: return math.ceil(x/step)*step

@@ -1,16 +1,11 @@
 from typing import Any, TypedDict
-from unittest import TestCase
-import time
-import shutil
-import math
-from enum import Enum
 from pathlib import Path
-
-from numpy.testing import assert_equal
-
 from base import dates
-from base.caching import MemoryPersistor, cached_scalar, cached_series, FilePersistor, SqlitePersistor, Persistor, Metadata
-from base.types import Equatable, Serializable
+from base.algos import lower_whole, upper_whole
+from base.caching import KeySeriesStorage, KeyValueStorage, cached_scalar, cached_series
+from base.key_series_storage import MemoryKSStorage
+from base.key_value_storage import MemoryKVStorage
+from base.tests.test_base import TestBase
 
 
 TEST_DATA = Path("./test_data")
@@ -18,62 +13,62 @@ class SimpleDict(TypedDict):
     t: float
     d: Any
 class SimpleProvider:
-    def __init__(self, persistor: Persistor|None = None, timestep: float = 10):
-        self.persistor = persistor or FilePersistor(TEST_DATA)
-        self.timestep = timestep
+    def __init__(self, storage: KeySeriesStorage|None = None, batch_size: float = 10):
+        self.storage: KeySeriesStorage[SimpleDict] = storage or MemoryKSStorage(lambda it: it['t'])
+        self.batch_size = batch_size
         self.invocations = 0
     @staticmethod
     def _timestamp_fn(it: SimpleDict) -> float: return it['t']
     def _key_fn(self) -> str: return ""
-    def _persistor_fn(self) -> Persistor: return self.persistor
-    def _timestep_fn(self) -> float: return self.timestep
+    def _storage_fn(self) -> KeySeriesStorage[SimpleDict]: return self.storage
+    def _batch_size_fn(self) -> float: return self.batch_size
     @cached_series(
         timestamp_fn = _timestamp_fn,
         key_fn=_key_fn,
-        persistor_fn=_persistor_fn,
-        timestep_fn=_timestep_fn
+        storage_fn=_storage_fn,
+        batch_size_fn=_batch_size_fn
     )
     def get_series(self, unix_from: float, unix_to: float) -> list[SimpleDict]:
         self.invocations += 1
         return [{'t': it, 'd': it} for it in range(int(unix_from), int(unix_to)+1) if it >unix_from and it <=unix_to ] 
 class KeyedProvider:
-    def __init__(self, persistor: Persistor|None = None, timestep: float = 10):
-        self.persistor = persistor or FilePersistor(TEST_DATA)
-        self.timestep = timestep
+    def __init__(self, storage: KeySeriesStorage|None = None, batch_size: float = 10):
+        self.storage: KeySeriesStorage[SimpleDict] = storage or MemoryKSStorage(lambda it: it['t'])
+        self.batch_size = batch_size
         self.invocations = 0
     @staticmethod
     def _timestamp_fn(it: SimpleDict) -> float: return it['t']
     def _key_fn(self, key: str) -> str: return key
-    def _persistor_fn(self, key: str) -> Persistor: return self.persistor
-    def _timestep_fn(self, key: str) -> float: return self.timestep
+    def _storage_fn(self, key: str): return self.storage
+    def _batch_size_fn(self, key: str) -> float: return self.batch_size
     @cached_series(
         timestamp_fn = _timestamp_fn,
         key_fn=_key_fn,
-        persistor_fn=_persistor_fn,
-        timestep_fn=_timestep_fn
+        storage_fn=_storage_fn,
+        batch_size_fn=_batch_size_fn
     )
     def get_series(self, unix_from: float, unix_to: float, key: str) -> list[SimpleDict]:
         self.invocations += 1
         return [{'t': it, 'd': key} for it in range(int(unix_from), int(unix_to)+1) if it>unix_from and it<=unix_to ]
 class EdgeProvider:
-    def __init__(self, persistor: Persistor|None = None, timestep: float = 10, live_delay: float = 0, refresh_after: float = 0):
-        self.persistor = persistor or FilePersistor(TEST_DATA)
-        self.timestep = timestep
+    def __init__(self, storage: KeySeriesStorage|None = None, batch_size: float = 10, live_delay: float = 0, refresh_after: float = 0):
+        self.storage: KeySeriesStorage[SimpleDict] = storage or MemoryKSStorage(lambda it: it['t'])
+        self.batch_size = batch_size
         self.live_delay = live_delay
         self.refresh_after = refresh_after
         self.invocations = 0
     @staticmethod
     def _timestamp_fn(it: SimpleDict) -> float: return it['t']
     def _key_fn(self) -> str: return ""
-    def _persistor_fn(self) -> Persistor: return self.persistor
-    def _timestep_fn(self) -> float: return self.timestep
+    def _storage_fn(self) -> KeySeriesStorage: return self.storage
+    def _batch_size_fn(self) -> float: return self.batch_size
     def _live_delay_fn(self) -> float: return self.live_delay
     def _should_refresh_fn(self, last: float, now: float) -> bool: return now-last >= self.refresh_after
     @cached_series(
         timestamp_fn = _timestamp_fn,
         key_fn=_key_fn,
-        persistor_fn=_persistor_fn,
-        timestep_fn=_timestep_fn,
+        storage_fn=_storage_fn,
+        batch_size_fn=_batch_size_fn,
         live_delay_fn=_live_delay_fn,
         should_refresh_fn=_should_refresh_fn
     )
@@ -81,89 +76,33 @@ class EdgeProvider:
         self.invocations += 1
         return [{'t': int(unix_from)+1, 'd': None}, {'t': int(unix_to), 'd': None}]
 
-class A(Equatable, Serializable):
-    def __init__(self, t: float, d: Any):
-        self.t = t
-        self.d = d
-    def __repr__(self) -> str: return f"A(t='{self.t}',d={self.d})"
 class SimpleScalarProvider:
-    def __init__(self, persistor: Persistor|None = None, refresh_after: float = float('+inf')):
-        self.persistor = persistor or FilePersistor(TEST_DATA)
+    def __init__(self, storage: KeyValueStorage|None = None, refresh_after: float = float('+inf')):
+        self.storage = storage or MemoryKVStorage()
         self.refresh_after = refresh_after
         self.invocations = 0
     def _key_fn(self, key: str) -> str: return key
-    def _persistor_fn(self, key: str) -> Persistor: return self.persistor
+    def _storage_fn(self, key: str): return self.storage
     def _refresh_fn(self, key: str) -> float: return self.refresh_after
     @cached_scalar(
         key_fn=_key_fn,
-        persistor_fn=FilePersistor(TEST_DATA),
+        storage_fn=_storage_fn,
         refresh_fn=_refresh_fn
     )
-    def get_data(self, key: str) -> A:
+    def get_data(self, key: str) -> SimpleDict:
         self.invocations += 1
-        return A(dates.unix(), key)
+        return {'t': dates.unix(), 'd': key}
 
-class TestCaching(TestCase):
-    def drop_files(self):
-        if TEST_DATA.exists():
-            if TEST_DATA.is_file(): TEST_DATA.unlink()
-            else: shutil.rmtree(TEST_DATA)
-    def make_files(self):
-        TEST_DATA.mkdir(parents=True, exist_ok=False)
-    def setUp(self):
-        super().setUp()
-        self.drop_files()
-        dates.set(None)
-        self.make_files()
-    def tearDown(self):
-        super().tearDown()
-        self.drop_files()
-        dates.set(None)
-
-    def _test_persistor_simple(self, persistor: Persistor):
-        self.assertEqual(0, len(list(persistor.keys())))
-        data = "This is some data."
-        key1 = "a/b/123"
-        key2 = "a/c/123"
-
-        persistor.persist(key1, data)
-        self.assertEqual(data, persistor.read(key1))
-        persistor.persist(key2, data)
-        self.assertEqual(data, persistor.read(key2))
-        self.assertEqual({key1, key2}, set(persistor.keys()))
-        persistor.delete(key1)
-        self.assertEqual({key2}, set(persistor.keys()))
-        self.assertFalse(persistor.has(key1))
-        self.assertTrue(persistor.has(key2))
-        self.assertFalse(persistor.has(data))
-    def _test_persistor_special(self, persistor: Persistor, keys: list[str] = ["", "1", "COM", "a.b.c"]):
-        self.assertEqual(0, len(set(persistor.keys())))
-        data = "Some data."
-        for key in keys:
-            persistor.persist(key, data)
-            self.assertEqual({key}, set(persistor.keys()))
-            self.assertEqual(data, persistor.read(key))
-            self.assertTrue(persistor.has(key))
-            persistor.delete(key)
-
-    def test_file_persistor_simple(self):
-        self._test_persistor_simple(FilePersistor(TEST_DATA))
-    def test_file_persistor_special(self):
-        self._test_persistor_special(FilePersistor(TEST_DATA/'test'))
-    def test_sqlite_persistor_simple(self):
-        self._test_persistor_simple(SqlitePersistor(TEST_DATA/"test.db", "testtable"))
-    def test_sqlite_persistor_special(self):
-        self._test_persistor_special(SqlitePersistor(TEST_DATA/"test.db", "testtable"))
-    
-    def _test_cached_series_simple(self, start: int, end: int, step: int):
-        provider = SimpleProvider(timestep=step)
-        start_id = start//step
-        end_id = end//step if end%step else end//step-1
+class TestCaching(TestBase):
+    def _test_cached_series_simple(self, start: int, end: int, batch_size: int):
+        provider = SimpleProvider(batch_size=batch_size)
+        expect = [{'t': it, 'd': it} for it in range(start+1, end+1)]
         data = provider.get_series(start, end)
-        self.assertEqual(data, [{'t': it, 'd': it} for it in range(start+1, end+1)])
-        self.assertEqual(provider.invocations, end_id-start_id+1)
-        provider.get_series(start_id*step, (end_id+1)*step-0.01)
-        self.assertEqual(provider.invocations, end_id-start_id+1)
+        self.assertEqual(expect, data)
+        self.assertEqual(provider.invocations, 1)
+        provider.get_series(lower_whole(start, batch_size), upper_whole(end, batch_size))
+        self.assertEqual(provider.invocations, 1)
+        self.assertEqual(expect, provider.get_series(start, end))
 
     def test_cached_series_decorator_simple(self):
         for args in [(7,8,10),(7,15,10),(7,25,10),(7,30,10),(0,100,10),(12,12345,12)]:
@@ -174,20 +113,20 @@ class TestCaching(TestCase):
     def test_cached_series(self):
         KEY1 = "k1"
         KEY2 = "abc/123"
-        provider = KeyedProvider(timestep=10)
+        provider = KeyedProvider(batch_size=10)
         test1 = provider.get_series(16, 30, KEY1)
         test2 = provider.get_series(16, 30, KEY2)
         self.assertEqual(14, len(test1))
         self.assertEqual(14, len(test2))
         self.assertEqual(17, test1[0]['t'])
         self.assertEqual(30, test2[-1]['t'])
-        self.assertEqual(4, provider.invocations)
+        self.assertEqual(2, provider.invocations)
         self.assertEqual(test1, provider.get_series(16, 30, KEY1))
         self.assertEqual(test2, provider.get_series(16, 30, KEY2))
-        self.assertEqual(4, provider.invocations)
+        self.assertEqual(2, provider.invocations)
 
     def test_cached_series_refresh(self):
-        provider = EdgeProvider(timestep = 100, refresh_after=10)
+        provider = EdgeProvider(batch_size = 100, refresh_after=10)
         unix_from = 50
         unix_to = 80
         dates.set(unix_to)
@@ -209,64 +148,40 @@ class TestCaching(TestCase):
         self.assertEqual(2, provider.invocations)
 
     def test_cached_series_live_delay(self):
-        persistor = MemoryPersistor()
-        provider = EdgeProvider(persistor=persistor, live_delay=15, timestep=100)
+        provider = EdgeProvider(live_delay=15, batch_size=100)
         unix_from = 50
         unix_to = 60
         dates.set(unix_to)
         test1 = provider.get_series(unix_from, unix_to)
-        meta: Metadata = persistor.data[f"/{Metadata.__name__}"]
-        self.assertEqual(next(iter(meta.partials.values())), unix_to-15) 
         self.assertEqual(0, len(test1))
         dates.add(10)
         test2 = provider.get_series(unix_from, unix_to)
         self.assertEqual(1, len(test2))
         self.assertEqual(55, test2[0]['t'])
 
-    def test_cached_series_invalidate(self):
-        provider = EdgeProvider(timestep=10)
+    def test_cached_series_delete(self):
+        storage = MemoryKSStorage[SimpleDict](lambda it: it['t'])
+        provider = EdgeProvider(storage=storage, batch_size=10)
         dates.set(15)
         series = provider.get_series(0, 20)
-        self.assertEqual([1,10,11,15], [it['t'] for it in series])
+        self.assertEqual([1, 15], [it['t'] for it in series])
 
-        EdgeProvider.get_series.invalidate(provider, 13, 15)
+        storage.delete("", 13, 15)
         series = provider.get_series(0, 20)
-        self.assertEqual([1,10,11,14,15], [it['t'] for it in series])
+        self.assertEqual([1,14,15], [it['t'] for it in series])
 
-        EdgeProvider.get_series.invalidate(provider, 17, 150)
+        storage.delete("", 17, 150)
         series = provider.get_series(0, 20)
-        self.assertEqual([1,10,11,14,15], [it['t'] for it in series])
+        self.assertEqual([1,14,15], [it['t'] for it in series])
 
-        self.assertEqual(3, provider.invocations)
+        self.assertEqual(2, provider.invocations)
 
-    def test_cached_scalar(self):
-        class Test(Enum):
-            A = 'aa'
-        class Provider:
-            def __init__(self):
-                self.invocations = 0
-            def get_scalar_key_fn(self, name: str, typ: Test) -> str: return f"{name}/{typ.name}"
-            @cached_scalar(
-                key_fn=get_scalar_key_fn,
-                persistor_fn=FilePersistor(TEST_DATA)
-            )
-            def get_scalar(self, name: str, typ: Test) -> dict:
-                self.invocations += 1
-                return {'name': name, 'typ': typ.name}
-            
-            def get_scalar_key_fn2(self, name: str) -> str: return f"test-{name}"
-            @cached_scalar(
-                key_fn=get_scalar_key_fn2,
-                persistor_fn=FilePersistor(TEST_DATA)
-            )
-            def get_scalar2(self, name: str) -> str: return name
-        
-        provider = Provider()
-        data = provider.get_scalar('test', Test.A)
-        self.assertEqual({'name':'test','typ':Test.A.name}, data)
-        self.assertEqual(data, provider.get_scalar('test', Test.A))
+    def test_cached_scalar(self):        
+        provider = SimpleScalarProvider()
+        data = provider.get_data('test')
+        self.assertEqual(data['d'], 'test')
+        self.assertEqual(data, provider.get_data('test'))
         self.assertEqual(1, provider.invocations)
-        self.assertEqual('test', provider.get_scalar2('test'))
     
     def test_cached_scalar_refresh(self):        
         provider = SimpleScalarProvider(refresh_after=10)
@@ -279,14 +194,14 @@ class TestCaching(TestCase):
         self.assertEqual(data1, data2)
         dates.add(5)
         data2 = provider.get_data(KEY1)
-        self.assertNotEqual(data1, data2)
-        self.assertGreater(data2.t, data1.t)
+        self.assertGreater(data2['t'], data1['t'])
         data2 = provider.get_data(KEY2) and provider.get_data(KEY2)
         self.assertNotEqual(data1, data2)
         self.assertEqual(3, provider.invocations)
 
-    def test_cached_scalar_invalidate(self):
-        provider = SimpleScalarProvider()
+    def test_cached_scalar_delete(self):
+        storage = MemoryKVStorage()
+        provider = SimpleScalarProvider(storage=storage)
         KEY1 = "1"
         KEY2 = "2"
         dates.set(10)
@@ -294,7 +209,7 @@ class TestCaching(TestCase):
         a2 = provider.get_data(KEY2)
         dates.add(10)
         self.assertEqual(a1, provider.get_data(KEY1))
-        SimpleScalarProvider.get_data.invalidate(provider, KEY1)
+        storage.delete(KEY1)
         a12 = provider.get_data(KEY1)
         self.assertNotEqual(a1, a12)
         self.assertEqual(a2, provider.get_data(KEY2))

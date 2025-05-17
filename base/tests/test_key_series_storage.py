@@ -1,6 +1,6 @@
 from typing import Any, TypedDict
 from base.db import sqlite_engine
-from base.key_series_storage import KeySeriesStorage, MemoryKeySeriesStorage, SqlKeySeriesStorage
+from base.key_series_storage import KeySeriesStorage, MemoryKSStorage, SqlKSStorage
 from base.tests.test_base import TestBase
 from base.types import Equatable, Serializable
 
@@ -47,10 +47,10 @@ class TestKSStorage(TestBase):
         self.assertEqual([(0, 500)], list(storage.missing_spans(KEY, 0, 500)))
 
     def test_memory_ks_storage_simple(self):
-        self._test_key_series_storage_simple(MemoryKeySeriesStorage(lambda it: it.t))
+        self._test_key_series_storage_simple(MemoryKSStorage(lambda it: it.t))
     def test_memory_ks_storage_edge(self):
-        self._test_key_series_storage_edge(MemoryKeySeriesStorage(lambda it: it.t))
+        self._test_key_series_storage_edge(MemoryKSStorage(lambda it: it.t))
     def test_sql_ks_storage_simple(self):
-        self._test_key_series_storage_simple(SqlKeySeriesStorage(sqlite_engine(self.TEST_DATA), "test", timestamp=lambda it: it.t))
+        self._test_key_series_storage_simple(SqlKSStorage(sqlite_engine(self.TEST_DATA), "test", timestamp=lambda it: it.t))
     def test_sql_ks_storage_edge(self):
-        self._test_key_series_storage_edge(SqlKeySeriesStorage(sqlite_engine(self.TEST_DATA), "test", timestamp=lambda it: it.t))
+        self._test_key_series_storage_edge(SqlKSStorage(sqlite_engine(self.TEST_DATA), "test", timestamp=lambda it: it.t))

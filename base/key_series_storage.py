@@ -1,11 +1,10 @@
+#4
 from collections import defaultdict
 from typing import Callable, Generic, Iterable, Sequence, final, override, TypeVar
-
 from sqlalchemy import Engine, select, delete
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column, sessionmaker
-
 from base.algos import binary_search, binsert
-from base.caching import Serializer, TypedSerializer
+from base.serialization import Serializer, TypedSerializer
 
 T = TypeVar('T')
 class KeySeriesStorage(Generic[T]):
@@ -69,7 +68,7 @@ class KeySeriesStorage(Generic[T]):
             else:
                 if spans[-1][1] < end: yield (spans[-1][1], end)
     
-class MemoryKeySeriesStorage(KeySeriesStorage[T]):
+class MemoryKSStorage(KeySeriesStorage[T]):
     data: dict[str, list[T]]
     spans: dict[str, list[tuple[float,float]]]
     def __init__(self, timestamp: Callable[[T], float]):
@@ -121,7 +120,7 @@ class MemoryKeySeriesStorage(KeySeriesStorage[T]):
         i = binary_search(spans, start, key=lambda it: it[0], side='EQ')
         if i is not None: spans.pop(i)
 
-class SqlKeySeriesStorage(KeySeriesStorage[T]):
+class SqlKSStorage(KeySeriesStorage[T]):
     def __init__(self, engine: Engine, table_name: str, timestamp: Callable[[T], float], serializer: Serializer = TypedSerializer()):
         self.engine = engine
         self.timestamp = timestamp
