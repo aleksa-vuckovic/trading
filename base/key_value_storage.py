@@ -27,18 +27,6 @@ class KeyValueStorage:
         except:
             return None
 
-class NullKVStorage(KeyValueStorage):
-    @override
-    def set(self, key: str, value: Any): return
-    @override
-    def get[T](self, key: str, assert_type: type[T]|None=None) -> T: raise NotFoundError()
-    @override
-    def delete(self, key: str) -> bool: return False
-    @override
-    def has(self, key: str) -> bool: return False
-    @override
-    def keys(self) -> Iterable[str]: return []
-
 class MemoryKVStorage(KeyValueStorage):
     def __init__(self):
         self.data = {}
@@ -97,6 +85,7 @@ class FileKVStorage(KeyValueStorage):
         if self.path.exists():
             self.data = self.serializer.deserialize(self.path.read_text(), dict)
         else:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
             self.data = {}
     def _save(self):
         self.path.write_text(self.serializer.serialize(self.data))

@@ -76,18 +76,23 @@ class BrowserImpersonator(Scraper):
         cookie = ";".join([f"{key}={value}" for key,value in cookies.items()]) if cookies else None
         response = requests.get(url, headers = {**_CHROME_HEADERS, 'Cookie': cookie, **headers}, params=params)
         logger.info(f"GET {url} ? {params} -> {response.status_code}")
-        if config.http.log_response: logger.info(response.text)
-        elif config.http.log_response_short: logger.info(text.shorter(response.text))
+        if config.http.response_log == 'long': logger.info(response.text)
+        elif config.http.response_log == 'short': logger.info(text.shorter(response.text))
         if check_response: assert_response(url, response)
         return response
     @override
     def post(self, url: str, body: dict|list|str|Number|bool|None, *, cookies: dict = {}, headers: dict = {}, params: dict | None = None, origin: str | None = None, check_response: bool = True) -> requests.Response:
+        msg = f"POST {url}"
+        if config.http.request_log == 'long': msg += " ->" + json.dumps(body, indent = 4)
+        if config.http.request_log == 'short': msg += " ->" + text.shorter(json.dumps(body, indent=4))
+        logger.info(msg)
+
         response = requests.post(url, json=body, headers={**_CHROME_HEADERS, **headers})
-        logger.info(f"POST {url} -> {response.status_code}")
-        if config.http.log_request: logger.info("->" + json.dumps(body, indent = 4))
-        elif config.http.log_request_short: logger.info("->" + text.shorter(json.dumps(body, indent=4)))
-        if config.http.log_response: logger.info("<-" + response.text)
-        elif config.http.log_response_short: logger.info("<-" + text.shorter(response.text))
+        msg = f"{url} -> {response.status_code}"
+        if config.http.response_log == 'long': msg += " - " + response.text
+        if config.http.response_log == 'short': msg += " - " + text.shorter(response.text)
+        logger.info(msg)
+
         if check_response: assert_response(url, response)
         return response
     

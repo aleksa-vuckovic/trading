@@ -1,6 +1,6 @@
 from typing import Any, TypedDict
 from base.db import sqlite_engine
-from base.key_series_storage import KeySeriesStorage, MemoryKSStorage, SqlKSStorage
+from base.key_series_storage import FolderKSStorage, KeySeriesStorage, MemoryKSStorage, SqlKSStorage
 from base.tests.test_base import TestBase
 from base.types import Equatable, Serializable
 
@@ -50,6 +50,10 @@ class TestKSStorage(TestBase):
         self._test_key_series_storage_simple(MemoryKSStorage(lambda it: it.t))
     def test_memory_ks_storage_edge(self):
         self._test_key_series_storage_edge(MemoryKSStorage(lambda it: it.t))
+    def test_folder_ks_storage_simple(self):
+        self._test_key_series_storage_simple(FolderKSStorage(self.TEST_DATA, lambda it: it.t))
+    def test_folder_ks_storage_edge(self):
+        self._test_key_series_storage_edge(FolderKSStorage(self.TEST_DATA, lambda it: it.t))
     def test_sql_ks_storage_simple(self):
         self._test_key_series_storage_simple(SqlKSStorage(sqlite_engine(self.TEST_DATA), "test", timestamp=lambda it: it.t))
     def test_sql_ks_storage_edge(self):

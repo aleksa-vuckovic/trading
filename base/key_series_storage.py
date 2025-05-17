@@ -1,13 +1,23 @@
 #4
 from collections import defaultdict
-from typing import Callable, Generic, Iterable, Sequence, final, override, TypeVar
+import os
+from pathlib import Path
+from typing import Callable, Generic, Iterable, Sequence, TypedDict, final, override, TypeVar
 from sqlalchemy import Engine, select, delete
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column, sessionmaker
 from base.algos import binary_search, binsert
-from base.serialization import Serializer, TypedSerializer
+from base.serialization import Serializer, TypedSerializer, serializer
 
 T = TypeVar('T')
+
 class KeySeriesStorage(Generic[T]):
+    def set(self, key: str, start: float, end: float, data: Sequence[T]): ...
+    def get(self, key: str, start: float, end: float) -> Sequence[T]: ...
+    def delete(self, key: str, start: float, end: float): ...
+    def keys(self) -> Iterable[str]: ...
+    def missing_spans(self, key: str, start: float, end: float) -> Iterable[tuple[float, float]]: ...
+
+class BaseKeySeriesStorage(KeySeriesStorage[T]):
     @final
     def set(self, key: str, start: float, end: float, data: Sequence[T]):
         spans = list(self._get_overlapping_spans(key, start, end))
@@ -30,6 +40,19 @@ class KeySeriesStorage(Generic[T]):
     @final
     def keys(self) -> Iterable[str]:
         return self._keys()
+    @final
+    def missing_spans(self, key: str, start: float, end: float) -> Iterable[tuple[float, float]]:
+        spans = list(self._get_overlapping_spans(key, start, end))
+        if not spans:
+            yield (start, end)
+            return
+        for i in range(len(spans)+1):
+            if i == 0:
+                if spans[0][0] > start: yield (start, spans[0][0])
+            elif i < len(spans):
+                yield (spans[i-1][1], spans[i][0])
+            else:
+                if spans[-1][1] < end: yield (spans[-1][1], end)
     
 
     def _set(self, key: str, data: Sequence[T]):# -> Any:
@@ -54,21 +77,7 @@ class KeySeriesStorage(Generic[T]):
         """Delete span starting at start."""
         raise NotImplementedError()
     
-    @final
-    def missing_spans(self, key: str, start: float, end: float) -> Iterable[tuple[float, float]]:
-        spans = list(self._get_overlapping_spans(key, start, end))
-        if not spans:
-            yield (start, end)
-            return
-        for i in range(len(spans)+1):
-            if i == 0:
-                if spans[0][0] > start: yield (start, spans[0][0])
-            elif i < len(spans):
-                yield (spans[i-1][1], spans[i][0])
-            else:
-                if spans[-1][1] < end: yield (spans[-1][1], end)
-    
-class MemoryKSStorage(KeySeriesStorage[T]):
+class MemoryKSStorage(BaseKeySeriesStorage[T]):
     data: dict[str, list[T]]
     spans: dict[str, list[tuple[float,float]]]
     def __init__(self, timestamp: Callable[[T], float]):
@@ -120,7 +129,45 @@ class MemoryKSStorage(KeySeriesStorage[T]):
         i = binary_search(spans, start, key=lambda it: it[0], side='EQ')
         if i is not None: spans.pop(i)
 
-class SqlKSStorage(KeySeriesStorage[T]):
+class _FolderDict(TypedDict, Generic[T]):
+    data: list[T]
+    spans: list[tuple[float,float]]
+class FolderKSStorage(MemoryKSStorage[T]):
+
+    def __init__(self, root: Path, timestamp: Callable[[T], float]):
+        super().__init__(timestamp)
+        self.root = root
+
+        self.root.mkdir(parents=True, exist_ok=True)
+        for key in os.listdir(self.root):
+            path = self.root/key
+            saved: _FolderDict[T] = serializer.deserialize(path.read_text())
+            self.data[key] = saved['data']
+            self.spans[key] = saved['spans']
+
+    def _save(self, key: str):
+        saved: _FolderDict[T] = {'data': self.data[key], 'spans': self.spans[key]}
+        path = self.root/key
+        path.write_text(serializer.serialize(saved))
+    @override
+    def _set(self, key: str, data: Sequence[T]):
+        super()._set(key, data)
+        self._save(key)
+    @override
+    def _delete(self, key: str, start: float, end: float):
+        super()._delete(key, start, end)
+        self._save(key)
+    
+    @override
+    def _add_span(self, key: str, start: float, end: float):
+        super()._add_span(key, start, end)
+        self._save(key)
+    @override
+    def _delete_span(self, key: str, start: float):
+        super()._delete_span(key, start)
+        self._save(key)
+
+class SqlKSStorage(BaseKeySeriesStorage[T]):
     def __init__(self, engine: Engine, table_name: str, timestamp: Callable[[T], float], serializer: Serializer = TypedSerializer()):
         self.engine = engine
         self.timestamp = timestamp
@@ -183,4 +230,3 @@ class SqlKSStorage(KeySeriesStorage[T]):
         with self.maker.begin() as sess:
             sess.execute(delete(self.Span).where((self.Span.key == key) & (self.Span.start == start)))
 
-    

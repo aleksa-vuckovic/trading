@@ -127,7 +127,7 @@ class CachedScalarDescriptor(Generic[S, *Args, T]):
 
 def cached_scalar(
     *,
-    key_fn: Callable[[S, *Args], str],
+    key_fn: Callable[[S, *Args], str] = lambda it: "",
     storage_fn: KeyValueStorage|Callable[[S, *Args], KeyValueStorage],
     refresh_fn: float|Callable[[S, *Args], float] = float('+inf')
 ) -> Callable[[Callable[[S, *Args], T]], CachedScalarDescriptor[S, *Args, T]]:

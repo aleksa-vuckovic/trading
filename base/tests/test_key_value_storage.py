@@ -52,13 +52,13 @@ class TestKVStorage(TestBase):
             self.assertTrue(storage.has(key))
             storage.delete(key)
 
-    def test_file_persistor_simple(self):
+    def test_file_storage_simple(self):
         self._test_kv_storage_simple(FileKVStorage(self.TEST_DATA))
-    def test_file_persistor_special(self):
+    def test_file_storage_special(self):
         self._test_kv_storage_special(FileKVStorage(self.TEST_DATA))
-    def test_folder_persistor_simple(self):
+    def test_folder_storage_simple(self):
         self._test_kv_storage_simple(FolderKVStorage(self.TEST_DATA))
-    def test_folder_persistor_special(self):
+    def test_folder_storage_special(self):
         self._test_kv_storage_special(FolderKVStorage(self.TEST_DATA))
     def test_sqlite_storage_simple(self):
         self._test_kv_storage_simple(SqlKVStorage(sqlite_engine(self.TEST_DATA), "testtable"))
