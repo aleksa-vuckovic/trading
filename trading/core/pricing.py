@@ -163,7 +163,7 @@ class BasePricingProvider(PricingProvider):
     def _get_pricing_key_fn(self, security: Security, interval: Interval) -> str:
         return f"{security.exchange.mic}_{security.symbol}_{interval.name}"
     def _get_pricing_persistor_storage_fn(self, security: Security, interval: Interval) -> KeySeriesStorage:
-        return self.get_pricing_persistor(security, interval)
+        return self.get_pricing_storage(security, interval)
     def _get_pricing_batch_size_fn(self, security: Security, interval: Interval) -> float:
         if interval == Interval.L1: return 1000000000
         elif interval == Interval.W1: return 300000000
@@ -204,7 +204,7 @@ class BasePricingProvider(PricingProvider):
             return self.get_pricing_raw(unix_from, unix_to, security, interval)
 
     #region Abstract
-    def get_pricing_persistor(self, security: Security, interval: Interval) -> KeySeriesStorage: raise NotImplementedError()
+    def get_pricing_storage(self, security: Security, interval: Interval) -> KeySeriesStorage: raise NotImplementedError()
     def get_pricing_delay(self, security: Security, interval: Interval) -> float: raise NotImplementedError()
     def get_pricing_raw(self, unix_from: float, unix_to: float, security: Security, interval: Interval) -> Sequence[OHLCV]:
         """
