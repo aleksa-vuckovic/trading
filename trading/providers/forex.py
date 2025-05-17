@@ -1,10 +1,9 @@
 #1
 from __future__ import annotations
 from enum import Enum, auto
-from tokenize import Single
 from typing import Sequence, override
 from datetime import datetime, timedelta
-from base.types import Serializable, Singleton
+from base.types import Singleton
 from base import dates
 from base.utils import cached
 from trading.core.interval import Interval

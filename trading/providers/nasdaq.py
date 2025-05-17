@@ -4,11 +4,12 @@ import logging
 import re
 from typing import Sequence, override
 from enum import Enum
+from base.key_value_storage import FileKVStorage
 import config
 from base import dates
 from base.types import Singleton
 from base.utils import cached
-from base.caching import cached_scalar, FilePersistor
+from base.caching import cached_scalar
 from base.scraping import scraper
 from base.serialization import Serializable
 from trading.core.work_calendar import WorkSchedule, BasicWorkCalendar, Hours
@@ -83,11 +84,9 @@ class Nasdaq(Exchange):
         super().__init__('XNAS', 'XNAS', 'XNAS', 'Nasdaq All Markets', NasdaqCalendar.instance)
     
     @cached_scalar(
-        key_fn=lambda self:"nasdaqlisted.txt",
-        persistor_fn=FilePersistor(config.caching.file_path/_MODULE/"listed"),
-        refresh_after=7*24*3600
+        storage_fn=FileKVStorage(config.storage.folder_path/_MODULE/"listed"),
+        refresh_fn=7*24*3600
     )
-
     def _fetch_listed(self) -> list[str]:
         response = scraper.get("https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt")
         return response.text.splitlines(False)

@@ -2,9 +2,10 @@ import json
 import logging
 from itertools import chain
 from typing import Literal, Sequence, TypedDict, override
+from base.key_value_storage import FileKVStorage
 import config
 from base.types import Singleton
-from base.caching import cached_scalar, FilePersistor
+from base.caching import cached_scalar
 from base.scraping import backup_timeout, scraper
 from base.utils import cached
 from trading.core.securities import Exchange, Security, SecurityType, WorkCalendar
@@ -47,8 +48,8 @@ class NYSEScraper(Singleton):
     def _key_fn(self, instrumentType: _FilterInsturmentType) -> str: return instrumentType
     @cached_scalar(
         key_fn=_key_fn,
-        persistor_fn=FilePersistor(config.caching.file_path/_MODULE/"listed"),
-        refresh_after=7*24*3600
+        storage_fn=FileKVStorage(config.storage.folder_path/_MODULE/"listed"),
+        refresh_fn=7*24*3600
     )
     @backup_timeout()
     def _fetch_listed(self, instrumentType: _FilterInsturmentType) -> list[_FetchResult]:
@@ -74,7 +75,7 @@ class NYSEScraper(Singleton):
                 data.extend(parsed)
                 logger.info(f"Appended {len(parsed)} entries.")
             except:
-                logger.warning(f"Unexpected error when when fetching NYSE stocks.", exc_info=True)
+                logger.warning(f"Unexpected error when fetching NYSE stocks.", exc_info=True)
         return data
     @cached
     def get_securities(self) -> Sequence[NYSESecurity]:

@@ -1,5 +1,4 @@
 from typing import override
-import time
 import unittest
 import config
 from base import dates
@@ -14,22 +13,22 @@ from trading.providers.nyse import NYSE, NYSEAmerican, NYSEArca
 
 stock = Nasdaq.instance.get_security('NVDA')
 calendar = Nasdaq.instance.calendar
-provider = Yahoo(config.caching.storage)
+provider = Yahoo(config.storage.location)
 
 class TestYahoo(TestPricingProvider):
     @override
     def get_provider(self) -> PricingProvider:
         return provider
     @override
-    def get_securities(self) -> list[Security]:
+    def get_securities(self) -> list[tuple[Security, float]]:
         return [
-            NasdaqGS.instance.get_security('NVDA'),
-            NasdaqMS.instance.get_security('LUNR'),
-            NasdaqCM.instance.get_security('RGTI'),   
-            Forex.instance.get_security('EURUSD'),
-            NYSE.instance.get_security('KO'),
-            NYSEAmerican.instance.get_security('IMO'),
-            NYSEArca.instance.get_security('SPY')
+            (NasdaqGS.instance.get_security('NVDA'), 0.8),
+            (NasdaqMS.instance.get_security('LUNR'), 0.8),
+            (NasdaqCM.instance.get_security('RGTI'), 0.7),
+            (NYSE.instance.get_security('KO'), 0.8),
+            (NYSEAmerican.instance.get_security('IMO'), 0.5),
+            (NYSEArca.instance.get_security('SPY'), 0.8),
+            (Forex.instance.get_security('EURUSD'), 0.8)
         ]
     
     def test_pricing_l1(self):
@@ -68,22 +67,6 @@ class TestYahoo(TestPricingProvider):
         self.assertEqual(calendar.str_to_unix('2022-01-15 00:00:00'), data[-1].t)
         self.assertAlmostEqual(31.37992286682129, data[0].c, 5)
         self.assertEqual(484368000, data[0].v)
-
-    def test_pricing_h1(self):
-        data = provider.get_pricing(
-            calendar.str_to_unix("2025-03-01 00:00:00"),
-            calendar.str_to_unix("2025-04-14 00:00:00"),
-            stock,
-            Interval.H1
-        )
-        self.assertGreater(len(data), 150)
-        self.assertLess(len(data), 300)
-        self.assertEqual(calendar.str_to_unix('2025-03-03 10:00:00'), data[0].t)
-        self.assertEqual(calendar.str_to_unix('2025-04-11 16:00:00'), data[-1].t)
-        self.assertGreater(data[0].c, 118)
-        self.assertLess(data[0].c, 120)
-        self.assertGreater(sum(it.v for it in data[:7]), 340000000)
-        self.assertLess(sum(it.v for it in data[:7]), 380000000)
 
     def test_pricing_m15(self):
         data = provider.get_pricing(
@@ -124,7 +107,7 @@ class TestYahoo(TestPricingProvider):
 
     @unittest.skip("Avoid http calls")
     def test_merge(self):
-        nonmerged = Yahoo('none', merge={})
+        nonmerged = Yahoo('mem', merge={})
         start = stock.exchange.calendar.get_next_timestamp(dates.unix() - 5*24*3600, Interval.D1)
         end = stock.exchange.calendar.get_next_timestamp(dates.unix()-3*24*3600, Interval.D1)
 

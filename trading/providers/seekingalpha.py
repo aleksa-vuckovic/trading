@@ -1,11 +1,13 @@
 #2
 import json
 import logging
-from typing import Literal, override
+from typing import override
 from datetime import datetime
 import config
+from base.caching import KeySeriesStorage
+from base.db import sqlite_engine
+from base.key_series_storage import FolderKSStorage, MemoryKSStorage, SqlKSStorage
 from base.scraping import scraper, backup_timeout
-from base.caching import NullPersistor, Persistor, FilePersistor, SqlitePersistor
 from trading.core.securities import Security
 from trading.core.news import BaseNewsProvider, News
 from trading.providers.forex import ForexSecurity
@@ -24,10 +26,10 @@ def _get_symbol(security: Security):
     raise Exception(f"Unsupported security {security}.")
 
 class SeekingAlpha(BaseNewsProvider):
-    def __init__(self, storage: Literal['file','db','none']='db'):
-        self.news_persistor = FilePersistor(config.caching.file_path/_MODULE/'news') if storage == 'file'\
-            else SqlitePersistor(config.caching.db_path, f"{_MODULE}_news") if storage == 'db'\
-            else NullPersistor()
+    def __init__(self, storage: config.storage.loc='db'):
+        self.news_persistor = FolderKSStorage[News](config.storage.folder_path/_MODULE/'news', lambda it: it.time) if storage == 'folder'\
+            else SqlKSStorage[News](sqlite_engine(config.storage.db_path), f"{_MODULE}_news", lambda it: it.time) if storage == 'db'\
+            else MemoryKSStorage[News](lambda it: it.time)
 
     @backup_timeout()
     def _fetch_news(self, unix_from: float, unix_to: float, symbol: str) -> list[News]:
@@ -51,7 +53,7 @@ class SeekingAlpha(BaseNewsProvider):
     
     #region Overrides
     @override
-    def get_news_persistor(self, security: Security) -> Persistor:
+    def get_news_storage(self, security: Security) -> KeySeriesStorage[News]:
         return self.news_persistor
     @override
     def get_news_raw(self, unix_from: float, unix_to: float, security: Security) -> list[News]:

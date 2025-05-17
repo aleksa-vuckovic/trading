@@ -1,13 +1,14 @@
 #2
 import json
 import logging
-import time
 from typing import Literal, override
 from datetime import timedelta
 import config
+from base.caching import KeySeriesStorage
+from base.db import sqlite_engine
+from base.key_series_storage import FolderKSStorage, MemoryKSStorage, SqlKSStorage
 from base import dates
 from base.scraping import scraper, backup_timeout
-from base.caching import FilePersistor, NullPersistor, Persistor, SqlitePersistor
 from trading.core.interval import Interval
 from trading.core.securities import Security, SecurityType
 from trading.core.pricing import OHLCV, BasePricingProvider
@@ -38,13 +39,13 @@ def _get_symbol(security: Security) -> str:
     raise Exception(f"Unsupported security {security}.")
 
 class WallStreetJournal(BasePricingProvider):
-    def __init__(self, storage: Literal['file','db','none']='db'):
+    def __init__(self, storage: config.storage.loc='db'):
         super().__init__(
             native = [Interval.D1, Interval.M30, Interval.M15, Interval.M5, Interval.M1]
         )
-        self.pricing_persistor = FilePersistor(config.caching.file_path/_MODULE/"pricing") if storage == 'file'\
-            else SqlitePersistor(config.caching.db_path, f"{_MODULE}_pricing") if storage == 'db'\
-            else NullPersistor()
+        self.pricing_persistor = FolderKSStorage[OHLCV](config.storage.folder_path/_MODULE/'pricing', lambda it: it.t) if storage == 'folder'\
+            else SqlKSStorage[OHLCV](sqlite_engine(config.storage.db_path), f"{_MODULE}_pricing", lambda it: it.t) if storage == 'db'\
+            else MemoryKSStorage[OHLCV](lambda it: it.t)
 
     @backup_timeout()
     def _fetch_pricing(self, key: str, step: str, time_frame: Literal['D5', 'D10'], **kwargs):
@@ -125,7 +126,7 @@ class WallStreetJournal(BasePricingProvider):
         if interval in {Interval.M30, Interval.M15, Interval.M5, Interval.M1}: return dates.unix() - 5*25*3600
         raise Exception(f"Unsupported interval {interval}.")
     @override
-    def get_pricing_persistor(self, security, interval) -> Persistor:
+    def get_pricing_storage(self, security, interval) -> KeySeriesStorage[OHLCV]:
         return self.pricing_persistor
     @override
     def get_pricing_delay(self, security, interval) -> float:

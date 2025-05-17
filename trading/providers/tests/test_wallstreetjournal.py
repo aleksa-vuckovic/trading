@@ -11,15 +11,15 @@ from trading.providers.wallstreetjournal import WallStreetJournal
 class TestWallStreetJournal(TestPricingProvider):
     @override
     def get_provider(self) -> PricingProvider:
-        return WallStreetJournal(config.caching.storage)
+        return WallStreetJournal(config.storage.location)
     @override
-    def get_securities(self) -> list[Security]:
+    def get_securities(self) -> list[tuple[Security, float]]:
         return [
-            NasdaqGS.instance.get_security('NVDA'),
-            NasdaqMS.instance.get_security('LUNR'),
-            NasdaqCM.instance.get_security('RGTI'),   
-            Forex.instance.get_security('EURUSD'),
-            NYSE.instance.get_security('KO'),
-            NYSEAmerican.instance.get_security('IMO'),
-            NYSEArca.instance.get_security('SPY')
+            (NasdaqGS.instance.get_security('NVDA'), 0.8),
+            (NasdaqMS.instance.get_security('LUNR'), 0.8),
+            (NasdaqCM.instance.get_security('RGTI'), 0.7),
+            (NYSE.instance.get_security('KO'), 0.8),
+            (NYSEAmerican.instance.get_security('IMO'), 0.5),
+            (NYSEArca.instance.get_security('SPY'), 0.8),
+            (Forex.instance.get_security('EURUSD'), 0.8)
         ]

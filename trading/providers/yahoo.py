@@ -5,14 +5,18 @@ import logging
 import time
 import math
 from typing import Literal, Mapping, override
+from base.db import sqlite_engine
+from base.key_series_storage import MemoryKSStorage, SqlKSStorage
+from base.key_value_storage import FolderKVStorage, MemoryKVStorage, SqlKVStorage
 import config
 from base import dates
-from base.algos import BinarySearchEdge, binary_search
-from base.caching import NullPersistor, cached_scalar, Persistor, FilePersistor, SqlitePersistor
+from base.algos import binary_search
+from base.caching import KeySeriesStorage, KeyValueStorage, cached_scalar
 from base.scraping import scraper, backup_timeout, BadResponseException, TooManyRequestsException
 from trading.core import Interval
 from trading.core.securities import Security, DataProvider, SecurityType
 from trading.core.pricing import OHLCV, BasePricingProvider
+from trading.providers.financialtimes import FolderKSStorage
 from trading.providers.nasdaq import NasdaqSecurity
 from trading.providers.nyse import NYSESecurity
 from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
@@ -31,21 +35,21 @@ class Yahoo(BasePricingProvider, DataProvider):
     The last nonprepost period is at 15:30 and covers only the last 30 minutes.
     The timestamps correspond to the START of the period.
     """
-    def __init__(self, storage: Literal['file','db','none']='db', merge: Mapping[Interval, Interval] = BasePricingProvider.DEFAULT_MERGE):
-        if merge != BasePricingProvider.DEFAULT_MERGE and storage != 'none':
-            raise Exception(f"Only change merge config when using 'none' storage.")
+    def __init__(self, storage: config.storage.loc='db', merge: Mapping[Interval, Interval] = BasePricingProvider.DEFAULT_MERGE):
+        if merge != BasePricingProvider.DEFAULT_MERGE and storage != 'mem':
+            raise Exception(f"Only change merge config when using 'mem' storage.")
         BasePricingProvider.__init__(
             self,
             native = [Interval.L1, Interval.W1, Interval.D1, Interval.M30, Interval.M15, Interval.M5, Interval.M1],
             merge = merge
         )
         DataProvider.__init__(self)
-        self.info_persistor = FilePersistor(config.caching.file_path/_MODULE/"info") if storage == 'file'\
-            else SqlitePersistor(config.caching.db_path, f"{_MODULE}_info") if storage == 'db'\
-            else NullPersistor()
-        self.pricing_persistor = FilePersistor(config.caching.file_path/_MODULE/"pricing") if storage == 'file'\
-            else SqlitePersistor(config.caching.db_path, f"{_MODULE}_pricing") if storage == 'db'\
-            else NullPersistor()
+        self.info_persistor = FolderKVStorage(config.storage.folder_path/_MODULE/'info') if storage == 'folder'\
+            else SqlKVStorage(sqlite_engine(config.storage.db_path), f"{_MODULE}_info") if storage == 'db'\
+            else MemoryKVStorage()
+        self.pricing_persistor = FolderKSStorage[OHLCV](config.storage.folder_path/_MODULE/'pricing', lambda it: it.t) if storage == 'folder'\
+            else SqlKSStorage[OHLCV](sqlite_engine(config.storage.db_path), f"{_MODULE}_pricing", lambda it: it.t) if storage == 'db'\
+            else MemoryKSStorage[OHLCV](lambda it: it.t)
 
     @backup_timeout()
     def _fetch_pricing(
@@ -119,7 +123,7 @@ class Yahoo(BasePricingProvider, DataProvider):
         if interval == Interval.M1: return now - 29*24*3600
         raise Exception(f"Unsupported interval {self}.")
     @override
-    def get_pricing_persistor(self, security: Security, interval: Interval) -> Persistor:
+    def get_pricing_storage(self, security: Security, interval: Interval) -> KeySeriesStorage[OHLCV]:
         return self.pricing_persistor
     @override
     def get_pricing_delay(self, security: Security, interval: Interval) -> float:
@@ -152,7 +156,7 @@ class Yahoo(BasePricingProvider, DataProvider):
                 d1data = self.get_pricing(unix_to - _ADJUSTMENT_PERIOD, unix_to, security, Interval.D1)
                 close = d1data[-1]['c']
                 time = security.exchange.calendar.set_close(d1data[-1]['t'])
-                i = binary_search(series, time, lambda x: x.t, edge=BinarySearchEdge.NONE)
+                i = binary_search(series, time, lambda x: x.t)
                 if i is not None:
                     factor = close / series[i]['c']
                     return [it.adjust(factor)  for it in series ]
@@ -167,11 +171,11 @@ class Yahoo(BasePricingProvider, DataProvider):
 
     def _get_info_key_fn(self, security: Security) -> str:
         return security.symbol
-    def _get_info_persistor_fn(self, security: Security) -> Persistor:
+    def _get_info_storage_fn(self, security: Security) -> KeyValueStorage:
         return self.info_persistor
     @cached_scalar(
         key_fn=_get_info_key_fn,
-        persistor_fn=_get_info_persistor_fn
+        storage_fn=_get_info_storage_fn
     )
     def _get_info(self, security: Security) -> dict:
         try:

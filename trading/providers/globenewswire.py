@@ -4,8 +4,10 @@ from typing import Literal, Sequence, override
 from urllib import parse
 from bs4 import BeautifulSoup
 import config
+from base.db import sqlite_engine
+from base.caching import KeySeriesStorage
+from base.key_series_storage import FolderKSStorage, MemoryKSStorage, SqlKSStorage
 from base.scraping import scraper, backup_timeout
-from base.caching import NullPersistor, Persistor, FilePersistor, SqlitePersistor
 from trading.core.securities import Security
 from trading.core.news import News, BaseNewsProvider
 from trading.providers.nyse import NYSESecurity
@@ -26,10 +28,10 @@ class GlobeNewswireNews(News):
         self.preview = preview
 
 class GlobeNewswire(BaseNewsProvider):
-    def __init__(self, storage: Literal['file','db','none']='db'):
-        self.news_persistor = FilePersistor(config.caching.file_path/_MODULE/'news') if storage == 'file'\
-            else SqlitePersistor(config.caching.db_path, f"{_MODULE}_news") if storage == 'db'\
-            else NullPersistor()
+    def __init__(self, storage: config.storage.loc='db'):
+        self.news_persistor = FolderKSStorage[GlobeNewswireNews](config.storage.folder_path/_MODULE/'news', lambda it: it.time) if storage == 'folder'\
+            else SqlKSStorage[GlobeNewswireNews](sqlite_engine(config.storage.db_path), f"{_MODULE}_news", lambda it: it.time) if storage == 'db'\
+            else MemoryKSStorage[GlobeNewswireNews](lambda it: it.time)
 
     @backup_timeout()
     def _fetch_news(self,  unix_from: float, unix_to: float, orgs: list[str], keywords: list[str]) -> list[GlobeNewswireNews]:
@@ -84,7 +86,7 @@ class GlobeNewswire(BaseNewsProvider):
 
     #region Overrides
     @override
-    def get_news_persistor(self, security: Security) -> Persistor:
+    def get_news_storage(self, security: Security) -> KeySeriesStorage[GlobeNewswireNews]:
         return self.news_persistor
     @override
     def get_news_raw(self, unix_from: float, unix_to: float, security: Security) -> Sequence[News]:

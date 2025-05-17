@@ -5,7 +5,7 @@ from trading.providers.seekingalpha import SeekingAlpha
 
 security = Nasdaq.instance.get_security('NVDA')
 calendar = Nasdaq.instance.calendar
-provider = SeekingAlpha(config.caching.storage)
+provider = SeekingAlpha(config.storage.location)
 
 class TestSeekingAlpha(unittest.TestCase):
     def test_news(self):

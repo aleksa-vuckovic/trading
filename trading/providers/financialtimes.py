@@ -1,17 +1,19 @@
 #2
 import json
 import logging
-import time
 import math
-from typing import Literal, Sequence, TypedDict, override
+from typing import Sequence, TypedDict, override
 import config
 from base import dates
 from base.scraping import scraper, backup_timeout
+from base.db import sqlite_engine
+from base.key_series_storage import FolderKSStorage, MemoryKSStorage, SqlKSStorage
 from trading.core.interval import Interval
 from trading.providers.forex import ForexSecurity
 from trading.providers.nyse import NYSE, NYSEAmerican, NYSEArca, NYSESecurity
 from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
-from base.caching import cached_scalar, Persistor, FilePersistor, SqlitePersistor, NullPersistor
+from base.caching import KeySeriesStorage, KeyValueStorage, cached_scalar
+from base.key_value_storage import FolderKVStorage, MemoryKVStorage, SqlKVStorage
 from trading.core.securities import Security
 from trading.core.pricing import OHLCV, BasePricingProvider
 from trading.providers.nasdaq import NasdaqSecurity, NasdaqGS, NasdaqMS, NasdaqCM
@@ -44,16 +46,16 @@ def _get_interval(interval: Interval) -> tuple[str, int]:
     raise Exception(f"Unknown interval {interval}")
 
 class FinancialTimes(BasePricingProvider):
-    def __init__(self, storage: Literal['file','db','none']='db'):
+    def __init__(self, storage: config.storage.loc='db'):
         super().__init__(
             native = [Interval.D1, Interval.M30, Interval.M15, Interval.M5, Interval.M1]
         )
-        self.info_persistor = FilePersistor(config.caching.file_path/_MODULE/'info') if storage == 'file'\
-            else SqlitePersistor(config.caching.db_path, f"{_MODULE}_info") if storage == 'db'\
-            else NullPersistor()
-        self.pricing_persistor = FilePersistor(config.caching.file_path/_MODULE/'pricing') if storage =='file'\
-            else SqlitePersistor(config.caching.db_path, f"{_MODULE}_pricing") if storage == 'db'\
-            else NullPersistor()
+        self.info_persistor = FolderKVStorage(config.storage.folder_path/_MODULE/'info') if storage == 'folder'\
+            else SqlKVStorage(sqlite_engine(config.storage.db_path), f"{_MODULE}_info") if storage == 'db'\
+            else MemoryKVStorage()
+        self.pricing_persistor = FolderKSStorage[OHLCV](config.storage.folder_path/_MODULE/'pricing', lambda it: it.t) if storage == 'folder'\
+            else SqlKSStorage[OHLCV](sqlite_engine(config.storage.db_path), f"{_MODULE}_pricing", lambda it: it.t) if storage == 'db'\
+            else MemoryKSStorage[OHLCV](lambda it: it.t)
     
     class _InfoDict(TypedDict):
         url: str
@@ -64,11 +66,11 @@ class FinancialTimes(BasePricingProvider):
         assetClass: str
     def _get_info_key_fn(self, security: Security) -> str:
         return f"{security.exchange.mic}_{security.symbol}"
-    def _get_info_persistor_fn(self, security: Security) -> Persistor:
+    def _get_info_storage_fn(self, security: Security) -> KeyValueStorage:
         return self.info_persistor
     @cached_scalar(
         key_fn=_get_info_key_fn,
-        persistor_fn=_get_info_persistor_fn
+        storage_fn=_get_info_storage_fn
     )
     def _get_info(self, security: Security) -> _InfoDict|None:
         url = f"https://markets.ft.com/data/searchapi/searchsecurities"
@@ -142,10 +144,10 @@ class FinancialTimes(BasePricingProvider):
         return result
 
     @override
-    def get_interval_start(self, interval):
+    def get_interval_start(self, interval: Interval):
         return dates.unix() - 15*24*3600
     @override
-    def get_pricing_persistor(self, security: Security, interval: Interval) -> Persistor:
+    def get_pricing_storage(self, security: Security, interval: Interval) -> KeySeriesStorage[OHLCV]:
         return self.pricing_persistor
     @override
     def get_pricing_delay(self, security: Security, interval: Interval) -> float:
