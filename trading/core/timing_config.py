@@ -1,7 +1,6 @@
 #3
 from __future__ import annotations
-import time
-from typing import Iterable, Iterator, TypeVar, override
+from typing import Iterable, TypeVar, override
 from datetime import datetime, tzinfo
 from base import dates
 from base.serialization import Serializable

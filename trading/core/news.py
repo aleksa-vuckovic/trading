@@ -1,6 +1,6 @@
 #2
 from typing import Sequence, override
-from base.caching import cached_series, Persistor
+from base.caching import KeySeriesStorage, cached_series
 from base.serialization import Serializable
 from trading.core.securities import Security
 
@@ -30,18 +30,18 @@ class NewsProvider:
 class BaseNewsProvider(NewsProvider):
     
     @override
-    def get_news(self, unix_from: float, unix_to: float, security: Security) -> list[News]:
+    def get_news(self, unix_from: float, unix_to: float, security: Security) -> Sequence[News]:
         return self._get_news(unix_from, unix_to, security)
 
     @staticmethod
     def _get_news_timestamp_fn(it: News) -> float: return it.time
     def _get_news_key_fn(self, security: Security) -> str: return f"{security.exchange.mic}_{security.symbol}"
-    def _get_news_persistor_fn(self, security: Security) -> Persistor: return self.get_news_persistor(security)
+    def _get_news_storage_fn(self, security: Security) -> KeySeriesStorage: return self.get_news_storage(security)
     @cached_series(
         timestamp_fn=_get_news_timestamp_fn,
         key_fn=_get_news_key_fn,
-        persistor_fn=_get_news_persistor_fn,
-        timestep_fn=10000000,
+        storage_fn=_get_news_storage_fn,
+        batch_size_fn=10000000,
         live_delay_fn=3600, #let's say that news is an hour late usually
         should_refresh_fn=2*3600
     )
@@ -49,6 +49,6 @@ class BaseNewsProvider(NewsProvider):
         return self.get_news_raw(unix_from, unix_to, security)
 
     #region Abstract
-    def get_news_persistor(self, security: Security) -> Persistor: raise NotImplementedError()
+    def get_news_storage(self, security: Security) -> KeySeriesStorage: raise NotImplementedError()
     def get_news_raw(self, unix_from: float, unix_to: float, security: Security) -> Sequence[News]: raise NotImplementedError()
     #endregion

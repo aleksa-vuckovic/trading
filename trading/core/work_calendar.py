@@ -2,10 +2,11 @@
 from __future__ import annotations
 import math
 import calendar
-from typing import Self, overload, TypeVar, override
+from typing import Self, Sequence, overload, TypeVar, override
 from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta
-from base.caching import Persistor, cached_series, MemoryPersistor
+from base.caching import cached_series
+from base.key_series_storage import KeySeriesStorage, MemoryKSStorage
 from base import dates
 from base.types import Equatable
 from trading.core import Interval
@@ -89,10 +90,9 @@ class WorkCalendar:
     Because intervals are consistently considered open at the start and closed at the end, in all methods
     the time 00:00 is (and should be) considered to belong to the previous day, i.e. to be the last moment of the previous day.
     """
-    cache: dict[tuple[Interval, float], list[datetime]]
     def __init__(self, tz: ZoneInfo):
         self.tz = tz
-        self.cache = {}
+        self.storage: KeySeriesStorage[datetime] = MemoryKSStorage(lambda it: it.timestamp())
     #region Basics
     def str_to_datetime(self, time_string: str, format: str = "%Y-%m-%d %H:%M:%S") -> datetime:
         return dates.str_to_datetime(time_string, format, tz=self.tz)
@@ -176,18 +176,15 @@ class WorkCalendar:
     @staticmethod
     def _get_timestamps_timestamp_fn(it: datetime) -> float: return it.timestamp()
     def _get_timestamps_key_fn(self, interval: Interval) -> str: return interval.name
-    def _get_timestamps_persistor_fn(self, interval: Interval) -> Persistor:
-        KEY = "_basic_work_calendar_persistor_"
-        if KEY not in self.__dict__: self.__dict__[KEY] = MemoryPersistor()
-        return self.__dict__[KEY]
-    def _get_timestamps_time_step_fn(self, interval: Interval) -> float:
+    def _get_timestamps_storage_fn(self, interval: Interval) -> KeySeriesStorage: return self.storage
+    def _get_timestamps_batch_size_fn(self, interval: Interval) -> float:
         if interval >= Interval.D1: return 1000*interval.time()
         else: return 4000*interval.time()
     @cached_series(
         timestamp_fn=_get_timestamps_timestamp_fn,
         key_fn=_get_timestamps_key_fn,
-        persistor_fn=_get_timestamps_persistor_fn,
-        timestep_fn=_get_timestamps_time_step_fn,
+        storage_fn=_get_timestamps_storage_fn,
+        batch_size_fn=_get_timestamps_batch_size_fn,
         live_delay_fn=None
     )
     def _get_timestamps(self, unix_from: float, unix_to: float, interval: Interval) -> list[datetime]:
@@ -199,7 +196,7 @@ class WorkCalendar:
             result.append(cur)
             cur = self.get_next_timestamp(cur, interval)
         return result
-    def get_timestamps(self, start_time: T, end_time: T, interval: Interval) -> list[T]:
+    def get_timestamps(self, start_time: T, end_time: T, interval: Interval) -> Sequence[T]:
         if not isinstance(start_time, datetime) or not isinstance(end_time, datetime):
             assert not isinstance(start_time, datetime)
             assert not isinstance(end_time, datetime)
@@ -211,7 +208,7 @@ class WorkCalendar:
             return self.add_intervals(self.unix_to_datetime(time), interval, count).timestamp()
         #estimate necessary timespan
         span = timedelta(seconds=interval.time()*(abs(count)+5))
-        t: list[datetime] = []
+        t: Sequence[datetime] = []
         if count > 0:
             while len(t) < count:
                 count -= len(t)

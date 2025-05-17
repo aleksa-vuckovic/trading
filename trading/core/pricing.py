@@ -5,7 +5,7 @@ from typing import Iterable, Mapping, Sequence, override
 from base.algos import interpolate
 from base.types import Equatable
 from base.serialization import Serializable
-from base.caching import cached_series, Persistor
+from base.caching import cached_series, KeySeriesStorage
 from trading.core import Interval
 from trading.core.securities import Security
 
@@ -145,7 +145,7 @@ class BasePricingProvider(PricingProvider):
         self.merge = merge
     
     @override
-    def get_pricing(self, unix_from, unix_to, security, interval, *, interpolate = False, max_fill_ratio = 1) -> list[OHLCV]:
+    def get_pricing(self, unix_from, unix_to, security, interval, *, interpolate = False, max_fill_ratio = 1) -> Sequence[OHLCV]:
         data = self._get_pricing(unix_from, unix_to, security, interval)
         if interpolate:
             timestamps = security.exchange.calendar.get_timestamps(unix_from, unix_to, interval)
@@ -162,9 +162,9 @@ class BasePricingProvider(PricingProvider):
     def _get_pricing_timestamp_fn(it: OHLCV) -> float: return it.t
     def _get_pricing_key_fn(self, security: Security, interval: Interval) -> str:
         return f"{security.exchange.mic}_{security.symbol}_{interval.name}"
-    def _get_pricing_persistor_fn(self, security: Security, interval: Interval) -> Persistor:
+    def _get_pricing_persistor_storage_fn(self, security: Security, interval: Interval) -> KeySeriesStorage:
         return self.get_pricing_persistor(security, interval)
-    def _get_pricing_time_step_fn(self, security: Security, interval: Interval) -> float:
+    def _get_pricing_batch_size_fn(self, security: Security, interval: Interval) -> float:
         if interval == Interval.L1: return 1000000000
         elif interval == Interval.W1: return 300000000
         elif interval == Interval.D1: return 50000000
@@ -181,8 +181,8 @@ class BasePricingProvider(PricingProvider):
     @cached_series(
         timestamp_fn=_get_pricing_timestamp_fn,
         key_fn=_get_pricing_key_fn,
-        persistor_fn=_get_pricing_persistor_fn,
-        timestep_fn=_get_pricing_time_step_fn,
+        storage_fn=_get_pricing_persistor_storage_fn,
+        batch_size_fn=_get_pricing_batch_size_fn,
         live_delay_fn=_get_pricing_live_delay_fn,
         should_refresh_fn=_get_pricing_should_refresh_fn
     )
@@ -204,7 +204,7 @@ class BasePricingProvider(PricingProvider):
             return self.get_pricing_raw(unix_from, unix_to, security, interval)
 
     #region Abstract
-    def get_pricing_persistor(self, security: Security, interval: Interval) -> Persistor: raise NotImplementedError()
+    def get_pricing_persistor(self, security: Security, interval: Interval) -> KeySeriesStorage: raise NotImplementedError()
     def get_pricing_delay(self, security: Security, interval: Interval) -> float: raise NotImplementedError()
     def get_pricing_raw(self, unix_from: float, unix_to: float, security: Security, interval: Interval) -> Sequence[OHLCV]:
         """

@@ -1,7 +1,6 @@
 import unittest
 from base import dates
 from base.serialization import serializer
-from storage import TimingConfig
 from trading.core import Interval
 from trading.core.news import Security
 from trading.core.securities import Exchange, SecurityType

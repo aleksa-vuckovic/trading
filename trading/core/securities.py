@@ -77,7 +77,6 @@ class Security(Equatable, Serializable):
     def __repr__(self) -> str:
         return str(self)
 
-
 class DataProvider:
     """
     Data providers will:
