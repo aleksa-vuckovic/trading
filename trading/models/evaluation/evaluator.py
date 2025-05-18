@@ -121,7 +121,7 @@ class BacktestResult(Serializable):
         self.estimator = estimator
         self.commission = commission
         self.model = model
-        self.unix_time = time.time()
+        self.unix_time = dates.unix()
     
     def __str__(self) -> str:
         return f"""BacktestResult ({dates.unix_to_datetime(self.unix_from,tz=dates.CET)} -> {dates.unix_to_datetime(self.unix_to,tz=dates.CET)}).
@@ -139,7 +139,7 @@ class Evaluator:
     def evaluate(self, security: Security, unix_time: float|None = None) -> float:
         self.manager.model.eval()
         with torch.no_grad():
-            example = {key:value.to(dtype=self.manager.dtype, device=self.manager.device) for key,value in self.generator.generate_example(security, unix_time or time.time(), with_output=False).items()}
+            example = {key:value.to(dtype=self.manager.dtype, device=self.manager.device) for key,value in self.generator.generate_example(security, unix_time or dates.unix(), with_output=False).items()}
             tensors = self.manager.model.extract_tensors(example, with_output=False)
             return self.manager.model(tensors).squeeze().item()
 
@@ -245,7 +245,7 @@ class Evaluator:
         selector.clear()
         model = f"{self.manager.model.get_name()}\n{text.tab(serializer.serialize(self.manager.model.config, typed=False, indent=2))}"
         backtest_result = BacktestResult(history, unix_from, unix_to, selector, estimator, commission, model)
-        path = self.manager.backtests / f"backtest_t{int(time.time())}.json"
+        path = self.manager.backtests / f"backtest_t{int(dates.unix())}.json"
         path.write_text(serializer.serialize(backtest_result))
         plt.show(block = True)
         return backtest_result
