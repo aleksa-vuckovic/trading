@@ -10,8 +10,8 @@ from matplotlib import pyplot as plt
 from torch import Tensor
 from pathlib import Path
 
-from blank import PriceModifier
 import config
+from base import dates
 from trading.core import Interval
 from trading.core.securities import Exchange, Security
 from trading.core.timing_config import TimingConfig, BasicTimingConfig
@@ -56,7 +56,7 @@ class Generator(AbstractGenerator):
                 ),
                 min(
                     it.calendar.add_intervals(
-                        time.time(),
+                        dates.unix(),
                         interval,
                         -self.after_data_config.counts[interval]
                     )
@@ -71,7 +71,7 @@ class Generator(AbstractGenerator):
                     self.data_config.counts[interval]
                 )
                 for interval in self.data_config.intervals
-            ), time.time()
+            ), dates.unix()
 
     @override
     def generate_example(

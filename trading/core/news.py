@@ -41,7 +41,7 @@ class BaseNewsProvider(NewsProvider):
         timestamp_fn=_get_news_timestamp_fn,
         key_fn=_get_news_key_fn,
         storage_fn=_get_news_storage_fn,
-        batch_size_fn=10000000,
+        chunk_size_fn=10000000,
         live_delay_fn=3600, #let's say that news is an hour late usually
         should_refresh_fn=2*3600
     )

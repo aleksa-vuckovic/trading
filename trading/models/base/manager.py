@@ -15,6 +15,7 @@ from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session, Mapped, declarative_base, mapped_column
 
 from base import plotutils
+from base import dates
 from base.algos import interpolate
 from base.serialization import SerializedObject
 from base.reflection import get_module, get_full_classname
@@ -295,7 +296,7 @@ class HistoryFrame:
     stats: dict[str, dict[str, float]]
     def __init__(self, epoch: int):
         self.epoch = epoch
-        self.unix_time = time.time()
+        self.unix_time = dates.unix()
         self.stats = {}
 #endregion
 

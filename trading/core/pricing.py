@@ -182,7 +182,7 @@ class BasePricingProvider(PricingProvider):
         timestamp_fn=_get_pricing_timestamp_fn,
         key_fn=_get_pricing_key_fn,
         storage_fn=_get_pricing_persistor_storage_fn,
-        batch_size_fn=_get_pricing_batch_size_fn,
+        chunk_size_fn=_get_pricing_batch_size_fn,
         live_delay_fn=_get_pricing_live_delay_fn,
         should_refresh_fn=_get_pricing_should_refresh_fn
     )
