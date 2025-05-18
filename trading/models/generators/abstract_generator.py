@@ -3,9 +3,8 @@ import torch
 from tqdm import tqdm
 from torch import Tensor
 from pathlib import Path
-
-from base.algos import binary_search, BinarySearchEdge
-from base.caching import SqlitePersistor
+from base.algos import binary_search
+from base.key_value_storage import FileKVStorage
 from base.serialization import serializer
 from trading.core import Interval
 from trading.core.securities import Exchange, Security, SecurityType
@@ -34,14 +33,15 @@ class AbstractGenerator:
         securities: list[Security] = [it for it in exchange.securities() if it.type == SecurityType.STOCK]
         securities.sort(key = lambda it: it.symbol)
         security_time_frame = {it:self.get_time_frame(it) for it in securities}
-        persistor = SqlitePersistor(folder/AbstractGenerator.STATE_FILE, exchange.mic)
+        storage = FileKVStorage(folder/AbstractGenerator.STATE_FILE)
 
+        def key(time: float): return f"{exchange.mic}-{time}"
         def next_time(time: float) -> tuple[float, int]:
             while True:
                 time = timing.next(time, interval, exchange)
-                symbol: str|None = persistor.try_read(str(time))
+                symbol: str|None = storage.try_get(key(time))
                 if symbol is None: return time, 0
-                i = binary_search(securities, symbol, lambda it: it.symbol, edge=BinarySearchEdge.LOW) + 1
+                i = binary_search(securities, symbol, lambda it: it.symbol, side='GT')
                 if i < len(securities): return time, i
 
         time, i = next_time(time_frame[0])
@@ -76,7 +76,7 @@ class AbstractGenerator:
                 if batch_file.exists(): raise Exception(f"Batch file {batch_file} already exists.")
                 torch.save(data, batch_file)
                 logger.info(f"Wrote batch for {exchange.calendar.unix_to_datetime(time)}.")
-                persistor.persist(str(time), securities[i-1].symbol)
+                storage.set(key(time), securities[i-1].symbol)
                 current.clear()
             
             if i < len(securities): continue

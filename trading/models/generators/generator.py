@@ -16,7 +16,7 @@ from trading.core import Interval
 from trading.core.securities import Exchange, Security
 from trading.core.timing_config import TimingConfig, BasicTimingConfig
 from trading.providers.aggregate import AggregateProvider
-from trading.models.base.model_config import Aggregation, BarValues, AFTER, PriceEstimator, PricingDataConfig, SigmoidPriceModifier
+from trading.models.base.model_config import Aggregation, BarValues, AFTER, PriceEstimator, PriceModifier, PricingDataConfig, SigmoidPriceModifier
 from trading.models.base.tensors import check_tensors
 from trading.models.base.batches import BatchFile
 from trading.models.generators.abstract_generator import AbstractGenerator

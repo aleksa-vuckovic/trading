@@ -9,7 +9,6 @@ from pathlib import Path
 from trading.core import work_calendar
 from trading.providers.nasdaq import Nasdaq
 from trading.core.interval import Interval
-from base.caching import FilePersistor, SqlitePersistor
 from tqdm import tqdm
 import shutil
 
@@ -17,24 +16,6 @@ import shutil
 logger = logging.getLogger(__name__)
 
 calendar = Nasdaq.instance.calendar
-
-def migrate():
-    def migrate_cache(root: Path, db: Path, table: str):
-        p1 = FilePersistor(root)
-        p2 = SqlitePersistor(db, table)
-        p1.migrate(p2)
-
-    db = Path("./cache.db")
-    cache = Path("./trading/data/cache")
-
-    migrate_cache(cache/'financialtimes'/'info', db, 'financialtimes_info')
-    migrate_cache(cache/'financialtimes'/'pricing', db, 'financialtimes_pricing')
-    migrate_cache(cache/'globenewswire'/'news', db, 'globenewswire_news')
-    migrate_cache(cache/'seekingalpha'/'news', db, 'seekingalpha_news')
-    migrate_cache(cache/'wallstreetjournal'/'pricing', db, 'wallstreetjournal_pricing')
-    migrate_cache(cache/'yahoo'/'info', db, 'yahoo_info')
-    migrate_cache(cache/'yahoo'/'pricing', db, 'yahoo_pricing')
-
 
 def nest(folder: Path, into: str):
     temp = folder.parent / (folder.parts[-1]+'2')
