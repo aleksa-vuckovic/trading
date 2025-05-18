@@ -21,12 +21,17 @@ from trading.providers.aggregate import AggregateProvider
 class Transaction(Equatable, Serializable):
     def __init__(self, fees: float):
         self.fees = fees
+    def __repr__(self) -> str:
+        return f"Transaction(fees={self.fees})"
 class SecurityTransaction(Transaction):
     def __init__(self, security: Security, amount: int, price: float, fees: float):
         super().__init__(fees)
         self.security = security
         self.amount = amount
         self.price = price
+    def __repr__(self) -> str:
+        return f"Transaction(security={self.security.symbol}, amount={self.amount}, price={self.price}, fees={self.fees})"
+    
 
 class Position(Equatable, Cloneable):
     def __init__(self, security: Security, amount: int, price: float):
@@ -55,6 +60,9 @@ class Portfolio(Serializable):
                 self.unix_time,
                 transactions = self.transactions + other.transactions
             )
+        
+        def __repr__(self) -> str:
+            return f"Action(unix_time={self.unix_time}, transactions={self.transactions})"
 
     class EquityFrame(Equatable):
         def __init__(self, unix_time: float, equity: float):
