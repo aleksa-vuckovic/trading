@@ -26,7 +26,7 @@ class SimpleProvider:
         timestamp_fn = _timestamp_fn,
         key_fn=_key_fn,
         storage_fn=_storage_fn,
-        batch_size_fn=_batch_size_fn
+        chunk_size_fn=_batch_size_fn
     )
     def get_series(self, unix_from: float, unix_to: float) -> list[SimpleDict]:
         self.invocations += 1
@@ -45,7 +45,7 @@ class KeyedProvider:
         timestamp_fn = _timestamp_fn,
         key_fn=_key_fn,
         storage_fn=_storage_fn,
-        batch_size_fn=_batch_size_fn
+        chunk_size_fn=_batch_size_fn
     )
     def get_series(self, unix_from: float, unix_to: float, key: str) -> list[SimpleDict]:
         self.invocations += 1
@@ -68,7 +68,7 @@ class EdgeProvider:
         timestamp_fn = _timestamp_fn,
         key_fn=_key_fn,
         storage_fn=_storage_fn,
-        batch_size_fn=_batch_size_fn,
+        chunk_size_fn=_batch_size_fn,
         live_delay_fn=_live_delay_fn,
         should_refresh_fn=_should_refresh_fn
     )
