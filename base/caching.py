@@ -71,7 +71,7 @@ def cached_series(
     timestamp_fn: Callable[[T], float],
     key_fn: Callable[[S, *Args], str],
     storage_fn: KeySeriesStorage | Callable[[S, *Args], KeySeriesStorage],
-    batch_size_fn: float | Callable[[S, *Args], float|None],
+    chunk_size_fn: float | Callable[[S, *Args], float|None],
     live_delay_fn: float | Callable[[S, *Args], float] | None = 0,
     should_refresh_fn: float | Callable[[S, float, float, *Args], bool] = 0,
 ) -> Callable[[Callable[[S, float, float, *Args], Sequence[T]]], CachedSeriesDescriptor[S, *Args, T]]:
@@ -81,7 +81,7 @@ def cached_series(
             timestamp_fn,
             key_fn,
             storage_fn if callable(storage_fn) else (lambda self, *args: cast(KeySeriesStorage, storage_fn)),
-            batch_size_fn if callable(batch_size_fn) else (lambda self, *args: cast(float, batch_size_fn)),
+            chunk_size_fn if callable(chunk_size_fn) else (lambda self, *args: cast(float, chunk_size_fn)),
             live_delay_fn if callable(live_delay_fn) else (lambda self, *args: -1.0e10) if live_delay_fn is None else (lambda self, *args: cast(float, live_delay_fn)),
             should_refresh_fn if callable(should_refresh_fn) else lambda self, fetch, now, *args: now-fetch > cast(float, should_refresh_fn)
         )
