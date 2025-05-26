@@ -1,4 +1,6 @@
 #1
+import base64
+import os
 from typing import Callable, Sequence, Iterable, Any, overload, Protocol, Literal
 import itertools
 import math
@@ -128,3 +130,11 @@ def interpolate(x: Sequence[float], y: Sequence, x_ret: Iterable[float], method:
 def lower_whole(x: float, step: float) -> float: return math.floor(x/step)*step
 
 def upper_whole(x: float, step: float) -> float: return math.ceil(x/step)*step
+
+def next_whole(x: float, step: float) -> float: return upper_whole(x, step) if x%step else x+step
+
+def random_b32(length: int = 16) -> str:
+    return base64.b32encode(os.urandom(math.ceil(length*5/8)))[:length].decode()
+
+def random_b64(length: int = 16) -> str:
+    return base64.b64encode(os.urandom(math.ceil(length*6/8)))[:length].decode()

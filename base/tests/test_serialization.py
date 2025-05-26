@@ -4,7 +4,7 @@ import json
 from enum import Enum
 from pathlib import Path
 from base.reflection import transient
-from base.serialization import TypedSerializer, Serializable, _TYPE, _VALUE
+from base.serialization import GenericSerializer, Serializable, _VALUE
 from base import dates
 from base.types import Equatable
 
@@ -59,7 +59,7 @@ class TestJsonutils(unittest.TestCase):
         self.assertNotEqual(B(1, 'a', [], None, x=1, y=3), B(1, 'b', [], None, x=2, y=2))
 
     def test_typed_serializer_with_skips(self):
-        serializer = TypedSerializer()
+        serializer = GenericSerializer()
         def do(obj): return serializer.deserialize(serializer.serialize(obj))
         a = A(1, 'hello', [1,2,3], None)
         b = A(2, 'world', [], a)
@@ -71,12 +71,13 @@ class TestJsonutils(unittest.TestCase):
         a = B(None, None, None, None, None)
         a_s = serializer.serialize(a)
         b = json.loads(a_s)
-        self.assertFalse('x' in b[_VALUE])
-        self.assertFalse('b' in b[_VALUE])
-        self.assertTrue('y' in b[_VALUE])
+        self.assertFalse(_VALUE in b)
+        self.assertFalse('x' in b)
+        self.assertFalse('b' in b)
+        self.assertTrue('y' in b)
 
     def test_typed_serializer_datetime(self):
-        serializer = TypedSerializer()
+        serializer = GenericSerializer()
         data = {
             'somedate': dates.now(tz=dates.ET),
             'otherdate': dates.str_to_datetime('2020-01-01 00:00:00', tz=dates.CET)
@@ -87,7 +88,7 @@ class TestJsonutils(unittest.TestCase):
         self.assertEqual(data, result)
     
     def test_typed_serializer_tuple(self):
-        serializer = TypedSerializer()
+        serializer = GenericSerializer(True)
         data = {
             't1': (1,2,3),
             't2': ((10,20,30), 11, 12, 13, [1, 2, 3, (4,5,6)]),
@@ -95,12 +96,12 @@ class TestJsonutils(unittest.TestCase):
                 'c': E(('a', 'b', 'c', 1))
             }
         }
-        data_s = serializer.serialize(data, typed=True)
+        data_s = serializer.serialize(data)
         data_d = serializer.deserialize(data_s, dict)
         self.assertEqual(data, data_d)
 
     def test_typed_serializer_path(self):
-        serializer = TypedSerializer()
+        serializer = GenericSerializer()
         data = {
             "p1": Path("./hello.txt"),
             "p2": Path("D:/test/abc")
@@ -110,7 +111,7 @@ class TestJsonutils(unittest.TestCase):
         self.assertEqual(data, data_d)
 
     def test_typed_serializer_dict_with_object_keys(self):
-        serializer = TypedSerializer()
+        serializer = GenericSerializer()
         data = {
             MyEnum.A: "Value 1",
             C(1): "Value 2",
@@ -123,7 +124,7 @@ class TestJsonutils(unittest.TestCase):
         self.assertEqual({MyEnum.A, C(1), C(2), "abc"}, set(data_d.keys()))
 
     def test_serializable_inheritance(self):
-        serializer = TypedSerializer()
+        serializer = GenericSerializer()
         a = Derived()
         a_s = serializer.serialize(a)
         a_d = serializer.deserialize(a_s, Derived)
