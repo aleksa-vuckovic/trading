@@ -3,6 +3,8 @@ from collections import defaultdict
 import os
 from pathlib import Path
 from typing import Callable, Generic, Iterable, Sequence, override, TypeVar
+from pymongo import ASCENDING, UpdateOne
+from pymongo.collection import Collection
 from sqlalchemy import Engine, select, delete
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column, sessionmaker
 from base.algos import binary_search
@@ -124,3 +126,39 @@ class SqlKSStorage(KeySeriesStorage[T]):
     def keys(self) -> Iterable[str]:
         with self.maker.begin() as sess:
             return sess.execute(select(self.Table.key).distinct()).scalars().all()
+
+MONGO_KEY = "key"
+MONGO_TIMESTAMP = "timestamp"
+MONGO_VALUE = "value"
+class MongoKSStorage(KeySeriesStorage[T]):
+    def __init__(self, collection: Collection, timestamp: Callable[[T], float], serializer: Serializer = GenericSerializer()):
+        self.collection = collection
+        self.timestamp = timestamp
+        self.serializer = serializer
+        self.collection.create_index([("key", ASCENDING), ("timestamp", ASCENDING)], name="ks_key_timestamp_index" ,unique=True)
+
+    @override
+    def get(self, key: str, start: float, end: float) -> Sequence[T]:
+        data = self.collection.find({MONGO_KEY: key, MONGO_TIMESTAMP: {"$gt": start, "$lte": end}})
+        return [self.serializer.from_json(it[MONGO_VALUE]) for it in data]
+
+    @override
+    def set(self, key: str, data: Sequence[T]):
+        self.collection.bulk_write([
+            UpdateOne(
+                {MONGO_KEY: key, MONGO_TIMESTAMP: self.timestamp(it)},
+                {
+                    "$set": {MONGO_VALUE: self.serializer.to_json(it)},
+                    "$setOnInsert": {MONGO_KEY: key, MONGO_TIMESTAMP: self.timestamp(it)}
+                },
+                upsert = True
+            ) for it in data
+        ])
+    
+    @override
+    def delete(self, key: str, start: float, end: float):
+        self.collection.delete_many({MONGO_KEY: key, MONGO_TIMESTAMP: {"$gt": start, "$lte": end}})
+
+    @override
+    def keys(self) -> Iterable[str]:
+        return (str(it["_id"]) for it in self.collection.aggregate([{"$group": {"_id": "$key",}}]))

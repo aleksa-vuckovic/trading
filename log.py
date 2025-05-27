@@ -1,32 +1,29 @@
 #1
+from pathlib import Path
 import sys
 import logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
-from pathlib import Path
 import config
+import base.log
 
 def configure_logging(console: bool = False, name: str = "main"):
     date = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
-    root = config.logging.root
+    root = Path(config.logging.root)
     output = root / name
     bin = root / "bin"
     if not output.exists(): output.mkdir(parents=True)
     if not bin.exists(): bin.mkdir()
     for file in output.iterdir(): file.rename(bin / file.name)
 
-    #formatters
-    simple_formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
-    timed_simple_formatter = logging.Formatter('%(asctime)s \t- %(name)s - %(levelname)s - %(message)s')
-
     #handlers
     console_handler = logging.StreamHandler(sys.stderr)
-    console_handler.setFormatter(simple_formatter)
+    console_handler.setFormatter(base.log.text_format)
     file_handler_names = ["providers", "yahoo", "models", "http", "others"]
     file_handlers = {}
     for name in file_handler_names:
         handler = RotatingFileHandler(filename=output / f"{date} - {name}.txt", mode="w", maxBytes=1024*1024, backupCount=3, encoding='utf-8')
-        handler.setFormatter(timed_simple_formatter)
+        handler.setFormatter(base.log.text_format)
         file_handlers[name] = handler
 
     #loggers

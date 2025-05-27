@@ -2,8 +2,11 @@
 import os
 from pathlib import Path
 from typing import Any, Iterable, get_origin, override
+from xml.dom import NotFoundErr
+from pymongo.errors import DuplicateKeyError
 from sqlalchemy import Engine, delete, exists, select
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column, sessionmaker
+from pymongo.collection import Collection
 from base.files import escape_filename, unescape_filename
 from base.serialization import Serializer, GenericSerializer
 
@@ -189,3 +192,52 @@ class SqlKVStorage(KeyValueStorage):
                 return True
         return False
     
+MONGO_KEY = "key"
+MONGO_VALUE = "value"
+class MongoKVStorage(KeyValueStorage):
+    def __init__(self, collection: Collection, serializer: Serializer = GenericSerializer(True)):
+        self.collection = collection
+        self.serializer = serializer
+        self.collection.create_index(MONGO_KEY, name="kv_key_index", unique=True)
+
+    @override
+    def get[T](self, key: str, assert_type: type[T]|None=None) -> T:
+        doc = self.collection.find_one({MONGO_KEY: key})
+        if not doc: raise NotFoundError()
+        return self.serializer.from_json(doc[MONGO_VALUE], assert_type)
+    
+    @override
+    def set(self, key: str, value: Any):
+        self.collection.update_one({MONGO_KEY: key}, {"$set": {MONGO_VALUE: self.serializer.to_json(value)}}, upsert=True)
+
+    @override
+    def delete(self, key: str) -> bool:
+        return self.collection.delete_one({MONGO_KEY: key}).deleted_count > 0
+
+    @override
+    def has(self, key: str) -> bool:
+        return self.collection.count_documents({MONGO_KEY: key}) > 0
+    
+    @override
+    def keys(self) -> Iterable[str]:
+        return [it[MONGO_KEY] for it in self.collection.find({}, {"_id": 0, MONGO_KEY: 1})]
+    
+    @override
+    def get_or_set[T](self, key: str, value: T, assert_type: type[T]|None=None) -> T:
+        ret = self.collection.find_one({MONGO_KEY: key}, {"_id": 0})
+        if ret: return self.serializer.from_json(ret[MONGO_VALUE], assert_type)
+        try:
+            self.collection.insert_one({MONGO_KEY: key, MONGO_VALUE: self.serializer.to_json(value)})
+            return value
+        except DuplicateKeyError:
+            pass
+        ret = self.collection.find_one({MONGO_KEY: key})
+        if not ret: raise NotFoundError()
+        return self.serializer.from_json(ret[MONGO_VALUE], assert_type) 
+    
+    @override
+    def compare_and_set(self, key: str, new: Any, old: Any) -> bool:
+        return self.collection.update_one(
+            {MONGO_KEY: key, MONGO_VALUE: self.serializer.to_json(old)},
+            {"$set": {MONGO_VALUE: self.serializer.to_json(new)}}
+        ).matched_count > 0

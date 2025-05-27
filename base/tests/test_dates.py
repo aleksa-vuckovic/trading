@@ -1,7 +1,6 @@
 import unittest
 from base import dates
 
-
 class TestDates(unittest.TestCase):
     def test_str_to_unix(self):
         unix = dates.str_to_unix('2023-05-06 06:20:30', tz=dates.ET)

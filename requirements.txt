@@ -10,3 +10,4 @@ torchinfo
 matplotlib
 parameterized
 sqlalchemy
+pymongo[srv]

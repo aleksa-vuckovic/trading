@@ -4,7 +4,7 @@ import json
 import datetime
 import zoneinfo
 import builtins
-from typing import Any, Self, cast, get_origin, override
+from typing import Any, Self, cast, final, get_origin, override
 from sqlalchemy import String, TypeDecorator
 from enum import Enum
 from pathlib import Path
@@ -25,19 +25,20 @@ class Serializable:
 class Serializer:
     def to_json(self, obj: object) -> json_type: ...
     def from_json[T](self, data: json_type, assert_type: type[T]|None = None) -> T: ...
-    def serialize(self, obj: object) -> str:
-        return json.dumps(self.to_json(obj))
+    @final
+    def serialize(self, obj: object, indent: int|str|None=None) -> str:
+        return json.dumps(self.to_json(obj), indent=indent)
+    @final
     def deserialize[T](self, data: str, assert_type: type[T]|None = None) -> T: 
         return self.from_json(json.loads(data), assert_type)
 
 class BasicSerializer(Serializer):
     @override
-    def serialize(self, obj: object) -> str:
-        return json.dumps(obj)
-    def deserialize[T](self, data, assert_type: type[T]|None = None) -> T:
-        ret = json.loads(data)
-        if assert_type: assert isinstance(ret, get_origin(assert_type) or assert_type)
-        return ret
+    def to_json(self, obj: object) -> json_type: return cast(json_type, obj)
+    @override
+    def from_json[T](self, data: json_type, assert_type: type[T]|None = None) -> T:
+        if assert_type: assert isinstance(data, assert_type)
+        return cast(T, data)
     
 _TYPE = '#T'
 _VALUE = '#V'
@@ -45,69 +46,62 @@ class GenericSerializer(Serializer):
     def __init__(self, typed: bool = True):
         self.typed = typed
 
-    def _serialize(self, obj: object) -> json_type:
+    @override
+    def to_json(self, obj: object) -> json_type:
         if obj is None: return None
         if isinstance(obj, (bool,int,float,str)): return obj
         elif isinstance(obj, list):
-            return [self._serialize(it) for it in obj]
+            return [self.to_json(it) for it in obj]
         elif isinstance(obj, dict) and all(isinstance(it, str) for it in obj):
-            return {key: self._serialize(value) for key, value in obj.items()}
+            return {key: self.to_json(value) for key, value in obj.items()}
         
         # objects that are not directly mapped to json
-        if isinstance(obj, dict): val = [(self._serialize(key), self._serialize(value)) for key, value in obj.items()]
-        elif isinstance(obj, (set, tuple)): val = [self._serialize(it) for it in obj]
+        if isinstance(obj, dict): val = [(self.to_json(key), self.to_json(value)) for key, value in obj.items()]
+        elif isinstance(obj, (set, tuple)): val = [self.to_json(it) for it in obj]
         elif type(obj).__module__ == 'builtins': val = repr(obj)
         elif isinstance(obj, Enum): val = obj.name
         elif isinstance(obj, datetime.datetime): val = repr(obj)
         elif isinstance(obj, Path): val = str(obj)
         elif isinstance(obj, Serializable):
             val = obj.to_json()
-            if isinstance(val, list): val = [self._serialize(it) for it in val]
-            elif isinstance(val, dict): val = {key: self._serialize(value) for key,value in val.items()}
+            if isinstance(val, list): val = [self.to_json(it) for it in val]
+            elif isinstance(val, dict): val = {key: self.to_json(value) for key,value in val.items()}
         else: raise Exception(f"Can't serialize {obj} of type {type(obj)}.")
         
         if self.typed:
             if isinstance(val, dict): val[_TYPE] = get_full_classname(obj)
             else: val = {_TYPE: get_full_classname(obj), _VALUE: val}
         return val
-    @override
-    def serialize(self, obj: object, *, indent:int|str|None=None) -> str:
-        """
-        Args:
-            typed - When set to false, type info will not be preserved, and deserialization will
-                yield undefined results! Use only for display, and never for preservation.
-        """
-        return json.dumps(self._serialize(obj), indent=indent)
     
-    def _deserialize(self, obj: json_type) -> Any:
-        if obj is None: return None
-        if isinstance(obj, (bool,int,float,str)): return obj
-        if isinstance(obj, list):
-            return [self._deserialize(it) for it in obj]
-        if isinstance(obj, dict) and _TYPE not in obj:
-            return {key: self._deserialize(value) for key,value in obj.items()}
-        if not isinstance(obj, dict): raise Exception(f"Can't deserialize {obj}.")
-
-        cls = get_class_by_full_classname(obj[_TYPE])
-        del obj[_TYPE]
-        if _VALUE in obj: val = obj[_VALUE]
-        else: val = obj
-        
-        if cls == dict: return {self._deserialize(key):self._deserialize(value) for key,value in cast(list[tuple], val)}
-        elif cls in (set, tuple): return cls(self._deserialize(it) for it in cast(list, val))
-        elif cls.__module__ == 'builtins': return eval(cast(str, val))
-        elif issubclass(cls, Enum): return cls[cast(str, val)] 
-        elif cls == datetime.datetime: return eval(cast(str, val))
-        elif issubclass(cls, Path): return Path(cast(str, val))
-        elif issubclass(cls, Serializable):
-            if isinstance(val, list): val = [self._deserialize(it) for it in val]
-            elif isinstance(val, dict): val = {key: self._deserialize(value) for key,value in val.items()}
-            return cls.from_json(val)
-        else: raise Exception(f"Can't deserialize {val} into type {cls}.")
     @override
-    def deserialize[T](self, data: str, assert_type: type[T]|None = None) -> T:
-        ret = self._deserialize(json.loads(data))
-        if assert_type: assert isinstance(ret, get_origin(assert_type) or assert_type)
+    def from_json[T](self, data: json_type, assert_type: type[T]|None=None) -> Any:
+        if data is None: return None
+        if isinstance(data, (bool,int,float,str)): return data
+        if isinstance(data, list):
+            return [self.from_json(it) for it in data]
+        if isinstance(data, dict) and _TYPE not in data:
+            return {key: self.from_json(value) for key,value in data.items()}
+        if not isinstance(data, dict): raise Exception(f"Can't deserialize {data}.")
+
+        cls = get_class_by_full_classname(data[_TYPE])
+        del data[_TYPE]
+        if _VALUE in data: val = data[_VALUE]
+        else: val = data
+        
+        ret: Any = None
+        if cls == dict: ret = {self.from_json(key):self.from_json(value) for key,value in cast(list[tuple], val)}
+        elif cls in (set, tuple): ret = cls(self.from_json(it) for it in cast(list, val))
+        elif cls.__module__ == 'builtins': ret = eval(cast(str, val))
+        elif issubclass(cls, Enum): ret = cls[cast(str, val)] 
+        elif cls == datetime.datetime: ret = eval(cast(str, val))
+        elif issubclass(cls, Path): ret = Path(cast(str, val))
+        elif issubclass(cls, Serializable):
+            if isinstance(val, list): ret = cls.from_json([self.from_json(it) for it in val])
+            elif isinstance(val, dict): ret = cls.from_json({key: self.from_json(value) for key,value in val.items()})
+            else: ret = cls.from_json(val)
+        else: raise Exception(f"Can't deserialize {val} into type {cls}.")
+
+        if assert_type: assert isinstance(ret, assert_type)
         return ret
 
 serializer = GenericSerializer()
