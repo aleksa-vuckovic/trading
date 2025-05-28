@@ -144,6 +144,7 @@ class MongoKSStorage(KeySeriesStorage[T]):
 
     @override
     def set(self, key: str, data: Sequence[T]):
+        if not data: return
         self.collection.bulk_write([
             UpdateOne(
                 {MONGO_KEY: key, MONGO_TIMESTAMP: self.timestamp(it)},

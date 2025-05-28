@@ -169,10 +169,13 @@ class BasePricingProvider(PricingProvider):
     def get_intervals(self) -> set[Interval]:
         return self.native.union(self.merge.keys())
 
+    #region caching
     def _get_pricing_key(self, security: Security, interval: Interval) -> str:
         return f"{security.exchange.mic}_{security.symbol}_{interval.name}"
-    def _get_pricing_persistor_kv_storage(self, security: Security, interval: Interval): return self.local_pricing_storage[0]
-    def _get_pricing_persistor_ks_storage(self, security: Security, interval: Interval): return self.local_pricing_storage[1]
+    def _get_pricing_local_kv(self, security: Security, interval: Interval): return self.local_pricing_storage[0]
+    def _get_pricing_local_ks(self, security: Security, interval: Interval): return self.local_pricing_storage[1]
+    def _get_pricing_remote_kv(self, security: Security, interval: Interval): return self.remote_pricing_storage[0]
+    def _get_pricing_remote_ks(self, security: Security, interval: Interval): return self.remote_pricing_storage[1]
     def _get_pricing_min_chunk(self, security: Security, interval: Interval) -> float:
         if interval == Interval.L1: return 1000000000
         elif interval == Interval.W1: return 300000000
@@ -189,14 +192,14 @@ class BasePricingProvider(PricingProvider):
         return security.exchange.calendar.get_next_timestamp(fetch, interval) < now and now-fetch > 3600
     @cached_series(
         key=_get_pricing_key,
-        kv_storage=_get_pricing_persistor_kv_storage,
-        ks_storage=_get_pricing_persistor_ks_storage,
+        kv_storage=_get_pricing_remote_kv,
+        ks_storage=_get_pricing_remote_ks,
         min_chunk=_get_pricing_min_chunk,
         max_chunk=_get_pricing_min_chunk,
         live_delay=_get_pricing_live_delay,
         should_refresh=_get_pricing_should_refresh
     )
-    def _get_pricing(
+    def _get_pricing_remote(
         self,
         unix_from: float,
         unix_to: float,
@@ -205,13 +208,26 @@ class BasePricingProvider(PricingProvider):
     ) -> Sequence[OHLCV]:
         if interval not in self.native and interval not in self.merge:
             raise Exception(f"Unsupported interval {interval}. Supported intervals are {self.native.union(self.merge.keys())}.")
-        if interval in self.merge:
-            if interval in self.native and unix_from < self.get_interval_start(self.merge[interval]):
-                return self.get_pricing_raw(unix_from, unix_to, security, interval)
+        if interval in self.merge and not(interval in self.native and unix_from < self.get_interval_start(self.merge[interval])):
             data = self._get_pricing(security.exchange.calendar.add_intervals(unix_from, interval, -1), unix_to, security, self.merge[interval])
             return merge_pricing(data, unix_from, unix_to, interval, security)
         else:
             return self.get_pricing_raw(unix_from, unix_to, security, interval)
+    @cached_series(
+        key=_get_pricing_key,
+        kv_storage=_get_pricing_local_kv,
+        ks_storage=_get_pricing_local_ks,
+        live_delay=_get_pricing_live_delay,
+    )
+    def _get_pricing(
+        self,
+        unix_from: float,
+        unix_to: float,
+        security: Security,
+        interval: Interval
+    ) -> Sequence[OHLCV]:
+        return self._get_pricing_remote(unix_from, unix_to, security, interval)
+    #endregion
 
     #region Abstract
     def get_pricing_delay(self, security: Security, interval: Interval) -> float: raise NotImplementedError()

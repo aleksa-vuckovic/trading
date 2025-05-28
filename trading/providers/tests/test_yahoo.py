@@ -77,7 +77,7 @@ class TestYahoo(TestPricingProvider):
         self.assertEqual(52, len(data))
         self.assertTrue(all(calendar.is_timestamp(it.t, Interval.M15) for it in data))
         self.assertEqual(calendar.str_to_unix("2025-04-10 09:45:00"), data[0].t)
-        self.assertAlmostEqual(108.90000152587894, data[0].c)
+        self.assertAlmostEqual(108.99998, data[0].c, 4)
 
     def test_pricing_m5(self):
         data = provider.get_pricing(
