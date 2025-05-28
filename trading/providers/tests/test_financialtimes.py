@@ -10,7 +10,7 @@ from trading.providers.nyse import NYSE, NYSEAmerican, NYSEArca
 class TestFinancialtimes(TestPricingProvider):
     @override
     def get_provider(self) -> PricingProvider:
-        return FinancialTimes(config.storage.location)
+        return FinancialTimes()
     @override
     def get_securities(self) -> list[tuple[Security, float]]:
         return [

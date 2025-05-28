@@ -9,7 +9,7 @@ from trading.core.pricing import MongoKVStorage
 from trading.core.securities import Security
 
 class News(Serializable):
-    def __init__(self, unix_time: float, title: str, content: str):
+    def __init__(self, unix_time: float, title: str, content: str|None):
         self.unix_time = unix_time
         self.title = title
         self.content = content
@@ -34,8 +34,8 @@ class NewsProvider:
 class BaseNewsProvider(NewsProvider):
     def __init__(self):
         name = type(self).__name__.lower()
-        self.local_news_storage = (SqlKVStorage(injection.local_db, f"{name}_news"), SqlKSStorage[News](injection.local_db, f"{name}_news", lambda it: it.unix_time))
-        self.remote_news_storage = (MongoKVStorage(injection.mongo_db[f"{name}_news"]), MongoKSStorage[News](injection.mongo_db[f"{name}_news"], lambda it: it.unix_time))
+        self.local_news_storage = (SqlKVStorage(injection.local_db, f"{name}_news_span"), SqlKSStorage[News](injection.local_db, f"{name}_news", lambda it: it.unix_time))
+        self.remote_news_storage = (MongoKVStorage(injection.mongo_db[f"{name}_news_span"]), MongoKSStorage[News](injection.mongo_db[f"{name}_news"], lambda it: it.unix_time))
 
     @override
     def get_news(self, unix_from: float, unix_to: float, security: Security) -> Sequence[News]:

@@ -1,6 +1,7 @@
 #1
 from __future__ import annotations
 import logging
+from pathlib import Path
 import re
 from typing import Sequence, override
 from enum import Enum
@@ -52,6 +53,38 @@ class NasdaqCalendar(BasicWorkCalendar, Singleton):
             ).build()  
         )
 
+class Nasdaq(Exchange):
+    def __init__(self):
+        super().__init__('XNAS', 'XNAS', 'XNAS', 'Nasdaq All Markets', NasdaqCalendar.instance)
+    
+    @cached_scalar( #type: ignore
+        storage=FileKVStorage(Path(config.storage.local_root_path)/_MODULE/"listed"),
+        refresh_interval=7*24*3600
+    )
+    def _fetch_listed(self) -> list[str]:
+        response = scraper.get("https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt")
+        return response.text.splitlines(False)
+
+    @override
+    @cached
+    def securities(self) -> Sequence[NasdaqSecurity]:
+        result: list[NasdaqSecurity] = []
+        tests = 0
+        failed = 0
+        error = None
+        for row in self._fetch_listed():
+            try:
+                sec = NasdaqSecurity.from_line(row)
+                if sec.type == SecurityType.TEST: tests += 1
+                else: result.append(sec)
+            except Exception as e:
+                failed += 1
+                error = error if failed > 2 else e
+        logger.info(f"Successfully parsed {len(result)} securities.")
+        logger.info(f"Skipped {tests} test securities.")
+        logger.info(f"Failed to parse {failed} securities. {error}")
+        return result
+
 class NasdaqGS(Exchange):
     def __init__(self):
         super().__init__('XNAS', 'XNGS', 'XNAS', 'Nasdaq Global Select', NasdaqCalendar.instance)
@@ -79,50 +112,11 @@ class NasdaqCM(Exchange):
     def securities(self) -> Sequence[Security]:
         return [it for it in Nasdaq.instance.securities() if it.exchange is NasdaqCM.instance]
 
-class Nasdaq(Exchange):
-    def __init__(self):
-        super().__init__('XNAS', 'XNAS', 'XNAS', 'Nasdaq All Markets', NasdaqCalendar.instance)
-    
-    @cached_scalar(
-        storage_fn=FileKVStorage(config.storage.folder_path/_MODULE/"listed"),
-        refresh_fn=7*24*3600
-    )
-    def _fetch_listed(self) -> list[str]:
-        response = scraper.get("https://www.nasdaqtrader.com/dynamic/symdir/nasdaqlisted.txt")
-        return response.text.splitlines(False)
-
-    @override
-    @cached
-    def securities(self) -> Sequence[NasdaqSecurity]:
-        result: list[NasdaqSecurity] = []
-        tests = 0
-        failed = 0
-        error = None
-        for row in self._fetch_listed():
-            try:
-                sec = NasdaqSecurity.from_line(row)
-                if sec.type == SecurityType.TEST: tests += 1
-                else: result.append(sec)
-            except Exception as e:
-                failed += 1
-                error = error if failed > 2 else e
-        logger.info(f"Successfully parsed {len(result)} securities.")
-        logger.info(f"Skipped {tests} test securities.")
-        logger.info(f"Failed to parse {failed} securities. {error}")
-        return result
-
 class FinancialStatus(Enum):
     NORMAL = 'N'
     DEFICIENT = 'D'
     DELINQUENT = 'E'
     BANKRUPT = 'Q'
-
-def _yn_to_bool(yn: str) -> bool:
-    if yn.lower() == 'y':
-        return True
-    if yn.lower() == 'n':
-        return False
-    raise ValueError(f'Invalid Y/N value: {yn}')
 
 class NasdaqSecurity(Security, Serializable):
     def __init__(self, symbol: str, name: str, type: SecurityType, exchange: Exchange, status: FinancialStatus):
@@ -147,3 +141,10 @@ class NasdaqSecurity(Security, Serializable):
             else SecurityType.TEST
         
         return NasdaqSecurity(symbol, name, type, exchange, status)
+
+def _yn_to_bool(yn: str) -> bool:
+    if yn.lower() == 'y':
+        return True
+    if yn.lower() == 'n':
+        return False
+    raise ValueError(f'Invalid Y/N value: {yn}')

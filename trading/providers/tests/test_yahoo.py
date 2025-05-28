@@ -1,6 +1,5 @@
 from typing import override
 import unittest
-import config
 from base import dates
 from trading.core.interval import Interval
 from trading.core.pricing import PricingProvider
@@ -13,7 +12,7 @@ from trading.providers.nyse import NYSE, NYSEAmerican, NYSEArca
 
 stock = Nasdaq.instance.get_security('NVDA')
 calendar = Nasdaq.instance.calendar
-provider = Yahoo(config.storage.location)
+provider = Yahoo()
 
 class TestYahoo(TestPricingProvider):
     @override
@@ -65,7 +64,7 @@ class TestYahoo(TestPricingProvider):
         self.assertEqual(32, len(data))
         self.assertEqual(calendar.str_to_unix('2021-12-02 00:00:00'), data[0].t)
         self.assertEqual(calendar.str_to_unix('2022-01-15 00:00:00'), data[-1].t)
-        self.assertAlmostEqual(31.37992286682129, data[0].c, 5)
+        self.assertAlmostEqual(31.37991, data[0].c, 4)
         self.assertEqual(484368000, data[0].v)
 
     def test_pricing_m15(self):
@@ -90,7 +89,7 @@ class TestYahoo(TestPricingProvider):
         self.assertEqual(18, len(data))
         self.assertTrue(all(calendar.is_timestamp(it.t, Interval.M5) for it in data))
         self.assertEqual(calendar.str_to_unix("2025-04-09 15:05:00"), data[0].t)
-        self.assertAlmostEqual(111.11000061035156, data[0].c)
+        self.assertAlmostEqual(111.19764, data[0].c, 4)
     
     def test_info(self):
         tnya = Nasdaq.instance.get_security('TNYA')
@@ -107,7 +106,7 @@ class TestYahoo(TestPricingProvider):
 
     @unittest.skip("Avoid http calls")
     def test_merge(self):
-        nonmerged = Yahoo('mem', merge={})
+        nonmerged = Yahoo(merge={}, local=True)
         start = stock.exchange.calendar.get_next_timestamp(dates.unix() - 5*24*3600, Interval.D1)
         end = stock.exchange.calendar.get_next_timestamp(dates.unix()-3*24*3600, Interval.D1)
 

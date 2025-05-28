@@ -4,7 +4,7 @@ from trading.providers.globenewswire import GlobeNewswire
 from trading.providers.nasdaq import Nasdaq
 
 security = Nasdaq.instance.get_security("NVDA")
-provider = GlobeNewswire(config.storage.location)
+provider = GlobeNewswire()
 class TestGlobenewswire(unittest.TestCase):
     def test_get_news(self):
         start_time = security.exchange.calendar.str_to_unix('2023-01-01 00:00:00')

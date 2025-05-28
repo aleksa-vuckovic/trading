@@ -1,12 +1,8 @@
 #2
 import logging
-from typing import Literal, Sequence, override
+from typing import Sequence, override
 from urllib import parse
 from bs4 import BeautifulSoup
-import config
-from base.db import sqlite_engine
-from base.caching import KeySeriesStorage
-from base.key_series_storage import FolderKSStorage, MemoryKSStorage, SqlKSStorage
 from base.scraping import scraper, backup_timeout
 from trading.core.securities import Security
 from trading.core.news import News, BaseNewsProvider
@@ -27,11 +23,15 @@ class GlobeNewswireNews(News):
         self.url = url
         self.preview = preview
 
+def _get_org(security: Security) -> str:
+    if not isinstance(security, (NasdaqSecurity, NYSESecurity)):
+        raise Exception(f"Unsupported security {security}")
+    try:
+        return security.name[:security.name.index(' - ')].strip()
+    except:
+        return security.name
+
 class GlobeNewswire(BaseNewsProvider):
-    def __init__(self, storage: config.storage.loc='db'):
-        self.news_persistor = FolderKSStorage[GlobeNewswireNews](config.storage.folder_path/_MODULE/'news', lambda it: it.time) if storage == 'folder'\
-            else SqlKSStorage[GlobeNewswireNews](sqlite_engine(config.storage.db_path), f"{_MODULE}_news", lambda it: it.time) if storage == 'db'\
-            else MemoryKSStorage[GlobeNewswireNews](lambda it: it.time)
 
     @backup_timeout()
     def _fetch_news(self,  unix_from: float, unix_to: float, orgs: list[str], keywords: list[str]) -> list[GlobeNewswireNews]:
@@ -76,20 +76,10 @@ class GlobeNewswire(BaseNewsProvider):
             if soup.select_one('div.pagnition-next > a'): page += 1
             else: break
         return result
-    def _get_org(self, security: Security) -> str:
-        if not isinstance(security, (NasdaqSecurity, NYSESecurity)):
-            raise Exception(f"Unsupported security {security}")
-        try:
-            return security.name[:security.name.index(' - ')].strip()
-        except:
-            return security.name
 
     #region Overrides
     @override
-    def get_news_storage(self, security: Security) -> KeySeriesStorage[GlobeNewswireNews]:
-        return self.news_persistor
-    @override
     def get_news_raw(self, unix_from: float, unix_to: float, security: Security) -> Sequence[News]:
-        result = self._fetch_news(unix_from, unix_to, [self._get_org(security)], [])
+        result = self._fetch_news(unix_from, unix_to, [_get_org(security)], [])
         return filter_news(result, unix_from=unix_from, unix_to=unix_to)
     #endregion

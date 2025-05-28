@@ -13,10 +13,11 @@ from base import dates
 from base.algos import binary_search
 from base.caching import KeySeriesStorage, KeyValueStorage, cached_scalar
 from base.scraping import scraper, backup_timeout, BadResponseException, TooManyRequestsException
+import injection
 from trading.core import Interval
+from trading.core.news import MongoKVStorage
 from trading.core.securities import Security, DataProvider, SecurityType
 from trading.core.pricing import OHLCV, BasePricingProvider
-from trading.providers.financialtimes import FolderKSStorage
 from trading.providers.nasdaq import NasdaqSecurity
 from trading.providers.nyse import NYSESecurity
 from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
@@ -35,21 +36,18 @@ class Yahoo(BasePricingProvider, DataProvider):
     The last nonprepost period is at 15:30 and covers only the last 30 minutes.
     The timestamps correspond to the START of the period.
     """
-    def __init__(self, storage: config.storage.loc='db', merge: Mapping[Interval, Interval] = BasePricingProvider.DEFAULT_MERGE):
-        if merge != BasePricingProvider.DEFAULT_MERGE and storage != 'mem':
-            raise Exception(f"Only change merge config when using 'mem' storage.")
+    def __init__(self, merge: Mapping[Interval, Interval] = BasePricingProvider.DEFAULT_MERGE, local: bool = False):
         BasePricingProvider.__init__(
             self,
             native = [Interval.L1, Interval.W1, Interval.D1, Interval.M30, Interval.M15, Interval.M5, Interval.M1],
-            merge = merge
+            merge = merge,
+            local = local
         )
         DataProvider.__init__(self)
-        self.info_persistor = FolderKVStorage(config.storage.folder_path/_MODULE/'info') if storage == 'folder'\
-            else SqlKVStorage(sqlite_engine(config.storage.db_path), f"{_MODULE}_info") if storage == 'db'\
-            else MemoryKVStorage()
-        self.pricing_persistor = FolderKSStorage[OHLCV](config.storage.folder_path/_MODULE/'pricing', lambda it: it.t) if storage == 'folder'\
-            else SqlKSStorage[OHLCV](sqlite_engine(config.storage.db_path), f"{_MODULE}_pricing", lambda it: it.t) if storage == 'db'\
-            else MemoryKSStorage[OHLCV](lambda it: it.t)
+
+        name = Yahoo.__name__.lower()
+        self.local_info_storage = SqlKVStorage(injection.local_db, f"{name}_info")
+        self.remote_info_storage = MongoKVStorage(injection.mongo_db[f"{name}_info"])
 
     @backup_timeout()
     def _fetch_pricing(
@@ -123,9 +121,6 @@ class Yahoo(BasePricingProvider, DataProvider):
         if interval == Interval.M1: return now - 29*24*3600
         raise Exception(f"Unsupported interval {self}.")
     @override
-    def get_pricing_storage(self, security: Security, interval: Interval) -> KeySeriesStorage[OHLCV]:
-        return self.pricing_persistor
-    @override
     def get_pricing_delay(self, security: Security, interval: Interval) -> float:
         return 60
     @override
@@ -169,13 +164,13 @@ class Yahoo(BasePricingProvider, DataProvider):
             return try_adjust(series)
         return series
 
-    def _get_info_key_fn(self, security: Security) -> str:
+    def _get_info_key(self, security: Security) -> str:
         return security.symbol
-    def _get_info_storage_fn(self, security: Security) -> KeyValueStorage:
-        return self.info_persistor
+    def _get_info_storage(self, security: Security) -> KeyValueStorage:
+        return self.local_info_storage
     @cached_scalar(
-        key_fn=_get_info_key_fn,
-        storage_fn=_get_info_storage_fn
+        key=_get_info_key,
+        storage=_get_info_storage
     )
     def _get_info(self, security: Security) -> dict:
         try:
@@ -186,7 +181,7 @@ class Yahoo(BasePricingProvider, DataProvider):
         try:
             meta = self._fetch_pricing(mock_time-3*24*3600, mock_time, security.symbol, self._get_interval(Interval.D1))['chart']['result'][0]['meta']
         except BadResponseException:
-            logger.error(f"Bad response for {security.symbol} in _get_info. PERMANENT EMPTY RETURN!", exc_info=True)
+            logger.error(f"Bad response for {security.symbol} in _get_info. Returning empty.", exc_info=True)
             meta = {}
         return {**info, **meta}
     def get_info(self, security: Security) -> dict:

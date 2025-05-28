@@ -1,6 +1,7 @@
 import json
 import logging
 from itertools import chain
+from pathlib import Path
 from typing import Literal, Sequence, TypedDict, override
 from base.key_value_storage import FileKVStorage
 import config
@@ -8,7 +9,7 @@ from base.types import Singleton
 from base.caching import cached_scalar
 from base.scraping import backup_timeout, scraper
 from base.utils import cached
-from trading.core.securities import Exchange, Security, SecurityType, WorkCalendar
+from trading.core.securities import Exchange, Security, SecurityType
 from trading.providers.nasdaq import NasdaqCalendar
 
 logger = logging.getLogger(__name__)
@@ -45,11 +46,9 @@ class NYSEScraper(Singleton):
         symbolEsignalTicker: str
         instrumentName: str
         micCode: str
-    def _key_fn(self, instrumentType: _FilterInsturmentType) -> str: return instrumentType
-    @cached_scalar(
-        key_fn=_key_fn,
-        storage_fn=FileKVStorage(config.storage.folder_path/_MODULE/"listed"),
-        refresh_fn=7*24*3600
+    @cached_scalar( #type: ignore
+        storage=FileKVStorage(Path(config.storage.local_root_path)/_MODULE/"listed"),
+        refresh_interval=7*24*3600
     )
     @backup_timeout()
     def _fetch_listed(self, instrumentType: _FilterInsturmentType) -> list[_FetchResult]:

@@ -11,7 +11,7 @@ from trading.providers.wallstreetjournal import WallStreetJournal
 class TestWallStreetJournal(TestPricingProvider):
     @override
     def get_provider(self) -> PricingProvider:
-        return WallStreetJournal(config.storage.location)
+        return WallStreetJournal()
     @override
     def get_securities(self) -> list[tuple[Security, float]]:
         return [

@@ -5,7 +5,7 @@ from trading.providers.seekingalpha import SeekingAlpha
 
 security = Nasdaq.instance.get_security('NVDA')
 calendar = Nasdaq.instance.calendar
-provider = SeekingAlpha(config.storage.location)
+provider = SeekingAlpha()
 
 class TestSeekingAlpha(unittest.TestCase):
     def test_news(self):
@@ -14,4 +14,7 @@ class TestSeekingAlpha(unittest.TestCase):
         news = provider.get_news(unix_from, unix_to, security)
         self.assertEqual(2, len(news))
         self.assertEqual(news[0].title, "Post-CES, Citi puts 'positive catalyst watch' on hot-handed tech name")
-        self.assertEqual(news[0].time, 1578665011)
+        content = news[0].content
+        assert content
+        self.assertIn("management team \"sounded positive\" on growth", content)
+        self.assertEqual(news[0].unix_time, 1578665011)

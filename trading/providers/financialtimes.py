@@ -3,20 +3,18 @@ import json
 import logging
 import math
 from typing import Sequence, TypedDict, override
-import config
 from base import dates
-from base.scraping import scraper, backup_timeout
-from base.db import sqlite_engine
-from base.key_series_storage import FolderKSStorage, MemoryKSStorage, SqlKSStorage
-from trading.core.interval import Interval
+from base.scraping import TooManyRequestsException, scraper, backup_timeout
+from trading.core import Interval
 from trading.providers.forex import ForexSecurity
 from trading.providers.nyse import NYSE, NYSEAmerican, NYSEArca, NYSESecurity
 from trading.providers.utils import arrays_to_ohlcv, filter_ohlcv
-from base.caching import KeySeriesStorage, KeyValueStorage, cached_scalar
-from base.key_value_storage import FolderKVStorage, MemoryKVStorage, SqlKVStorage
+from base.caching import KeyValueStorage, cached_scalar
+from base.key_value_storage import SqlKVStorage
 from trading.core.securities import Security
-from trading.core.pricing import OHLCV, BasePricingProvider
+from trading.core.pricing import OHLCV, BasePricingProvider, MongoKVStorage
 from trading.providers.nasdaq import NasdaqSecurity, NasdaqGS, NasdaqMS, NasdaqCM
+import injection
 
 logger = logging.getLogger(__name__)
 _MODULE: str = __name__.split(".")[-1]
@@ -46,17 +44,15 @@ def _get_interval(interval: Interval) -> tuple[str, int]:
     raise Exception(f"Unknown interval {interval}")
 
 class FinancialTimes(BasePricingProvider):
-    def __init__(self, storage: config.storage.loc='db'):
+    def __init__(self):
         super().__init__(
             native = [Interval.D1, Interval.M30, Interval.M15, Interval.M5, Interval.M1]
         )
-        self.info_persistor = FolderKVStorage(config.storage.folder_path/_MODULE/'info') if storage == 'folder'\
-            else SqlKVStorage(sqlite_engine(config.storage.db_path), f"{_MODULE}_info") if storage == 'db'\
-            else MemoryKVStorage()
-        self.pricing_persistor = FolderKSStorage[OHLCV](config.storage.folder_path/_MODULE/'pricing', lambda it: it.t) if storage == 'folder'\
-            else SqlKSStorage[OHLCV](sqlite_engine(config.storage.db_path), f"{_MODULE}_pricing", lambda it: it.t) if storage == 'db'\
-            else MemoryKSStorage[OHLCV](lambda it: it.t)
+        name = FinancialTimes.__name__.lower()
+        self.local_info_storage = SqlKVStorage(injection.local_db, f"{name}_info")
+        self.remote_info_storage = MongoKVStorage(injection.mongo_db[f"{name}_info"])
     
+    #region info
     class _InfoDict(TypedDict):
         url: str
         urlChart: str
@@ -64,27 +60,36 @@ class FinancialTimes(BasePricingProvider):
         symbol: str
         xid: str
         assetClass: str
-    def _get_info_key_fn(self, security: Security) -> str:
-        return f"{security.exchange.mic}_{security.symbol}"
-    def _get_info_storage_fn(self, security: Security) -> KeyValueStorage:
-        return self.info_persistor
-    @cached_scalar(
-        key_fn=_get_info_key_fn,
-        storage_fn=_get_info_storage_fn
-    )
-    def _get_info(self, security: Security) -> _InfoDict|None:
+    @backup_timeout()
+    def _fetch_info(self, security: Security) -> _InfoDict|None:
         url = f"https://markets.ft.com/data/searchapi/searchsecurities"
         ids = _get_identifiers(security)
         for id in ids:
-            try:
-                resp = scraper.get(url, params={'query': id})
-                data = json.loads(resp.text)
-                data = [it for it in data['data']['security'] if 'symbol' in it and it['symbol'] in ids]
-                if data: return data[0]
-            except:
-                logger.warning(f"Failed to fetch info for {id}. Might return None.")
-        return None
+            resp = scraper.get(url, params={'query': id})
+            data = json.loads(resp.text)
+            data = [it for it in data['data']['security'] if 'symbol' in it and it['symbol'] in ids]
+            if data: return data[0]
+        raise Exception(f"Can't find info for {security.symbol}.")
 
+    def _get_info_key_fn(self, security: Security) -> str:
+        return f"{security.exchange.mic}_{security.symbol}"
+    def _get_info_storage_fn(self, security: Security) -> KeyValueStorage:
+        return self.local_info_storage
+    @cached_scalar(
+        key=_get_info_key_fn,
+        storage=_get_info_storage_fn
+    )
+    def _get_info(self, security: Security) -> _InfoDict|None:
+        try:
+            return self._fetch_info(security)
+        except TooManyRequestsException:
+            raise
+        except:
+            logger.warning(f"Setting info to None for {security.symbol}.", exc_info=True)
+            return None
+    #endregion
+
+    #region pricing
     @backup_timeout()
     def _fetch_pricing(self, xid: str, days: int, data_period: str, data_interval: int, realtime: bool):
         """
@@ -147,11 +152,8 @@ class FinancialTimes(BasePricingProvider):
     def get_interval_start(self, interval: Interval):
         return dates.unix() - 15*24*3600
     @override
-    def get_pricing_storage(self, security: Security, interval: Interval) -> KeySeriesStorage[OHLCV]:
-        return self.pricing_persistor
-    @override
     def get_pricing_delay(self, security: Security, interval: Interval) -> float:
-        return 17*60
+        return 16*60
     @override
     def get_pricing_raw(self, unix_from: float, unix_to: float, security: Security, interval: Interval) -> list[OHLCV]:
         if isinstance(security, ForexSecurity): raise Exception(f"FinancialTimes returns sparse data for forex securities.")
@@ -159,7 +161,13 @@ class FinancialTimes(BasePricingProvider):
         days = max(min(days, 15), 4)
         info = self._get_info(security)
         if not info or 'xid' not in info or not info['xid']: raise Exception(f"No xid for '{security.symbol}'.")
-        data = self._fetch_pricing(info['xid'], days, *_get_interval(interval), realtime=True)
+        try:
+            data = self._fetch_pricing(info['xid'], days, *_get_interval(interval), realtime=True)
+        except TooManyRequestsException:
+            raise
+        except:
+            logger.warning(f"Failed to fetch prices for {security.symbol} fro {dates.unix_to_str(unix_from)} to {dates.unix_to_str(unix_to)}. Returning [].", exc_info=True)
+            return []
         timestamps = self._fix_timestamps(data['Dates'], interval, security)
         elements = data['Elements']
         if len(elements) < 2:
@@ -173,3 +181,4 @@ class FinancialTimes(BasePricingProvider):
         data = {**extract_component_series_values(prices), **extract_component_series_values(volumes)}
         data['t'] = timestamps
         return filter_ohlcv(arrays_to_ohlcv(data), unix_from, unix_to)
+    #endregion

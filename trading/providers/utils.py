@@ -27,5 +27,5 @@ def filter_ohlcv(data: Sequence[OHLCV], unix_from: float, unix_to: float) -> lis
     return ret
 
 def filter_news(data: Sequence[News], unix_from: float, unix_to: float) -> list[News]:
-    data = sorted(data, key=lambda x: x.time)
-    return [it for it in data if it.time > unix_from and it.time <= unix_to]
+    data = sorted(data, key=lambda x: x.unix_time)
+    return [it for it in data if it.unix_time > unix_from and it.unix_time <= unix_to]

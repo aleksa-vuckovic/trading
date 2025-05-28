@@ -3,12 +3,11 @@ import json
 import logging
 from typing import Literal, override
 from datetime import timedelta
-import config
+
+from requests import TooManyRedirects
 from base.caching import KeySeriesStorage
-from base.db import sqlite_engine
-from base.key_series_storage import FolderKSStorage, MemoryKSStorage, SqlKSStorage
 from base import dates
-from base.scraping import scraper, backup_timeout
+from base.scraping import TooManyRequestsException, scraper, backup_timeout
 from trading.core.interval import Interval
 from trading.core.securities import Security, SecurityType
 from trading.core.pricing import OHLCV, BasePricingProvider
@@ -39,13 +38,10 @@ def _get_symbol(security: Security) -> str:
     raise Exception(f"Unsupported security {security}.")
 
 class WallStreetJournal(BasePricingProvider):
-    def __init__(self, storage: config.storage.loc='db'):
+    def __init__(self):
         super().__init__(
             native = [Interval.D1, Interval.M30, Interval.M15, Interval.M5, Interval.M1]
         )
-        self.pricing_persistor = FolderKSStorage[OHLCV](config.storage.folder_path/_MODULE/'pricing', lambda it: it.t) if storage == 'folder'\
-            else SqlKSStorage[OHLCV](sqlite_engine(config.storage.db_path), f"{_MODULE}_pricing", lambda it: it.t) if storage == 'db'\
-            else MemoryKSStorage[OHLCV](lambda it: it.t)
 
     @backup_timeout()
     def _fetch_pricing(self, key: str, step: str, time_frame: Literal['D5', 'D10'], **kwargs):
@@ -126,15 +122,18 @@ class WallStreetJournal(BasePricingProvider):
         if interval in {Interval.M30, Interval.M15, Interval.M5, Interval.M1}: return dates.unix() - 5*25*3600
         raise Exception(f"Unsupported interval {interval}.")
     @override
-    def get_pricing_storage(self, security, interval) -> KeySeriesStorage[OHLCV]:
-        return self.pricing_persistor
-    @override
     def get_pricing_delay(self, security, interval) -> float:
         return 120
     @override
     def get_pricing_raw(self, unix_from, unix_to, security, interval) -> list[OHLCV]:
         time_frame = 'D5'
-        data = self._fetch_pricing(_get_symbol(security), self._get_interval(interval), time_frame)
+        try:
+            data = self._fetch_pricing(_get_symbol(security), self._get_interval(interval), time_frame)
+        except TooManyRequestsException:
+            raise
+        except:
+            logger.warning(f"Failed to fetch pricing for {security.symbol} from {dates.unix_to_str(unix_from)} to {dates.unix_to_str(unix_to)}. Returning [].")
+            return []
         def extract_data_points(series: dict) -> dict:
             return {key: [it[index] for it in series['DataPoints']] for index,key in enumerate(series['DesiredDataPoints'])}
         quotes = {'Timestamp': self._fix_timestamps(data['TimeInfo']['Ticks'], interval, security)}
