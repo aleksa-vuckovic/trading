@@ -2,10 +2,13 @@
 from __future__ import annotations
 import math
 from typing import Iterable, Mapping, Sequence, override
+from base.key_value_storage import SqlKVStorage, MongoKVStorage, MemoryKVStorage
+from base.key_series_storage import SqlKSStorage, MongoKSStorage, MemoryKSStorage
 from base.algos import interpolate
 from base.types import Equatable
 from base.serialization import Serializable
-from base.caching import cached_series, KeySeriesStorage
+from base.caching import cached_series
+import injection
 from trading.core import Interval
 from trading.core.securities import Security
 
@@ -134,7 +137,8 @@ class BasePricingProvider(PricingProvider):
         self,
         *,
         native: Iterable[Interval],
-        merge: Mapping[Interval, Interval] = DEFAULT_MERGE
+        merge: Mapping[Interval, Interval] = DEFAULT_MERGE,
+        local: bool = False
     ):
         """
         Args:
@@ -143,6 +147,13 @@ class BasePricingProvider(PricingProvider):
         """
         self.native = set(native)
         self.merge = merge
+        name = type(self).__name__.lower()
+        if local:
+            self.local_pricing_storage = (MemoryKVStorage(), MemoryKSStorage[OHLCV](lambda it: it.t))
+            self.remote_pricing_storage = (MemoryKVStorage(), MemoryKSStorage[OHLCV](lambda it: it.t))
+        else:
+            self.local_pricing_storage = (SqlKVStorage(injection.local_db, f"{name}_pricing_span"), SqlKSStorage[OHLCV](injection.local_db, f"{name}_pricing", lambda it: it.t))
+            self.remote_pricing_storage = (MongoKVStorage(injection.mongo_db[f"{name}_pricing_span"]), MongoKSStorage[OHLCV](injection.mongo_db[f"{name}_pricing"], lambda it: it.t))
     
     @override
     def get_pricing(self, unix_from, unix_to, security, interval, *, interpolate = False, max_fill_ratio = 1) -> Sequence[OHLCV]:
@@ -158,13 +169,11 @@ class BasePricingProvider(PricingProvider):
     def get_intervals(self) -> set[Interval]:
         return self.native.union(self.merge.keys())
 
-    @staticmethod
-    def _get_pricing_timestamp_fn(it: OHLCV) -> float: return it.t
-    def _get_pricing_key_fn(self, security: Security, interval: Interval) -> str:
+    def _get_pricing_key(self, security: Security, interval: Interval) -> str:
         return f"{security.exchange.mic}_{security.symbol}_{interval.name}"
-    def _get_pricing_persistor_storage_fn(self, security: Security, interval: Interval) -> KeySeriesStorage:
-        return self.get_pricing_storage(security, interval)
-    def _get_pricing_batch_size_fn(self, security: Security, interval: Interval) -> float:
+    def _get_pricing_persistor_kv_storage(self, security: Security, interval: Interval): return self.local_pricing_storage[0]
+    def _get_pricing_persistor_ks_storage(self, security: Security, interval: Interval): return self.local_pricing_storage[1]
+    def _get_pricing_min_chunk(self, security: Security, interval: Interval) -> float:
         if interval == Interval.L1: return 1000000000
         elif interval == Interval.W1: return 300000000
         elif interval == Interval.D1: return 50000000
@@ -174,17 +183,18 @@ class BasePricingProvider(PricingProvider):
         elif interval == Interval.M5: return 1000000
         elif interval == Interval.M1: return 200000
         else: raise Exception(f"Unknown interval {interval}.")
-    def _get_pricing_live_delay_fn(self, security: Security, interval: Interval) -> float:
+    def _get_pricing_live_delay(self, security: Security, interval: Interval) -> float:
         return self.get_pricing_delay(security, interval)
-    def _get_pricing_should_refresh_fn(self, fetch: float, now: float, security: Security, interval: Interval) -> bool:
+    def _get_pricing_should_refresh(self, fetch: float, now: float, security: Security, interval: Interval) -> bool:
         return security.exchange.calendar.get_next_timestamp(fetch, interval) < now and now-fetch > 3600
     @cached_series(
-        timestamp_fn=_get_pricing_timestamp_fn,
-        key_fn=_get_pricing_key_fn,
-        storage_fn=_get_pricing_persistor_storage_fn,
-        chunk_size_fn=_get_pricing_batch_size_fn,
-        live_delay_fn=_get_pricing_live_delay_fn,
-        should_refresh_fn=_get_pricing_should_refresh_fn
+        key=_get_pricing_key,
+        kv_storage=_get_pricing_persistor_kv_storage,
+        ks_storage=_get_pricing_persistor_ks_storage,
+        min_chunk=_get_pricing_min_chunk,
+        max_chunk=_get_pricing_min_chunk,
+        live_delay=_get_pricing_live_delay,
+        should_refresh=_get_pricing_should_refresh
     )
     def _get_pricing(
         self,
@@ -204,7 +214,6 @@ class BasePricingProvider(PricingProvider):
             return self.get_pricing_raw(unix_from, unix_to, security, interval)
 
     #region Abstract
-    def get_pricing_storage(self, security: Security, interval: Interval) -> KeySeriesStorage: raise NotImplementedError()
     def get_pricing_delay(self, security: Security, interval: Interval) -> float: raise NotImplementedError()
     def get_pricing_raw(self, unix_from: float, unix_to: float, security: Security, interval: Interval) -> Sequence[OHLCV]:
         """

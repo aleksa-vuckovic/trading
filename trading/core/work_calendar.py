@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta
 from base.caching import cached_series
 from base.key_series_storage import KeySeriesStorage, MemoryKSStorage
+from base.key_value_storage import MemoryKVStorage, KeyValueStorage
 from base import dates
 from base.types import Equatable
 from trading.core import Interval
@@ -92,7 +93,8 @@ class WorkCalendar:
     """
     def __init__(self, tz: ZoneInfo):
         self.tz = tz
-        self.storage: KeySeriesStorage[datetime] = MemoryKSStorage(lambda it: it.timestamp())
+        self.kv_storage = MemoryKVStorage()
+        self.ks_storage = MemoryKSStorage[datetime](lambda it: it.timestamp())
     #region Basics
     def str_to_datetime(self, time_string: str, format: str = "%Y-%m-%d %H:%M:%S") -> datetime:
         return dates.str_to_datetime(time_string, format, tz=self.tz)
@@ -173,19 +175,11 @@ class WorkCalendar:
     #endregion
 
     #region Caching
-    @staticmethod
-    def _get_timestamps_timestamp_fn(it: datetime) -> float: return it.timestamp()
-    def _get_timestamps_key_fn(self, interval: Interval) -> str: return interval.name
-    def _get_timestamps_storage_fn(self, interval: Interval) -> KeySeriesStorage: return self.storage
-    def _get_timestamps_batch_size_fn(self, interval: Interval) -> float:
-        if interval >= Interval.D1: return 1000*interval.time()
-        else: return 4000*interval.time()
+    def _get_timestamps_kv_storage(self, interval: Interval) -> KeyValueStorage: return self.kv_storage
+    def _get_timestamps_ks_storage(self, interval: Interval) -> KeySeriesStorage[datetime]: return self.ks_storage
     @cached_series(
-        timestamp_fn=_get_timestamps_timestamp_fn,
-        key_fn=_get_timestamps_key_fn,
-        storage_fn=_get_timestamps_storage_fn,
-        chunk_size_fn=_get_timestamps_batch_size_fn,
-        live_delay_fn=None
+        kv_storage=_get_timestamps_kv_storage,
+        ks_storage=_get_timestamps_ks_storage
     )
     def _get_timestamps(self, unix_from: float, unix_to: float, interval: Interval) -> list[datetime]:
         result: list[datetime] = []
@@ -212,6 +206,10 @@ class WorkCalendar:
         if count > 0:
             while len(t) < count:
                 count -= len(t)
+                try:
+                    x = time+span
+                except:
+                    print('bad')
                 t = self.get_timestamps(time, time+span, interval)
                 time += span
                 span *= 2

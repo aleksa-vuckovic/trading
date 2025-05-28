@@ -202,7 +202,7 @@ def cached_series(
     ks_storage: KeySeriesStorage[T] | Callable[[S, *Args], KeySeriesStorage[T]],
     min_chunk: float | None | Callable[[S, *Args], float|None] = None,
     max_chunk: float | None | Callable[[S, *Args], float|None] = None,
-    live_delay: float | Callable[[S, *Args], float] = 0,
+    live_delay: float | None | Callable[[S, *Args], float] = None,
     should_refresh: float | Callable[[S, float, float, *Args], bool] = 0,
 ) -> Callable[[Callable[[S, float, float, *Args], Sequence[T]]], CachedSeriesDescriptor[S, *Args, T]]:
     def decorate(func: Callable[[S, float, float, *Args], Sequence[T]]) -> CachedSeriesDescriptor[S, *Args, T]:
