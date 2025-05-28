@@ -53,7 +53,7 @@ class CachedScalarDescriptor(Generic[S, *Args, T]):
 
 def cached_scalar(
     *,
-    key: Callable[[S, *Args], str] = lambda it: "",
+    key: Callable[[S, *Args], str] = lambda self, *args: "_".join(str(it) for it in args),
     storage: KeyValueStorage|Callable[[S, *Args], KeyValueStorage],
     refresh_interval: float|Callable[[S, *Args], float] = float('+inf')
 ) -> Callable[[Callable[[S, *Args], T]], CachedScalarDescriptor[S, *Args, T]]:
@@ -70,7 +70,8 @@ Params = ParamSpec('Params')
 
 class CachedSeriesDescriptor(Generic[S, *Args, T]):
     """This implementation assumes that the underlying storage will never be deleted from."""
-    def __init__(self,
+    def __init__(
+        self,
         func: Callable[[S, float, float, *Args], Sequence[T]],
         get_key: Callable[[S, *Args], str],
         get_kv_storage: Callable[[S, *Args], KeyValueStorage],
@@ -196,7 +197,7 @@ class CachedSeriesDescriptor(Generic[S, *Args, T]):
 
 def cached_series(
     *,
-    key: Callable[[S, *Args], str],
+    key: Callable[[S, *Args], str] = lambda self, *args: "_".join(str(it) for it in args),
     kv_storage: KeyValueStorage | Callable[[S, *Args], KeyValueStorage],
     ks_storage: KeySeriesStorage[T] | Callable[[S, *Args], KeySeriesStorage[T]],
     min_chunk: float | None | Callable[[S, *Args], float|None] = None,
