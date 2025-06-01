@@ -1,6 +1,6 @@
 import unittest
 from base.reflection import transient
-from base.serialization import serializer
+from base.serialization import GenericSerializer
 from base.types import Cloneable, Equatable, ReadonlyDict, Singleton
 
 class TestSingleton(Singleton):
@@ -71,6 +71,7 @@ class TestTypes(unittest.TestCase):
         self.assertIs(a.c[1], b.c[1])
         
     def test_readonly_dict(self):
+        serializer = GenericSerializer()
         a = ReadonlyDict({"a": 1, "b": 2})
         self.assertEqual(1, a["a"])
         self.assertEqual({"a", "b"}, set(a.keys()))
@@ -80,6 +81,7 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(a,c)
 
     def test_singleton(self):
+        serializer = GenericSerializer()
         self.assertIs(TestSingleton.instance, TestSingleton.instance)
         obj = serializer.deserialize(serializer.serialize(TestSingleton.instance), TestSingleton)
         self.assertIs(TestSingleton.instance, obj)

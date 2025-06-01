@@ -1,10 +1,11 @@
-from __future__ import annotations
+from dataclasses import dataclass
+from typing import override
 import unittest
 import json
 from enum import Enum
 from pathlib import Path
 from base.reflection import transient
-from base.serialization import GenericSerializer, Serializable, _VALUE
+from base.serialization import ContractSerializer, GenericSerializer, Serializable, _VALUE
 from base import dates
 from base.types import Equatable
 
@@ -15,7 +16,7 @@ class MyEnum(Enum):
 # skip_keys hierarchy
 @transient('b')
 class A(Equatable, Serializable):
-    def __init__(self, a:int|None, b:str|None, c: list|None, d: A|None, e: object|None = None):
+    def __init__(self, a:int|None, b:str|None, c: list|None, d: 'A|None', e: object|None = None):
         self.a = a
         self.b = b
         self.c = c
@@ -129,3 +130,43 @@ class TestJsonutils(unittest.TestCase):
         a_s = serializer.serialize(a)
         a_d = serializer.deserialize(a_s, Derived)
         self.assertIsInstance(a_d, Derived)
+
+
+    def test_contract_serializer(self):
+        serializer = ContractSerializer()
+        @dataclass
+        class AC:
+            a: int
+            b: str
+            c: dict[str, int]
+            d: dict
+            e: list[list[str]]
+        
+        a = AC(1, "hah", {"a": 2}, {"a": None}, [["a"]])
+        a2 = serializer.deserialize(serializer.serialize(a), AC)
+        self.assertEqual(a, a2)
+
+    def test_contract_serializer_nested(self):
+        serializer = ContractSerializer()
+        @dataclass
+        class AC:
+            a: int
+        @dataclass
+        class BC:
+            a: AC
+            b: int
+        b = BC(AC(1), 2)
+        b2 = serializer.deserialize(serializer.serialize(b), BC)
+        self.assertEqual(b, b2)
+
+    def test_contract_serializer_union(self):
+        serializer = ContractSerializer()
+        @dataclass
+        class AC:
+            a: int|str|None
+        @dataclass
+        class BC:
+            a: AC|None
+        x = [BC(AC(1)), BC(AC("a")), BC(AC(None)), BC(None)]
+        x2 = serializer.deserialize(serializer.serialize(x), list[BC])
+        self.assertEqual(x, x2)

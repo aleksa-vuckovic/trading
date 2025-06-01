@@ -9,7 +9,7 @@ from sqlalchemy import Engine, select, delete
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column, sessionmaker
 from base.algos import binary_search
 from base.files import escape_filename, unescape_filename
-from base.serialization import Serializer, GenericSerializer, serializer
+from base.serialization import Serializer, GenericSerializer
 
 T = TypeVar('T')
 
@@ -63,15 +63,16 @@ class FolderKSStorage(MemoryKSStorage[T]):
     def __init__(self, root: Path, timestamp: Callable[[T], float]):
         super().__init__(timestamp)
         self.root = root
+        self.serializer = GenericSerializer()
 
         self.root.mkdir(parents=True, exist_ok=True)
         for key in os.listdir(self.root):
             path = self.root/key
-            self.data[unescape_filename(key)] = serializer.deserialize(path.read_text(), list[T])
+            self.data[unescape_filename(key)] = self.serializer.deserialize(path.read_text(), list[T])
 
     def _save(self, key: str):
         path = self.root/escape_filename(key)
-        path.write_text(serializer.serialize(self.data[key]))
+        path.write_text(self.serializer.serialize(self.data[key]))
 
     @override
     def set(self, key: str, data: Sequence[T]):
