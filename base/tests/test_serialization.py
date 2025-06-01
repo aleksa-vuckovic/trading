@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import override
+from typing import Literal, override
 import unittest
 import json
 from enum import Enum
@@ -170,3 +170,15 @@ class TestJsonutils(unittest.TestCase):
         x = [BC(AC(1)), BC(AC("a")), BC(AC(None)), BC(None)]
         x2 = serializer.deserialize(serializer.serialize(x), list[BC])
         self.assertEqual(x, x2)
+    
+    def test_contract_serializer_literal(self):
+        serializer = ContractSerializer()
+        @dataclass
+        class AC:
+            a: Literal['a', 'b', 'c']
+
+        a = AC('a')
+        a2 = serializer.deserialize(serializer.serialize(a), AC)
+        self.assertEqual(a, a2)
+
+        self.assertRaises(AssertionError, lambda: serializer.deserialize('{"a": "d"}', AC))

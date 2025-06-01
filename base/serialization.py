@@ -5,7 +5,7 @@ import datetime
 import zoneinfo #ignore unused import
 import builtins #ignore unused import
 from types import NoneType, UnionType
-from typing import Any, Self, Union, cast, final, get_args, get_origin, override
+from typing import Any, Literal, Self, Union, cast, final, get_args, get_origin, override
 from sqlalchemy import String, TypeDecorator
 from enum import Enum
 from pathlib import Path
@@ -146,6 +146,9 @@ class ContractSerializer(Serializer):
                 except AssertionError:
                     pass
             raise AssertionError(f"Object {data} can't be deserialized as {assert_type}.")
+        if type == Literal:
+            assert any(data == it for it in args)
+            return data #type: ignore
         if type == NoneType:
             assert data is None
             return data #type: ignore
@@ -169,7 +172,7 @@ class ContractSerializer(Serializer):
         try:
             ret = object.__new__(type)
         except:
-            return None
+            return None #type: ignore
         for field_name, field_type in type.__annotations__.items():
             ret.__dict__[field_name] = self.from_json(data[field_name], field_type)
         return  ret
