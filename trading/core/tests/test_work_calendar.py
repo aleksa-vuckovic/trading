@@ -1,7 +1,6 @@
 import random
 from unittest import TestCase
 from base import dates
-from base.serialization import serializer
 from trading.core import Interval
 from trading.core.securities import Exchange
 from trading.core.work_calendar import WorkCalendar, BasicWorkCalendar, WorkSchedule, Hours
