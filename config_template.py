@@ -12,7 +12,7 @@ class storage:
     local_root_path_tmp = "storage/tmp"
     local_db_path = "storage/prod.db"
     local_db_path_tmp = "storage/tmp.db"
-    mongo_uri = f"mongodb+srv://aleksavuckovic77:###@trading.xekx4j9.mongodb.net/?retryWrites=true&w=majority&appName=trading"
+    mongo_uri = f"mongodb+srv://XXXXX:XXXXX@XXXXX.mongodb.net/?retryWrites=true&w=majority&appName=trading"
     mongo_db_name = "trading"
     mongo_db_name_tmp = "trading_tmp"
 

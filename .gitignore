@@ -19,3 +19,4 @@ backtests/
 *.db
 *.db-journal
 /blank*.py
+config.py
