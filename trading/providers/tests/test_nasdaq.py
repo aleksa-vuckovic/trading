@@ -1,6 +1,6 @@
 from typing import override
 import unittest
-from base.serialization import serializer
+from base.serialization import GenericSerializer
 from trading.core.securities import Exchange, SecurityType
 from trading.providers.nasdaq import NasdaqSecurity, Nasdaq, NasdaqGS
 from trading.core.interval import Interval
@@ -21,6 +21,7 @@ class TestNasdaq(unittest.TestCase):
         self.assertIs(NasdaqGS.instance, nvda.exchange)
 
     def test_serialization(self):
+        serializer = GenericSerializer()
         serialized = serializer.serialize(Nasdaq.instance)
         deserialized = serializer.deserialize(serialized, Exchange)
         self.assertIs(Nasdaq.instance, deserialized)
