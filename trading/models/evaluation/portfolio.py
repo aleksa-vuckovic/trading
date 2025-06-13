@@ -146,8 +146,8 @@ class Portfolio(Serializable):
     def ideal_equity_history(self, unix_from: float, unix_to: float|None = None, interval: Interval = Interval.H1) -> Sequence[EquityFrame]:
         return self._equity_history(unix_from, unix_to or dates.unix(), interval, True)
     def _equity_history_key(self, interval: Interval, ideal: bool) -> str: return f"{interval.name}-{ideal}"
-    def _equity_history_ks_storage(self, interval: Interval, ideal: bool) -> KeySeriesStorage[EquityFrame]: return self.equity_ks_storage
-    def _equity_history_kv_storage(self, interval: Interval, ideal: bool) -> KeyValueStorage: return self.equity_kv_storage
+    def _equity_history_ks_storage(self) -> KeySeriesStorage[EquityFrame]: return self.equity_ks_storage
+    def _equity_history_kv_storage(self) -> KeyValueStorage: return self.equity_kv_storage
     @cached_series(
         key=_equity_history_key,
         ks_storage=_equity_history_ks_storage,

@@ -1,7 +1,7 @@
 #2
 from __future__ import annotations
 import math
-from typing import Iterable, Mapping, Sequence, override
+from typing import Iterable, Mapping, Sequence, overload, override
 from base.key_value_storage import SqlKVStorage, MongoKVStorage, MemoryKVStorage
 from base.key_series_storage import SqlKSStorage, MongoKSStorage, MemoryKSStorage
 from base.algos import interpolate
@@ -172,10 +172,10 @@ class BasePricingProvider(PricingProvider):
     #region caching
     def _get_pricing_key(self, security: Security, interval: Interval) -> str:
         return f"{security.exchange.mic}_{security.symbol}_{interval.name}"
-    def _get_pricing_local_kv(self, security: Security, interval: Interval): return self.local_pricing_storage[0]
-    def _get_pricing_local_ks(self, security: Security, interval: Interval): return self.local_pricing_storage[1]
-    def _get_pricing_remote_kv(self, security: Security, interval: Interval): return self.remote_pricing_storage[0]
-    def _get_pricing_remote_ks(self, security: Security, interval: Interval): return self.remote_pricing_storage[1]
+    def _get_pricing_local_kv(self): return self.local_pricing_storage[0]
+    def _get_pricing_local_ks(self): return self.local_pricing_storage[1]
+    def _get_pricing_remote_kv(self): return self.remote_pricing_storage[0]
+    def _get_pricing_remote_ks(self): return self.remote_pricing_storage[1]
     def _get_pricing_min_chunk(self, security: Security, interval: Interval) -> float:
         if interval == Interval.L1: return 1000000000
         elif interval == Interval.W1: return 300000000
@@ -227,6 +227,18 @@ class BasePricingProvider(PricingProvider):
         interval: Interval
     ) -> Sequence[OHLCV]:
         return self._get_pricing_remote(unix_from, unix_to, security, interval)
+    
+    @overload
+    def invalidate_pricing(self, unix_from: float, unix_to: float): ...
+    @overload
+    def invalidate_pricing(self, unix_from: float, unix_to: float, security: Security, interval: Interval): ...
+    def invalidate_pricing(self, unix_from: float, unix_to: float, security: Security|None=None, interval: Interval|None=None):
+        if security and interval:
+            BasePricingProvider._get_pricing_remote.invalidate(self, unix_from, unix_to, security, interval)
+            BasePricingProvider._get_pricing.invalidate(self, unix_from, unix_to, security, interval)
+        else:
+            BasePricingProvider._get_pricing_remote.invalidate_all(self, unix_from, unix_to)
+            BasePricingProvider._get_pricing_remote.invalidate_all(self, unix_from, unix_to)
     #endregion
 
     #region Abstract

@@ -95,7 +95,7 @@ class TestPricingProvider(unittest.TestCase):
                 context = f"Provider {type(self).__name__}, Interval {interval}, Security {security.symbol}, From {security.exchange.calendar.unix_to_datetime(unix_from)}, To {security.exchange.calendar.unix_to_datetime(unix_to)}"
                 data = provider.get_pricing(unix_from, unix_to, security, interval)
                 expect = len(security.exchange.calendar.get_timestamps(unix_from, unix_to, interval))
-                self.assertGreaterEqual(len(data), ratio*expect, context)
+                self.assertGreaterEqual(len(data), int(ratio*expect), context)
                 self.assertTrue(all(it.is_valid() for it in data), context)
                 self.assertTrue(all(security.exchange.calendar.is_timestamp(it.t, interval) for it in data), context)
 
