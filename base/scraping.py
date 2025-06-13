@@ -82,13 +82,13 @@ class BrowserImpersonator(Scraper):
         return response
     @override
     def post(self, url: str, body: dict|list|str|Number|bool|None, *, cookies: dict = {}, headers: dict = {}, params: dict | None = None, origin: str | None = None, check_response: bool = True) -> requests.Response:
-        msg = f"POST {url}"
+        msg = f"-> POST {url}"
         if config.http.request_log == 'long': msg += " ->" + json.dumps(body, indent = 4)
         if config.http.request_log == 'short': msg += " ->" + text.shorter(json.dumps(body, indent=4))
         logger.info(msg)
 
         response = requests.post(url, json=body, headers={**_CHROME_HEADERS, **headers})
-        msg = f"{url} -> {response.status_code}"
+        msg = f"<- {url} {response.status_code}"
         if config.http.response_log == 'long': msg += " - " + response.text
         if config.http.response_log == 'short': msg += " - " + text.shorter(response.text)
         logger.info(msg)

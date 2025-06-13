@@ -52,8 +52,8 @@ class KeyedProvider:
         self.min_chunk = min_chunk
         self.invocations = 0
     def _key(self, key: str) -> str: return key
-    def _kv_storage(self, key: str) -> KeyValueStorage: return self.kv_storage
-    def _ks_storage(self, key: str): return self.ks_storage
+    def _kv_storage(self) -> KeyValueStorage: return self.kv_storage
+    def _ks_storage(self): return self.ks_storage
     
     def _min_chunk(self, key: str) -> float: return self.min_chunk
     @cached_series(

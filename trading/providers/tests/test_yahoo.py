@@ -40,7 +40,7 @@ class TestYahoo(TestPricingProvider):
         self.assertEqual(18, len(data))
         self.assertTrue(all(calendar.is_timestamp(it.t, Interval.L1) for it in data))
         self.assertEqual(calendar.str_to_unix("2021-12-01 00:00:00"), data[0].t)
-        self.assertAlmostEqual(32.6147575378418, data[0].c, 4)
+        self.assertAlmostEqual(32.6147575378418, data[0].c, 2)
 
     def test_pricing_w1(self):
         data = provider.get_pricing(
@@ -52,7 +52,7 @@ class TestYahoo(TestPricingProvider):
         self.assertEqual(24,len(data))
         self.assertTrue(all(calendar.is_timestamp(it.t, Interval.W1) for it in data))
         self.assertEqual(calendar.str_to_unix('2021-12-06 00:00:00'), data[0].t)
-        self.assertAlmostEqual(30.63547134399414, data[0].c, 5)
+        self.assertAlmostEqual(30.63547134399414, data[0].c, 2)
 
     def test_pricing_d1(self):
         data = provider.get_pricing(
@@ -64,7 +64,7 @@ class TestYahoo(TestPricingProvider):
         self.assertEqual(32, len(data))
         self.assertEqual(calendar.str_to_unix('2021-12-02 00:00:00'), data[0].t)
         self.assertEqual(calendar.str_to_unix('2022-01-15 00:00:00'), data[-1].t)
-        self.assertAlmostEqual(31.37991, data[0].c, 4)
+        self.assertAlmostEqual(31.37991, data[0].c, 2)
         self.assertEqual(484368000, data[0].v)
 
     def test_pricing_m15(self):

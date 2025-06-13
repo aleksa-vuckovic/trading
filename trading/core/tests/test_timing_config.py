@@ -1,12 +1,13 @@
 import unittest
 from base import dates
-from base.serialization import serializer
+from base.serialization import GenericSerializer
 from trading.core import Interval
 from trading.core.news import Security
 from trading.core.securities import Exchange, SecurityType
 from trading.core.work_calendar import BasicWorkCalendar, WorkSchedule, Hours
 from trading.core.timing_config import BasicTimingConfig, execution_spots
 
+serializer = GenericSerializer()
 calendar = BasicWorkCalendar(tz=dates.ET, work_schedule=WorkSchedule.Builder(Hours(9, 16, open_minute=30)).build())
 calendar2 = BasicWorkCalendar(tz=dates.ET, work_schedule=WorkSchedule.Builder(Hours(15, 17)).build())
 exchange = Exchange('XTST', 'XTST', 'XTST', 'Test', calendar)

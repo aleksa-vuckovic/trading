@@ -1,5 +1,5 @@
 #2
-from typing import Sequence, override
+from typing import Sequence, overload, override
 from base.key_value_storage import SqlKVStorage, KeyValueStorage, MongoKVStorage
 from base.key_series_storage import SqlKSStorage, KeySeriesStorage, MongoKSStorage
 from base.caching import cached_series
@@ -42,10 +42,10 @@ class BaseNewsProvider(NewsProvider):
         return self._get_news(unix_from, unix_to, security)
 
     def _get_news_key(self, security: Security) -> str: return f"{security.exchange.mic}_{security.symbol}"
-    def _get_news_local_kv(self, security: Security) -> KeyValueStorage: return self.local_news_storage[0]
-    def _get_news_local_ks(self, security: Security) -> KeySeriesStorage[News]: return self.local_news_storage[1]
-    def _get_news_remote_kv(self, security: Security) -> KeyValueStorage: return self.remote_news_storage[0]
-    def _get_news_remote_ks(self, security: Security) -> KeySeriesStorage[News]: return self.remote_news_storage[1]
+    def _get_news_local_kv(self) -> KeyValueStorage: return self.local_news_storage[0]
+    def _get_news_local_ks(self) -> KeySeriesStorage[News]: return self.local_news_storage[1]
+    def _get_news_remote_kv(self) -> KeyValueStorage: return self.remote_news_storage[0]
+    def _get_news_remote_ks(self) -> KeySeriesStorage[News]: return self.remote_news_storage[1]
     @cached_series(
         key=_get_news_key,
         kv_storage=_get_news_remote_kv,
@@ -65,6 +65,18 @@ class BaseNewsProvider(NewsProvider):
     )
     def _get_news(self, unix_from: float, unix_to: float, security: Security) -> Sequence[News]:
         return self._get_news_remote(unix_from, unix_to, security)
+    
+    @overload
+    def invalidate_news(self, unix_from: float, unix_to: float): ...
+    @overload
+    def invalidate_news(self, unix_from: float, unix_to: float, security: Security): ...
+    def invalidate_news(self, unix_from: float, unix_to: float, security: Security|None=None):
+        if security:
+            BaseNewsProvider._get_news_remote.invalidate(self, unix_from, unix_to, security)
+            BaseNewsProvider._get_news.invalidate(self, unix_from, unix_to, security)
+        else:
+            BaseNewsProvider._get_news_remote.invalidate_all(self, unix_from, unix_to)
+            BaseNewsProvider._get_news.invalidate_all(self, unix_from, unix_to)
 
     #region Abstract
     def get_news_raw(self, unix_from: float, unix_to: float, security: Security) -> Sequence[News]: raise NotImplementedError()

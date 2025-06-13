@@ -175,9 +175,11 @@ class WorkCalendar:
     #endregion
 
     #region Caching
-    def _get_timestamps_kv_storage(self, interval: Interval) -> KeyValueStorage: return self.kv_storage
-    def _get_timestamps_ks_storage(self, interval: Interval) -> KeySeriesStorage[datetime]: return self.ks_storage
+    def _get_timestamps_key(self, interval: Interval) -> str: return interval.name
+    def _get_timestamps_kv_storage(self) -> KeyValueStorage: return self.kv_storage
+    def _get_timestamps_ks_storage(self) -> KeySeriesStorage[datetime]: return self.ks_storage
     @cached_series(
+        key = _get_timestamps_key,
         kv_storage=_get_timestamps_kv_storage,
         ks_storage=_get_timestamps_ks_storage
     )

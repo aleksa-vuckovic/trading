@@ -5,13 +5,14 @@ from torch import Tensor
 from pathlib import Path
 from base.algos import binary_search
 from base.key_value_storage import FileKVStorage
-from base.serialization import serializer
+from base.serialization import GenericSerializer
 from trading.core import Interval
 from trading.core.securities import Exchange, Security, SecurityType
 from trading.core.timing_config import TimingConfig
 from trading.models.base.batches import BatchFile
 
 logger = logging.getLogger(__name__)
+serializer = GenericSerializer(typed=False)
 
 class AbstractGenerator:
     STATE_FILE = '_state.db'
@@ -49,7 +50,7 @@ class AbstractGenerator:
         
         msg = f"""----Generating examples into {folder}
         Exchange: {exchange.name}
-        Timing config: {serializer.serialize(timing, typed=False)}
+        Timing config: {serializer.serialize(timing)}
         Start time: {exchange.calendar.unix_to_datetime(time_frame[0])}
         End time: {exchange.calendar.unix_to_datetime(time_frame[1])}"""
         logger.info(msg)

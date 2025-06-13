@@ -12,7 +12,7 @@ from matplotlib import pyplot as plt
 from torch.nn.modules import Module
 
 from base.reflection import transient
-from base.serialization import Serializable, serializer, json_type
+from base.serialization import GenericSerializer, Serializable, json_type
 from base.types import ReadonlyDict, Equatable
 from trading.core import Interval
 from trading.core.timing_config import TimingConfig
@@ -221,6 +221,8 @@ class PricingDataConfig(Equatable, Serializable):
             return self.counts[Interval[key]]
         raise IndexError(f"Key {key} does not exist in this DataConfig.")
 
+
+serializer = GenericSerializer(typed=False)
 class BaseModelConfig(Equatable, Serializable):
     def __init__(
         self,
@@ -237,8 +239,8 @@ class BaseModelConfig(Equatable, Serializable):
     def __repr__(self) -> str:
         return f"""BaseModelConfig(
     exchanges = {repr(self.exchanges)},
-    pricing_data_config = {serializer.serialize(self.pricing_data_config, typed=False, indent=2)},
+    pricing_data_config = {serializer.serialize(self.pricing_data_config, indent=2)},
     price_output_target = {repr(self.price_output_target)},
-    timing = {serializer.serialize(self.timing, typed=False, indent=2)}
+    timing = {serializer.serialize(self.timing, indent=2)}
 )
 """

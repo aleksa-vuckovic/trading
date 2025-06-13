@@ -74,8 +74,8 @@ class CachedSeriesDescriptor(Generic[S, *Args, T]):
         self,
         func: Callable[[S, float, float, *Args], Sequence[T]],
         get_key: Callable[[S, *Args], str],
-        get_kv_storage: Callable[[S, *Args], KeyValueStorage],
-        get_ks_storage: Callable[[S, *Args], KeySeriesStorage[T]],
+        get_kv_storage: Callable[[S], KeyValueStorage],
+        get_ks_storage: Callable[[S], KeySeriesStorage[T]],
         get_min_chunk: Callable[[S, *Args], float|None],
         get_max_chunk: Callable[[S, *Args], float|None],
         get_delay: Callable[[S, *Args], float],
@@ -92,8 +92,8 @@ class CachedSeriesDescriptor(Generic[S, *Args, T]):
     
     def cached_method(self, instance: S, unix_from: float, unix_to: float, *args: *Args) -> Sequence[T]:
         key = self.get_key(instance, *args)
-        kv_storage = self.get_kv_storage(instance, *args)
-        ks_storage = self.get_ks_storage(instance, *args)
+        kv_storage = self.get_kv_storage(instance)
+        ks_storage = self.get_ks_storage(instance)
         min_chunk = self.get_min_chunk(instance, *args)
         max_chunk = self.get_max_chunk(instance, *args)
         unix_now = dates.unix() - self.get_delay(instance, *args)
@@ -111,7 +111,7 @@ class CachedSeriesDescriptor(Generic[S, *Args, T]):
         for span_from, span_to in CachedSeriesDescriptor.missing_spans(spans, target): #get unfilled spans
             for start, end in CachedSeriesDescriptor.break_span((span_from, span_to), max_chunk): #break based on max chunk
                 if end < unix_now or self.should_refresh(instance, start, end, *args):
-                    ks_storage.set(key, self.func(instance, span_from, span_to, *args))
+                    ks_storage.set(key, self.func(instance, start, end, *args))
                     covered = (covered[0], end) if covered else (start, end)
         
         if covered:
@@ -122,14 +122,19 @@ class CachedSeriesDescriptor(Generic[S, *Args, T]):
         
         return ks_storage.get(key, unix_from, unix_to)
     
-    def invalidate(self, instance: S, unix_from: float, unix_to: float, *args: *Args):
-        key = self.get_key(instance, *args)
-        kv_storage = self.get_kv_storage(instance, *args)
+    def _invalidate(self, instance: S, unix_from: float, unix_to: float, key: str):
+        kv_storage = self.get_kv_storage(instance)
         spans = kv_storage.get_or_set(key, [], list[tuple[float,float]])
         newspans = self.remove_span(spans, (unix_from, unix_to))
         while spans != newspans and not kv_storage.compare_and_set(key, newspans, spans):
             spans = kv_storage.get(key, list[tuple[float,float]])
             newspans = self.remove_span(spans, (unix_from, unix_to))
+    def invalidate(self, instance: S, unix_from: float, unix_to: float, *args: *Args):
+        self._invalidate(instance, unix_from, unix_to, self.get_key(instance, *args))
+
+    def invalidate_all(self, instance: S, unix_from: float, unix_to: float):
+        kv_storage = self.get_kv_storage(instance)
+        for key in kv_storage.keys(): self._invalidate(instance, unix_from, unix_to, key)
 
     @overload
     def __get__(self, instance: None, owner: type[S]) -> Self: ...
@@ -198,8 +203,8 @@ class CachedSeriesDescriptor(Generic[S, *Args, T]):
 def cached_series(
     *,
     key: Callable[[S, *Args], str] = lambda self, *args: "_".join(str(it) for it in args),
-    kv_storage: KeyValueStorage | Callable[[S, *Args], KeyValueStorage],
-    ks_storage: KeySeriesStorage[T] | Callable[[S, *Args], KeySeriesStorage[T]],
+    kv_storage: KeyValueStorage | Callable[[S], KeyValueStorage],
+    ks_storage: KeySeriesStorage[T] | Callable[[S], KeySeriesStorage[T]],
     min_chunk: float | None | Callable[[S, *Args], float|None] = None,
     max_chunk: float | None | Callable[[S, *Args], float|None] = None,
     live_delay: float | None | Callable[[S, *Args], float] = None,
@@ -209,8 +214,8 @@ def cached_series(
         return CachedSeriesDescriptor(
             func,
             key,
-            kv_storage if callable(kv_storage) else (lambda self, *args: cast(KeyValueStorage, kv_storage)),
-            ks_storage if callable(ks_storage) else (lambda self, *args: cast(KeySeriesStorage[T], ks_storage)),
+            kv_storage if callable(kv_storage) else (lambda self: cast(KeyValueStorage, kv_storage)),
+            ks_storage if callable(ks_storage) else (lambda self: cast(KeySeriesStorage[T], ks_storage)),
             min_chunk if callable(min_chunk) else (lambda self, *args: cast(float|None, min_chunk)),
             max_chunk if callable(max_chunk) else (lambda self, *args: cast(float|None, max_chunk)),
             live_delay if callable(live_delay) else (lambda self, *args: -1.0e10) if live_delay is None else (lambda self, *args: cast(float, live_delay)),
