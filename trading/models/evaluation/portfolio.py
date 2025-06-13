@@ -6,9 +6,10 @@ import time
 from bisect import insort, insort_right
 from typing import Iterable, Sequence, override
 from base.algos import binary_search, binsert, interpolate
-from base.caching import KeySeriesStorage, cached_series
+from base.caching import KeySeriesStorage, KeyValueStorage, cached_series
 from base.key_series_storage import MemoryKSStorage
 from base.reflection import transient
+from base.tests.common import MemoryKVStorage
 from base.types import Cloneable, Equatable, Serializable, json_type
 from base.utils import get_or_set
 from base import dates
@@ -80,7 +81,8 @@ class Portfolio(Serializable):
         self.action_history = actions[:]
         self.state_history = [initial_state or Portfolio.State(0, 0, [])]
         self.ideal_state_history = [initial_state or Portfolio.State(0, 0, [])]
-        self.equity_storage = MemoryKSStorage[Portfolio.EquityFrame](lambda it: it.unix_time)
+        self.equity_ks_storage = MemoryKSStorage[Portfolio.EquityFrame](lambda it: it.unix_time)
+        self.equity_kv_storage = MemoryKVStorage()
         self._update_state_history()
 
     @property
@@ -113,8 +115,8 @@ class Portfolio(Serializable):
         self.ideal_state_history[ideal_state_index:] = Portfolio._get_states(self.ideal_state_history[ideal_state_index-1], actions, include_fees=False)
         
         #invalidate equity
-        for key in self.equity_storage.keys():
-            self.equity_storage.delete(key, unix_time-1, dates.unix())
+        for key in self.equity_ks_storage.keys():
+            self.equity_ks_storage.delete(key, unix_time-1, dates.unix())
 
     @staticmethod
     def _get_states(state: State, actions: Iterable[Action], *, include_fees: bool) -> Iterable[State]:
@@ -143,16 +145,13 @@ class Portfolio(Serializable):
         return self._equity_history(unix_from, unix_to or dates.unix(), interval, False)
     def ideal_equity_history(self, unix_from: float, unix_to: float|None = None, interval: Interval = Interval.H1) -> Sequence[EquityFrame]:
         return self._equity_history(unix_from, unix_to or dates.unix(), interval, True)
-    @staticmethod
-    def _equity_history_timestamp_fn(frame: EquityFrame) -> float: return frame.unix_time
-    def _equity_history_key_fn(self, interval: Interval, ideal: bool) -> str: return f"{interval.name}-{ideal}"
-    def _equity_history_storage_fn(self, interval: Interval, ideal: bool) -> KeySeriesStorage[EquityFrame]: return self.equity_storage
-    def _equity_history_chunk_size_fn(self, interval: Interval, ideal: bool) -> float: return interval.time()*100
+    def _equity_history_key(self, interval: Interval, ideal: bool) -> str: return f"{interval.name}-{ideal}"
+    def _equity_history_ks_storage(self, interval: Interval, ideal: bool) -> KeySeriesStorage[EquityFrame]: return self.equity_ks_storage
+    def _equity_history_kv_storage(self, interval: Interval, ideal: bool) -> KeyValueStorage: return self.equity_kv_storage
     @cached_series(
-        timestamp_fn = _equity_history_timestamp_fn,
-        key_fn=_equity_history_key_fn,
-        storage_fn=_equity_history_storage_fn,
-        chunk_size_fn=_equity_history_chunk_size_fn
+        key=_equity_history_key,
+        ks_storage=_equity_history_ks_storage,
+        kv_storage=_equity_history_kv_storage
     )
     def _equity_history(self, unix_from: float, unix_to: float, interval: Interval, ideal: bool) -> Sequence[EquityFrame]:
         return list(self._get_equity(self.ideal_state_history if ideal else self.state_history, unix_from, unix_to, interval))

@@ -21,7 +21,13 @@ class PortfolioManager:
                 self.portfolio.action(action)
             await asyncio.sleep(interval)
             
-    def run_historical(self, securities: Iterable[Security], interval: float, unix_start: float|None = None, unix_end: float|None = None):
+    def run_historical(
+        self,
+        securities: Iterable[Security],
+        interval: float,
+        unix_start: float|None = None,
+        unix_end: float|None = None
+    ):
         unix_end = unix_end or dates.unix()
         unix_start = unix_start or unix_end - 100*24*3600
         securities = set(securities)
@@ -29,7 +35,8 @@ class PortfolioManager:
         assert self.portfolio.state.unix_time < unix_start
         unix_time = unix_start
         while unix_time < unix_end:
-            action = self.suggest(securities, unix_time)
+            tradable = {it for it in securities if it.exchange.calendar.is_worktime(unix_time)}
+            action = self.suggest(tradable, unix_time)
             if action:
                 logger.info(f"Executing: {action}")
                 self.portfolio.action(action)

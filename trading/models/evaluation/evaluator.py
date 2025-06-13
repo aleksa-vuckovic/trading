@@ -17,7 +17,7 @@ from matplotlib.gridspec import GridSpec
 from base import dates
 from base import text
 from base.types import ClassDict
-from base.serialization import Serializable, serializer
+from base.serialization import Serializable, GenericSerializer
 from base import plotutils
 from trading.core.timing_config import TimingConfig
 from trading.core import Interval
@@ -131,6 +131,8 @@ class BacktestResult(Serializable):
     Time = {dates.unix_to_datetime(self.unix_time, tz=dates.CET)}
 """
 
+serializer = GenericSerializer()
+
 class Evaluator:
     def __init__(self, manager: ModelManager, generator: AbstractGenerator):
         self.generator = generator
@@ -197,10 +199,8 @@ class Evaluator:
         ax2.set_xlabel('Days')
         mock = [1,2]
         lines: dict[str, matplotlib.lines.Line2D] = {
-            'win': ax1.plot(mock, mock, color = 'blue', label = 'Win', marker='o', markersize=2, linestyle='')[0],
-            'real_win': ax1.plot(mock, mock, color='red', label = 'Real Win', marker='o', markersize=2, linestyle='')[0],
-            'total_win': ax2.plot(mock, mock, color = 'blue', label = 'Total Win')[0],
-            'real_win': ax2.plot(mock, mock, color = 'red', label = 'Real Win')[0],
+            'real': ax2.plot(mock, mock, color = 'blue', label = 'Total Win')[0],
+            'ideal': ax2.plot(mock, mock, color = 'red', label = 'Real Win')[0],
         }
         ax1.legend()
         ax2.legend()
@@ -243,7 +243,7 @@ class Evaluator:
             
         plt.ioff()
         selector.clear()
-        model = f"{self.manager.model.get_name()}\n{text.tab(serializer.serialize(self.manager.model.config, typed=False, indent=2))}"
+        model = f"{self.manager.model.get_name()}\n{text.tab(serializer.serialize(self.manager.model.config, indent=2))}"
         backtest_result = BacktestResult(history, unix_from, unix_to, selector, estimator, commission, model)
         path = self.manager.backtests / f"backtest_t{int(dates.unix())}.json"
         path.write_text(serializer.serialize(backtest_result))
