@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 import re
+from typing import Literal
 import pdfplumber
 from datetime import datetime
 
@@ -25,28 +26,53 @@ class Order:
     exchange: str
 
 @dataclass
-class Transaction:
+class Fill:
     timestamp: datetime
     amount: float
     price: float
-    total_price: float
-    bank_fee: float
-    execution_fee: float
-    other_fee: float
+    fees: float
 
 @dataclass
 class Confirmation:
     id: str
     client: Client
     order: Order
-    transaction: Transaction
+    fills: list[Fill]
+    total_fees: float
+
+    @property
+    def side(self) -> Literal['buy', 'sell']:
+        return 'buy' if self.id.startswith("K") else 'sell'
 
 file = "D:\\brokeri\\Potvrde_o_realizovanim_ino_nalozima - 2024-09-26T135155.478 - GOOG.pdf"
 
-_confirmation_id_pattern = re.compile(r"(?i)nalog broj:\s*[A-Z]-\d{4}/\d+")
+_confirmation_id_pattern = re.compile(r"(?i)nalog broj:\s*([A-Z]-\d{4}/\d+)")
 def _nn[T](ref: T|None) -> T:
     assert ref
     return ref
+
+def parse_fills_1(table: list[list[str|None]]) -> tuple[list[Fill], float]:
+    fills: list[Fill] = []
+    for row in table[1:-1]:
+        fills.append(Fill(
+            timestamp = dates.str_to_datetime(re.sub(r"\s+", " ", _nn(row[0])), format="%d.%m.%Y %H:%M:%S", tz=None),
+            amount = float(_nn(row[1])),
+            price = float(_nn(row[2])),
+            fees = sum(float(_nn(it)) for it in row[4:7])
+        ))
+    return fills, sum(float(_nn(it)) for it in table[-1][4:7])
+
+def parse_fills_2(table: list[list[str|None]]) -> tuple[list[Fill], float]:
+    fills: list[Fill] = []
+    for row in table[1:-1]:
+        fills.append(Fill(
+            timestamp = dates.str_to_datetime(re.sub(r"\s+", " ", _nn(row[0])), format="%d.%m.%Y %H:%M:%S", tz=None),
+            amount = float(_nn(row[1])),
+            price = float(_nn(row[2])),
+            fees = sum(float(_nn(it)) for it in [row[4], row[6], row[7]])
+        ))
+    return fills, sum(float(_nn(it)) for it in [table[-1][4], table[-1][6], table[-1][7]])
+
 def parse_confirmation(file: Path) -> list[Confirmation]:
     result: list[Confirmation] = []
     with pdfplumber.open(file) as pdf:
@@ -68,7 +94,7 @@ def parse_confirmation(file: Path) -> list[Confirmation]:
 
             table = tables[1]
             order = Order(
-                date = dates.str_to_datetime(_nn(table[1][1]), format="%d.%m.%Y"),
+                date = dates.str_to_datetime(_nn(table[1][1]), format="%d.%m.%Y", tz=None),
                 security_type = _nn(table[1][4]),
                 issuer = _nn(table[2][4]),
                 amount = float(_nn(table[3][1])),
@@ -79,16 +105,11 @@ def parse_confirmation(file: Path) -> list[Confirmation]:
             )
 
             table = tables[2]
-            transaction = Transaction(
-                timestamp = dates.str_to_datetime(re.sub(r"\s+", " ", _nn(table[1][0])), format="%d.%m.%Y %H:%M:%S"),
-                amount = float(_nn(table[1][1])),
-                price = float(_nn(table[1][2])),
-                total_price = float(_nn(table[1][3])),
-                bank_fee = float(_nn(table[1][4])),
-                execution_fee = float(_nn(table[1][5])),
-                other_fee = float(_nn(table[1][6]))
-            )
+            if order.date < datetime(2024, 12, 25):
+                fills, fees = parse_fills_1(table)
+            else:
+                fills, fees = parse_fills_2(table)
 
-            result.append(Confirmation(id, client, order, transaction))
+            result.append(Confirmation(id, client, order, fills, fees))
         
         return result

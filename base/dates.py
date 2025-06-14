@@ -19,7 +19,7 @@ TOKYO = ZoneInfo("Asia/Tokyo")
 LONDON = ZoneInfo("Europe/London")
 
 DEFAULT_FORMAT = "%Y-%m-%d %H:%M:%S"
-def str_to_datetime(time_string: str, format: str = DEFAULT_FORMAT, tz=UTC) -> datetime:
+def str_to_datetime(time_string: str, format: str = DEFAULT_FORMAT, tz: ZoneInfo|None=UTC) -> datetime:
     return datetime.strptime(time_string, format).replace(tzinfo=tz)
 def str_to_unix(time_string: str, format: str = DEFAULT_FORMAT, tz=UTC) -> float:
     return str_to_datetime(time_string, format=format, tz=tz).timestamp()
